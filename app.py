@@ -32,6 +32,7 @@ class WhisperApp:
         self._dictation_active = False
         self._accessibility_granted = False
         self._transcriber_lock = threading.Lock()
+        self._session_id = 0
         self._min_samples = int(0.12 * self.cfg["sample_rate"])
         self._silence_rms_threshold = 0.006
 
@@ -51,11 +52,16 @@ class WhisperApp:
         self._dictation_active = True
         try:
             self.recorder.start()
+            # Promote session only after recorder actually starts.
+            self._session_id += 1
         except Exception as e:
             self._dictation_active = False
             if self.tray:
                 self.tray.set_recording(False)
+                self.tray.set_processing(False)
                 self.tray.notify_error("Microphone unavailable. Check Microphone permission.")
+            if self.overlay and self.overlay.is_visible:
+                self.overlay.hide()
             print(f"[audio] failed to start microphone: {e}")
             print("[audio] check: System Settings -> Privacy & Security -> Microphone")
             return
@@ -76,6 +82,7 @@ class WhisperApp:
             self.tray.set_processing(True)
 
         audio = self.recorder.stop()
+        session = self._session_id
 
         def transcribe_and_paste():
             try:
@@ -88,20 +95,30 @@ class WhisperApp:
                     text = self.transcriber.transcribe(audio, self.cfg["sample_rate"])
 
                 if text:
+                    if self._session_id != session:
+                        # Stale result — user already started a new session
+                        self.platform.copy_text(text)
+                        return
                     if self._accessibility_granted:
                         self.platform.paste_text(text)
                     else:
                         self.platform.copy_text(text)
                         print(f"[clipboard] {text}")
+            except RuntimeError as e:
+                # Our own errors (e.g., "API key missing") — show as-is
+                print(f"[asr] {e}")
+                if self.tray:
+                    self.tray.notify_error(str(e))
             except Exception as e:
                 print(f"[asr] transcription failed: {e}")
                 if self.tray:
-                    self.tray.notify_error(str(e))
+                    self.tray.notify_error("Transcription failed. Check network and API key.")
             finally:
-                if self.overlay:
-                    self.overlay.hide()
-                if self.tray:
-                    self.tray.set_processing(False)
+                if self._session_id == session:
+                    if self.overlay:
+                        self.overlay.hide()
+                    if self.tray:
+                        self.tray.set_processing(False)
 
         t = threading.Thread(target=transcribe_and_paste, daemon=True)
         t.start()
