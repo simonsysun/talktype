@@ -17,6 +17,10 @@ DEFAULT_OPENROUTER_ASR_MODEL = "openai/gpt-4o-mini"
 OPENAI_ASR_ACCOUNT = "OpenAI-ASR"
 OPENROUTER_ASR_ACCOUNT = "OpenRouter-ASR"
 
+WHISPER_PROMPT_BARE = "{vocab}"
+WHISPER_PROMPT_CONTEXTUAL = "Previously mentioned: {vocab}"
+WHISPER_PROMPT_TEMPLATE = WHISPER_PROMPT_BARE
+
 
 class OpenAITranscriber:
     """Speech-to-text via OpenAI or OpenRouter (OpenAI-compatible SDK)."""
@@ -109,26 +113,62 @@ class OpenAITranscriber:
             return "\n".join(parts).strip()
         return ""
 
-    def _transcribe_via_openrouter_chat(self, wav_bytes: bytes) -> str:
-        audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
-        prompt = (
-            "Transcribe this audio accurately. Return only the transcript text, "
-            "preserve the original language (Chinese/English/mixed), punctuation, and casing."
+    @staticmethod
+    def _build_whisper_prompt(vocabulary_hints: list[str] | None) -> str | None:
+        hints = [hint.strip() for hint in (vocabulary_hints or []) if hint and hint.strip()]
+        if not hints:
+            return None
+        return WHISPER_PROMPT_TEMPLATE.format(vocab=", ".join(hints))
+
+    @staticmethod
+    def _build_openrouter_system_prompt(vocabulary_hints: list[str] | None) -> str:
+        base_prompt = (
+            "Transcribe the provided audio accurately. Return only the transcript text. "
+            "Preserve the original language, punctuation, and casing."
+        )
+        hints = [hint.strip() for hint in (vocabulary_hints or []) if hint and hint.strip()]
+        if not hints:
+            return base_prompt
+        return (
+            f"{base_prompt}\n\n"
+            "When transcribing, use these exact spellings for proper nouns and terms:\n"
+            + ", ".join(hints)
         )
 
+    def _transcribe_via_openrouter_chat(
+        self,
+        wav_bytes: bytes,
+        vocabulary_hints: list[str] | None = None,
+    ) -> str:
+        audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
         resp = self._client.chat.completions.create(
             model=self.model,
             temperature=0,
             messages=[
-                {"role": "user", "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "input_audio", "input_audio": {"data": audio_b64, "format": "wav"}},
-                ]}
+                {
+                    "role": "system",
+                    "content": self._build_openrouter_system_prompt(vocabulary_hints),
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Transcribe this audio."},
+                        {
+                            "type": "input_audio",
+                            "input_audio": {"data": audio_b64, "format": "wav"},
+                        }
+                    ],
+                },
             ],
         )
         return self._extract_chat_text(resp)
 
-    def transcribe(self, audio: np.ndarray, sample_rate: int = 16000) -> str:
+    def transcribe(
+        self,
+        audio: np.ndarray,
+        sample_rate: int = 16000,
+        vocabulary_hints: list[str] | None = None,
+    ) -> str:
         if len(audio) == 0:
             return ""
 
@@ -142,16 +182,20 @@ class OpenAITranscriber:
         wav_bytes = self._to_wav_bytes(audio, sample_rate)
 
         if self.provider == OPENROUTER_PROVIDER:
-            text = self._transcribe_via_openrouter_chat(wav_bytes)
+            text = self._transcribe_via_openrouter_chat(wav_bytes, vocabulary_hints)
             return (text or "").strip()
 
         file_obj = io.BytesIO(wav_bytes)
         file_obj.name = "speech.wav"
+        kwargs = {
+            "model": self.model,
+            "file": file_obj,
+        }
+        prompt = self._build_whisper_prompt(vocabulary_hints)
+        if prompt:
+            kwargs["prompt"] = prompt
 
-        resp = self._client.audio.transcriptions.create(
-            model=self.model,
-            file=file_obj,
-        )
+        resp = self._client.audio.transcriptions.create(**kwargs)
         text = getattr(resp, "text", "")
         if not text and isinstance(resp, dict):
             text = resp.get("text", "")

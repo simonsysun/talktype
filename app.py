@@ -8,6 +8,7 @@ import threading
 import time
 from pathlib import Path
 
+import AppKit
 import AVFoundation as AVF
 import numpy as np
 
@@ -23,6 +24,8 @@ from core.asr_api import (
     OpenAITranscriber,
 )
 from core.audio import AudioRecorder
+from core.post_processor import post_process_transcript
+from core.vocabulary import VocabularyStore
 from platform_layer.macos import MacOSPlatform
 from ui.overlay import OverlayPanel
 from ui.tray import WhisperTray
@@ -34,6 +37,7 @@ class WhisperApp:
         self.platform = MacOSPlatform()
         self.overlay = None
         self.recorder = None
+        self.vocabulary = VocabularyStore()
         provider = self._current_provider()
         model = self._current_model(provider)
         self.transcriber = OpenAITranscriber(
@@ -278,8 +282,14 @@ class WhisperApp:
                         )
                     return
 
+                vocabulary_hints = self.vocabulary.get_active_vocabulary()
                 with self._transcriber_lock:
-                    text = self.transcriber.transcribe(audio, self.cfg["sample_rate"])
+                    text = self.transcriber.transcribe(
+                        audio,
+                        self.cfg["sample_rate"],
+                        vocabulary_hints=vocabulary_hints,
+                    )
+                text = post_process_transcript(text, self.vocabulary.list_entries())
 
                 if text:
                     if self._session_id != session:
@@ -328,6 +338,15 @@ class WhisperApp:
         print("Whisper — Voice-to-Text")
         print("=" * 40)
 
+        # In dev-launcher mode the child interpreter can appear as "Python" in the Dock.
+        # Force accessory activation policy so the app stays menu-bar-only.
+        try:
+            AppKit.NSApplication.sharedApplication().setActivationPolicy_(
+                AppKit.NSApplicationActivationPolicyAccessory
+            )
+        except Exception as e:
+            print(f"[app] failed to set activation policy: {e}")
+
         if self.cfg.get("launch_at_login", False):
             try:
                 if not self.platform.is_launch_at_login_enabled():
@@ -340,6 +359,7 @@ class WhisperApp:
             platform=self.platform,
             on_provider_change=self._on_provider_change,
             is_dictating=lambda: self._dictation_active,
+            vocabulary_store=self.vocabulary,
         )
 
         # Passive check only — do NOT call requestAccess here.

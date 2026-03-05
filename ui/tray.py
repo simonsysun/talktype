@@ -18,12 +18,20 @@ from core.keychain import delete_key, retrieve_key, store_key
 class WhisperTray(rumps.App):
     """Menu bar app using rumps. Owns the NSApplication main runloop."""
 
-    def __init__(self, on_quit=None, platform=None, on_provider_change=None, is_dictating=None):
+    def __init__(
+        self,
+        on_quit=None,
+        platform=None,
+        on_provider_change=None,
+        is_dictating=None,
+        vocabulary_store=None,
+    ):
         super().__init__("Whisper", icon=None, quit_button=None)
         self._on_quit = on_quit
         self._platform = platform
         self._on_provider_change = on_provider_change
         self._is_dictating = is_dictating
+        self._vocabulary_store = vocabulary_store
         self._cfg = load_config()
         self._validation_seq = 0
         self._provider = self._normalize_provider(self._cfg.get("asr_provider", OPENAI_PROVIDER))
@@ -36,6 +44,7 @@ class WhisperTray(rumps.App):
         self._provider_openai_item = rumps.MenuItem("Use OpenAI", callback=self._use_openai)
         self._provider_openrouter_item = rumps.MenuItem("Use OpenRouter", callback=self._use_openrouter)
         self._key_menu_item = rumps.MenuItem("ASR API Key...", callback=self._set_api_key)
+        self._vocab_menu = rumps.MenuItem("Vocabulary")
 
         self._launch_item = rumps.MenuItem(
             "Launch at Login", callback=self._toggle_launch_at_login
@@ -50,6 +59,7 @@ class WhisperTray(rumps.App):
             self._provider_openai_item,
             self._provider_openrouter_item,
             self._key_menu_item,
+            self._vocab_menu,
             self._launch_item,
             None,
             rumps.MenuItem("Quit Whisper", callback=self._quit),
@@ -57,6 +67,7 @@ class WhisperTray(rumps.App):
 
         self._refresh_provider_ui()
         self._refresh_key_status()
+        self._refresh_vocabulary_menu()
 
         # Validate existing key on startup for current provider.
         key = self._current_api_key()
@@ -123,6 +134,30 @@ class WhisperTray(rumps.App):
     def _refresh_key_status(self):
         key = self._current_api_key()
         self._set_key_status("API Key: Saved" if key else "API Key: Missing", checked=False)
+
+    def _refresh_vocabulary_menu(self):
+        if getattr(self._vocab_menu, "_menu", None) is not None:
+            self._vocab_menu.clear()
+        self._vocab_menu.add(rumps.MenuItem("Add Word...", callback=self._add_vocabulary_word))
+        self._vocab_menu.add(None)
+
+        entries = []
+        if self._vocabulary_store is not None:
+            entries = sorted(
+                self._vocabulary_store.list_entries(),
+                key=lambda entry: str(entry.get("added_at", "")),
+                reverse=True,
+            )
+
+        if not entries:
+            self._vocab_menu.add(rumps.MenuItem("No saved words", callback=None))
+            return
+
+        for entry in entries:
+            item = rumps.MenuItem(entry["canonical"], callback=self._remove_vocabulary_word)
+            item._vocab_entry_id = entry["id"]
+            item._vocab_canonical = entry["canonical"]
+            self._vocab_menu.add(item)
 
     def _set_key_status(self, title: str, checked: bool) -> None:
         def _do():
@@ -287,6 +322,74 @@ class WhisperTray(rumps.App):
             else:
                 self.notify_error("Failed to save API key.")
         return False
+
+    def _add_vocabulary_word(self, sender):
+        if self._vocabulary_store is None:
+            self.notify_error("Vocabulary store is unavailable.")
+            return
+
+        window = rumps.Window(
+            message="Add a word or phrase to bias transcription spelling:",
+            title="Whisper — Vocabulary",
+            default_text="",
+            ok="Save",
+            cancel="Cancel",
+        )
+        resp = window.run()
+        if not resp.clicked:
+            return
+
+        value = resp.text.strip()
+        if not value:
+            self.notify_info("Vocabulary entry was empty.")
+            return
+
+        existing = None
+        for entry in self._vocabulary_store.list_entries():
+            if entry["canonical"].casefold() == value.casefold():
+                existing = entry
+                break
+
+        try:
+            entry = self._vocabulary_store.add(value)
+        except ValueError as e:
+            self.notify_error(str(e))
+            return
+        except Exception as e:
+            self.notify_error(f"Failed to save vocabulary word: {e}")
+            return
+
+        self._refresh_vocabulary_menu()
+        if existing is not None:
+            self.notify_info(f"Vocabulary word already exists: {entry['canonical']}")
+        else:
+            self.notify_info(f"Saved vocabulary word: {entry['canonical']}")
+
+    def _remove_vocabulary_word(self, sender):
+        if self._vocabulary_store is None:
+            self.notify_error("Vocabulary store is unavailable.")
+            return
+
+        entry_id = getattr(sender, "_vocab_entry_id", None)
+        canonical = getattr(sender, "_vocab_canonical", sender.title)
+        result = rumps.alert(
+            title="Whisper — Vocabulary",
+            message=f"Remove '{canonical}' from saved vocabulary?",
+            ok="Remove",
+            cancel="Cancel",
+        )
+        if result not in (1, 1000):
+            return
+
+        try:
+            removed = self._vocabulary_store.remove(entry_id)
+        except Exception as e:
+            self.notify_error(f"Failed to remove vocabulary word: {e}")
+            return
+
+        if removed:
+            self._refresh_vocabulary_menu()
+            self.notify_info(f"Removed vocabulary word: {canonical}")
 
     def _toggle_launch_at_login(self, sender):
         target = not bool(sender.state)
