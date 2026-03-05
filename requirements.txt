@@ -1,0 +1,13 @@
+sherpa-onnx>=1.12
+numpy>=2.0
+rumps>=0.4
+pyobjc-framework-Cocoa>=12.0
+pyobjc-framework-Quartz>=12.0
+pyobjc-framework-ApplicationServices>=12.0
+pyobjc-framework-WebKit>=12.0
+pyobjc-framework-AVFoundation>=12.0
+pyyaml>=6.0
+requests>=2.32
+tqdm>=4.67
+openai>=1.12
+pyobjc-framework-Security>=12.0

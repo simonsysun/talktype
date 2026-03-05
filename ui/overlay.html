@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  overflow: hidden;
+  -webkit-user-select: none;
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 130px;
+  height: 40px;
+  border-radius: 20px;
+  backdrop-filter: blur(28px) saturate(1.6);
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.12);
+  transform: scale(0);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+@media (prefers-color-scheme: light) {
+  .pill {
+    border-color: rgba(0, 0, 0, 0.2);
+    background: rgba(255, 255, 255, 0.45);
+  }
+}
+
+.pill.show {
+  animation: pop-in 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.pill.hide {
+  animation: pop-out 0.18s cubic-bezier(0.6, -0.28, 0.735, 0.045) forwards;
+}
+
+@keyframes pop-in {
+  0%   { transform: scale(0.3); opacity: 0; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+@keyframes pop-out {
+  0%   { transform: scale(1);   opacity: 1; }
+  100% { transform: scale(0.3); opacity: 0; }
+}
+
+/* Bars */
+.bar {
+  width: 3px;
+  height: 20px;
+  border-radius: 1.5px;
+  background: rgba(255, 255, 255, 0.85);
+  will-change: transform;
+  transform: scaleY(0.15);
+  animation: idle 0.6s ease-in-out infinite alternate;
+}
+
+@media (prefers-color-scheme: light) {
+  .bar { background: rgba(0, 0, 0, 0.45); }
+}
+
+.bar:nth-child(1)  { animation-duration: 0.5s;  animation-delay: 0.00s; }
+.bar:nth-child(2)  { animation-duration: 0.6s;  animation-delay: 0.08s; }
+.bar:nth-child(3)  { animation-duration: 0.4s;  animation-delay: 0.15s; }
+.bar:nth-child(4)  { animation-duration: 0.55s; animation-delay: 0.05s; }
+.bar:nth-child(5)  { animation-duration: 0.5s;  animation-delay: 0.12s; }
+.bar:nth-child(6)  { animation-duration: 0.65s; animation-delay: 0.02s; }
+.bar:nth-child(7)  { animation-duration: 0.45s; animation-delay: 0.18s; }
+.bar:nth-child(8)  { animation-duration: 0.6s;  animation-delay: 0.07s; }
+.bar:nth-child(9)  { animation-duration: 0.4s;  animation-delay: 0.14s; }
+.bar:nth-child(10) { animation-duration: 0.55s; animation-delay: 0.03s; }
+.bar:nth-child(11) { animation-duration: 0.5s;  animation-delay: 0.10s; }
+.bar:nth-child(12) { animation-duration: 0.6s;  animation-delay: 0.06s; }
+.bar:nth-child(13) { animation-duration: 0.45s; animation-delay: 0.16s; }
+
+@keyframes idle {
+  0%   { transform: scaleY(0.15); }
+  100% { transform: scaleY(0.35); }
+}
+
+.bar.active {
+  animation: none;
+  transition: transform 60ms ease-out;
+}
+
+/* Processing dots */
+.dots {
+  display: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.dots .dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  animation: pulse 0.6s ease-in-out infinite;
+}
+
+@media (prefers-color-scheme: light) {
+  .dots .dot { background: rgba(0, 0, 0, 0.45); }
+}
+
+.dots .dot:nth-child(2) { animation-delay: 0.15s; }
+.dots .dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(1.5); opacity: 1; }
+}
+
+.state-recording .waveform { display: flex; }
+.state-recording .dots { display: none; }
+.state-processing .waveform { display: none; }
+.state-processing .dots { display: flex; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pill.show  { animation: none; transform: scale(1); opacity: 1; }
+  .pill.hide  { animation: none; transform: scale(0); opacity: 0; }
+  .bar { animation: none; transform: scaleY(0.25); }
+  .bar.active { transition: transform 120ms ease; }
+  .dots .dot { animation: none; opacity: 0.6; }
+}
+</style>
+</head>
+<body>
+
+<div class="pill state-recording" id="pill">
+  <div class="waveform" id="waveform" style="display:flex;align-items:center;gap:3px;height:24px;">
+    <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+    <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+    <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+    <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+    <div class="bar"></div>
+  </div>
+  <div class="dots" id="dots">
+    <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+  </div>
+</div>
+
+<script>
+const pill = document.getElementById('pill');
+const bars = Array.from(document.querySelectorAll('.bar'));
+const numBars = bars.length;
+const mid = (numBars - 1) / 2;
+const barMultipliers = bars.map((_, i) => {
+  const dist = Math.abs(i - mid) / mid;
+  return 1.0 - dist * 0.55;
+});
+
+let audioActive = false;
+let audioTimeout = null;
+
+function appear() {
+  pill.classList.remove('hide');
+  pill.className = 'pill state-recording show';
+}
+
+function disappear() {
+  pill.classList.remove('show');
+  pill.classList.add('hide');
+}
+
+function setState(state) {
+  // Keep show/hide class, just swap state
+  const isShowing = pill.classList.contains('show');
+  pill.className = 'pill state-' + state + (isShowing ? ' show' : '');
+  // Return bars to idle
+  bars.forEach(b => b.classList.remove('active'));
+  audioActive = false;
+}
+
+function updateAudioLevelReal(level) {
+  if (!audioActive) {
+    audioActive = true;
+    bars.forEach(b => b.classList.add('active'));
+  }
+  clearTimeout(audioTimeout);
+  audioTimeout = setTimeout(() => {
+    audioActive = false;
+    bars.forEach(b => b.classList.remove('active'));
+  }, 200);
+
+  for (let i = 0; i < numBars; i++) {
+    const base = 0.15 + 0.85 * level * barMultipliers[i];
+    const jitter = 1 + (Math.random() - 0.5) * 0.25;
+    const scale = Math.max(0.1, Math.min(1.0, base * jitter));
+    bars[i].style.transform = 'scaleY(' + scale.toFixed(3) + ')';
+  }
+}
+</script>
+</body>
+</html>
