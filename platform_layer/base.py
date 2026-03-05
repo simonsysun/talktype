@@ -18,3 +18,11 @@ class PlatformBase(ABC):
     @abstractmethod
     def request_accessibility(self) -> bool:
         """Request accessibility permission. Returns True if granted."""
+
+    @abstractmethod
+    def set_launch_at_login(self, enabled: bool) -> None:
+        """Enable or disable launch-at-login."""
+
+    @abstractmethod
+    def is_launch_at_login_enabled(self) -> bool:
+        """Return whether launch-at-login is enabled."""

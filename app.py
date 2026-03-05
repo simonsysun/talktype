@@ -132,7 +132,14 @@ class WhisperApp:
         print("Whisper — Voice-to-Text (OpenAI)")
         print("=" * 40)
 
-        self.tray = WhisperTray(on_quit=self._on_quit)
+        if self.cfg.get("launch_at_login", False):
+            try:
+                if not self.platform.is_launch_at_login_enabled():
+                    self.platform.set_launch_at_login(True)
+            except Exception as e:
+                print(f"[launch] failed to ensure launch-at-login: {e}")
+
+        self.tray = WhisperTray(on_quit=self._on_quit, platform=self.platform)
 
         self._accessibility_granted = self.platform.request_accessibility()
         if not self._accessibility_granted:

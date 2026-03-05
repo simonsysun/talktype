@@ -1,4 +1,8 @@
 import time
+import os
+import plistlib
+import subprocess
+from pathlib import Path
 import AppKit
 import Quartz
 from ApplicationServices import AXIsProcessTrustedWithOptions, kAXTrustedCheckOptionPrompt
@@ -9,6 +13,8 @@ _MAIN_LOOP_MODES = [AppKit.NSDefaultRunLoopMode, AppKit.NSEventTrackingRunLoopMo
 
 class MacOSPlatform(PlatformBase):
     """macOS-specific hotkeys (NSEvent), paste (CGEvent), and clipboard."""
+
+    _LAUNCH_AGENT_LABEL = "dev.whisper.local.launcher"
 
     def __init__(self):
         self._monitors = []
@@ -147,6 +153,59 @@ class MacOSPlatform(PlatformBase):
             {kAXTrustedCheckOptionPrompt: True}
         )
         return bool(trusted)
+
+    def _launch_agent_path(self) -> Path:
+        return Path.home() / "Library" / "LaunchAgents" / f"{self._LAUNCH_AGENT_LABEL}.plist"
+
+    def _resolve_app_executable(self) -> str:
+        bundle = AppKit.NSBundle.mainBundle()
+        exe = bundle.executablePath() if bundle else None
+        if exe:
+            return str(exe)
+
+        repo_root = Path(__file__).resolve().parent.parent
+        candidate = repo_root / "dist" / "Whisper.app" / "Contents" / "MacOS" / "Whisper"
+        return str(candidate)
+
+    def _write_launch_agent(self) -> Path:
+        path = self._launch_agent_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        program = self._resolve_app_executable()
+        plist = {
+            "Label": self._LAUNCH_AGENT_LABEL,
+            "ProgramArguments": [program],
+            "RunAtLoad": True,
+            "KeepAlive": True,
+            "ProcessType": "Interactive",
+            "StandardOutPath": str(Path.home() / "Library" / "Logs" / "Whisper" / "launchagent.out.log"),
+            "StandardErrorPath": str(Path.home() / "Library" / "Logs" / "Whisper" / "launchagent.err.log"),
+        }
+        (Path.home() / "Library" / "Logs" / "Whisper").mkdir(parents=True, exist_ok=True)
+        with path.open("wb") as f:
+            plistlib.dump(plist, f)
+        return path
+
+    def _launchctl(self, *args: str) -> None:
+        subprocess.run(["launchctl", *args], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def set_launch_at_login(self, enabled: bool) -> None:
+        path = self._launch_agent_path()
+        uid = str(os.getuid())
+        domain = f"gui/{uid}"
+        if enabled:
+            path = self._write_launch_agent()
+            self._launchctl("bootout", domain, str(path))
+            self._launchctl("bootstrap", domain, str(path))
+            self._launchctl("enable", f"{domain}/{self._LAUNCH_AGENT_LABEL}")
+            self._launchctl("kickstart", "-k", f"{domain}/{self._LAUNCH_AGENT_LABEL}")
+            return
+
+        self._launchctl("bootout", domain, str(path))
+        if path.exists():
+            path.unlink()
+
+    def is_launch_at_login_enabled(self) -> bool:
+        return self._launch_agent_path().exists()
 
     def cleanup(self):
         if self._event_tap_source is not None:

@@ -1,6 +1,7 @@
 import AppKit
 import rumps
 
+from config import load_config, save_config
 from core.asr_api import DEFAULT_OPENAI_ASR_MODEL, OPENAI_ASR_ACCOUNT
 from core.keychain import retrieve_key, store_key
 
@@ -8,9 +9,11 @@ from core.keychain import retrieve_key, store_key
 class WhisperTray(rumps.App):
     """Menu bar app using rumps. Owns the NSApplication main runloop."""
 
-    def __init__(self, on_quit=None):
+    def __init__(self, on_quit=None, platform=None):
         super().__init__("Whisper", icon=None, quit_button=None)
         self._on_quit = on_quit
+        self._platform = platform
+        self._cfg = load_config()
 
         self.title = "W"
 
@@ -19,6 +22,10 @@ class WhisperTray(rumps.App):
         )
         self._key_status_item = rumps.MenuItem("", callback=None)
         self._refresh_key_status()
+        self._launch_item = rumps.MenuItem(
+            "Launch at Login", callback=self._toggle_launch_at_login
+        )
+        self._launch_item.state = self._initial_launch_state()
 
         self.menu = [
             rumps.MenuItem("Dictation: Option+Space", callback=None),
@@ -26,9 +33,25 @@ class WhisperTray(rumps.App):
             self._key_status_item,
             None,
             rumps.MenuItem("Set OpenAI API Key...", callback=self._set_api_key),
+            self._launch_item,
             None,
             rumps.MenuItem("Quit Whisper", callback=self._quit),
         ]
+
+    def _save_cfg(self):
+        save_config(self._cfg)
+
+    def _initial_launch_state(self) -> bool:
+        config_state = bool(self._cfg.get("launch_at_login", False))
+        if self._platform is None:
+            return config_state
+        try:
+            platform_state = self._platform.is_launch_at_login_enabled()
+            self._cfg["launch_at_login"] = platform_state
+            self._save_cfg()
+            return platform_state
+        except Exception:
+            return config_state
 
     def _refresh_key_status(self):
         key = retrieve_key(OPENAI_ASR_ACCOUNT) or retrieve_key("OpenAI")
@@ -48,6 +71,21 @@ class WhisperTray(rumps.App):
             store_key(OPENAI_ASR_ACCOUNT, resp.text.strip())
             self._refresh_key_status()
             rumps.notification("Whisper", "", "OpenAI API key saved.")
+
+    def _toggle_launch_at_login(self, sender):
+        target = not bool(sender.state)
+        if self._platform is None:
+            sender.state = target
+            self._cfg["launch_at_login"] = target
+            self._save_cfg()
+            return
+        try:
+            self._platform.set_launch_at_login(target)
+            sender.state = target
+            self._cfg["launch_at_login"] = target
+            self._save_cfg()
+        except Exception as e:
+            self.notify_error(f"Failed to update launch-at-login: {e}")
 
     def _on_main(self, fn):
         if AppKit.NSThread.isMainThread():
