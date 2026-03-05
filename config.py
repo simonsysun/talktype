@@ -2,18 +2,12 @@ import os
 import yaml
 
 DEFAULT_CONFIG = {
-    "model": "sensevoice",
-    "models_dir": os.path.expanduser("~/.whisper/models"),
     "dictation_hotkey": "option+space",
-    "audio_device": "default",
     "sample_rate": 16000,
     "overlay_position": "center-bottom",
     "overlay_theme": "auto",
     "launch_at_login": False,
-    "cleanup_enabled": False,
-    "cleanup_provider": "DeepSeek",
-    "cleanup_custom_base_url": "",
-    "cleanup_custom_model": "",
+    "asr_model": "gpt-4o-mini-transcribe",
 }
 
 CONFIG_PATH = os.path.expanduser("~/.whisper/config.yaml")
@@ -31,7 +25,8 @@ def load_config() -> dict:
         print(f"Warning: config file is corrupted ({e}), using defaults.")
         merged = dict(DEFAULT_CONFIG)
     # Expand ~ in paths
-    merged["models_dir"] = os.path.expanduser(merged["models_dir"])
+    if "models_dir" in merged and isinstance(merged["models_dir"], str):
+        merged["models_dir"] = os.path.expanduser(merged["models_dir"])
     # Force sample rate to 16kHz — required by ASR model
     merged["sample_rate"] = 16000
     return merged
