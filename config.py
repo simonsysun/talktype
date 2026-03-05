@@ -8,6 +8,7 @@ DEFAULT_CONFIG = {
     "overlay_theme": "auto",
     "launch_at_login": False,
     "asr_model": "gpt-4o-mini-transcribe",
+    "asr_timeout_seconds": 30.0,
 }
 
 CONFIG_PATH = os.path.expanduser("~/.whisper/config.yaml")
@@ -24,9 +25,6 @@ def load_config() -> dict:
     except yaml.YAMLError as e:
         print(f"Warning: config file is corrupted ({e}), using defaults.")
         merged = dict(DEFAULT_CONFIG)
-    # Expand ~ in paths
-    if "models_dir" in merged and isinstance(merged["models_dir"], str):
-        merged["models_dir"] = os.path.expanduser(merged["models_dir"])
     # Force sample rate to 16kHz — required by ASR model
     merged["sample_rate"] = 16000
     return merged

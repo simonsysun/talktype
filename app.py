@@ -5,6 +5,8 @@ import os
 import sys
 import threading
 
+import numpy as np
+
 # Add project root to path
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -22,11 +24,16 @@ class WhisperApp:
         self.platform = MacOSPlatform()
         self.overlay = None
         self.recorder = None
-        self.transcriber = OpenAITranscriber(model=self.cfg.get("asr_model", "gpt-4o-mini-transcribe"))
+        self.transcriber = OpenAITranscriber(
+            model=self.cfg.get("asr_model", "gpt-4o-mini-transcribe"),
+            timeout=float(self.cfg.get("asr_timeout_seconds", 30.0)),
+        )
         self.tray = None
         self._dictation_active = False
         self._accessibility_granted = False
         self._transcriber_lock = threading.Lock()
+        self._min_samples = int(0.12 * self.cfg["sample_rate"])
+        self._silence_rms_threshold = 0.006
 
     def _on_audio_level(self, level: float):
         """Called from audio thread with RMS level."""
@@ -48,6 +55,7 @@ class WhisperApp:
             self._dictation_active = False
             if self.tray:
                 self.tray.set_recording(False)
+                self.tray.notify_error("Microphone unavailable. Check Microphone permission.")
             print(f"[audio] failed to start microphone: {e}")
             print("[audio] check: System Settings -> Privacy & Security -> Microphone")
             return
@@ -64,12 +72,16 @@ class WhisperApp:
 
         if self.overlay:
             self.overlay.set_state("processing")
+        if self.tray:
+            self.tray.set_processing(True)
 
         audio = self.recorder.stop()
 
         def transcribe_and_paste():
             try:
-                if len(audio) < 1600:  # Less than 0.1s of audio
+                if len(audio) < self._min_samples:
+                    return
+                if float(np.sqrt(np.mean(audio ** 2))) < self._silence_rms_threshold:
                     return
 
                 with self._transcriber_lock:
@@ -83,9 +95,13 @@ class WhisperApp:
                         print(f"[clipboard] {text}")
             except Exception as e:
                 print(f"[asr] transcription failed: {e}")
+                if self.tray:
+                    self.tray.notify_error(str(e))
             finally:
                 if self.overlay:
                     self.overlay.hide()
+                if self.tray:
+                    self.tray.set_processing(False)
 
         t = threading.Thread(target=transcribe_and_paste, daemon=True)
         t.start()
@@ -98,6 +114,8 @@ class WhisperApp:
     def run(self):
         print("Whisper — Voice-to-Text (OpenAI)")
         print("=" * 40)
+
+        self.tray = WhisperTray(on_quit=self._on_quit)
 
         self._accessibility_granted = self.platform.request_accessibility()
         if not self._accessibility_granted:
@@ -115,6 +133,8 @@ class WhisperApp:
         except Exception as e:
             print(f"[audio] engine init warning: {e}")
             print("[audio] grant microphone permission and retry dictation hotkey.")
+            if self.tray:
+                self.tray.notify_error("Audio engine init failed. Check Microphone permission.")
 
         self.overlay = OverlayPanel()
         self.platform.register_hotkey(on_dictation=self._on_dictation)
@@ -125,7 +145,6 @@ class WhisperApp:
         print("  Set API key from tray menu: Set OpenAI API Key...")
         print()
 
-        self.tray = WhisperTray(on_quit=self._on_quit)
         self.tray.run()
 
 

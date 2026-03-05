@@ -5,6 +5,14 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+:root {
+  --pill-w: 132px;
+  --pill-h: 40px;
+  --pill-r: 20px;
+  --bar-w: 3px;
+  --bar-gap: 3px;
+}
+
 body {
   background: transparent;
   display: flex;
@@ -19,108 +27,109 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  width: 130px;
-  height: 40px;
-  border-radius: 20px;
-  backdrop-filter: blur(28px) saturate(1.6);
-  -webkit-backdrop-filter: blur(28px) saturate(1.6);
-  border: 1.5px solid rgba(255, 255, 255, 0.6);
-  background: rgba(255, 255, 255, 0.12);
-  transform: scale(0);
+  width: var(--pill-w);
+  height: var(--pill-h);
+  border-radius: var(--pill-r);
+  backdrop-filter: blur(20px) saturate(1.35);
+  -webkit-backdrop-filter: blur(20px) saturate(1.35);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.16);
+  transform: scale(0.75) translateZ(0);
   opacity: 0;
   will-change: transform, opacity;
 }
 
 @media (prefers-color-scheme: light) {
   .pill {
-    border-color: rgba(0, 0, 0, 0.2);
-    background: rgba(255, 255, 255, 0.45);
+    border-color: rgba(0, 0, 0, 0.16);
+    background: rgba(255, 255, 255, 0.50);
   }
 }
 
 .pill.show {
-  animation: pop-in 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  animation: pop-in 0.2s cubic-bezier(0.2, 0.9, 0.2, 1.0) forwards;
 }
 
 .pill.hide {
-  animation: pop-out 0.18s cubic-bezier(0.6, -0.28, 0.735, 0.045) forwards;
+  animation: pop-out 0.16s cubic-bezier(0.6, 0.0, 1.0, 0.4) forwards;
 }
 
 @keyframes pop-in {
-  0%   { transform: scale(0.3); opacity: 0; }
-  100% { transform: scale(1);   opacity: 1; }
+  0%   { transform: scale(0.75); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 @keyframes pop-out {
-  0%   { transform: scale(1);   opacity: 1; }
-  100% { transform: scale(0.3); opacity: 0; }
+  0%   { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.85); opacity: 0; }
 }
 
-/* Bars */
+.waveform {
+  display: flex;
+  align-items: center;
+  gap: var(--bar-gap);
+  height: 24px;
+}
+
 .bar {
-  width: 3px;
+  width: var(--bar-w);
   height: 20px;
-  border-radius: 1.5px;
-  background: rgba(255, 255, 255, 0.85);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.88);
+  transform: scaleY(0.14);
+  transform-origin: center;
   will-change: transform;
-  transform: scaleY(0.15);
-  animation: idle 0.6s ease-in-out infinite alternate;
+  animation: idle 0.56s ease-in-out infinite alternate;
 }
 
 @media (prefers-color-scheme: light) {
-  .bar { background: rgba(0, 0, 0, 0.45); }
+  .bar { background: rgba(0, 0, 0, 0.44); }
 }
 
-.bar:nth-child(1)  { animation-duration: 0.5s;  animation-delay: 0.00s; }
-.bar:nth-child(2)  { animation-duration: 0.6s;  animation-delay: 0.08s; }
-.bar:nth-child(3)  { animation-duration: 0.4s;  animation-delay: 0.15s; }
-.bar:nth-child(4)  { animation-duration: 0.55s; animation-delay: 0.05s; }
-.bar:nth-child(5)  { animation-duration: 0.5s;  animation-delay: 0.12s; }
-.bar:nth-child(6)  { animation-duration: 0.65s; animation-delay: 0.02s; }
-.bar:nth-child(7)  { animation-duration: 0.45s; animation-delay: 0.18s; }
-.bar:nth-child(8)  { animation-duration: 0.6s;  animation-delay: 0.07s; }
-.bar:nth-child(9)  { animation-duration: 0.4s;  animation-delay: 0.14s; }
-.bar:nth-child(10) { animation-duration: 0.55s; animation-delay: 0.03s; }
-.bar:nth-child(11) { animation-duration: 0.5s;  animation-delay: 0.10s; }
-.bar:nth-child(12) { animation-duration: 0.6s;  animation-delay: 0.06s; }
-.bar:nth-child(13) { animation-duration: 0.45s; animation-delay: 0.16s; }
+.bar:nth-child(1) { animation-delay: 0.00s; }
+.bar:nth-child(2) { animation-delay: 0.08s; }
+.bar:nth-child(3) { animation-delay: 0.02s; }
+.bar:nth-child(4) { animation-delay: 0.12s; }
+.bar:nth-child(5) { animation-delay: 0.05s; }
+.bar:nth-child(6) { animation-delay: 0.10s; }
+.bar:nth-child(7) { animation-delay: 0.03s; }
+.bar:nth-child(8) { animation-delay: 0.09s; }
+.bar:nth-child(9) { animation-delay: 0.01s; }
 
 @keyframes idle {
-  0%   { transform: scaleY(0.15); }
-  100% { transform: scaleY(0.35); }
+  0%   { transform: scaleY(0.14); }
+  100% { transform: scaleY(0.30); }
 }
 
 .bar.active {
   animation: none;
-  transition: transform 60ms ease-out;
+  transition: transform 55ms linear;
 }
 
-/* Processing dots */
 .dots {
   display: none;
   align-items: center;
   gap: 6px;
 }
 
-.dots .dot {
+.dot {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.85);
-  animation: pulse 0.6s ease-in-out infinite;
+  background: rgba(255, 255, 255, 0.9);
+  animation: pulse 0.62s ease-in-out infinite;
 }
 
 @media (prefers-color-scheme: light) {
-  .dots .dot { background: rgba(0, 0, 0, 0.45); }
+  .dot { background: rgba(0, 0, 0, 0.45); }
 }
 
-.dots .dot:nth-child(2) { animation-delay: 0.15s; }
-.dots .dot:nth-child(3) { animation-delay: 0.3s; }
+.dot:nth-child(2) { animation-delay: 0.14s; }
+.dot:nth-child(3) { animation-delay: 0.28s; }
 
 @keyframes pulse {
   0%, 100% { transform: scale(1); opacity: 0.4; }
-  50% { transform: scale(1.5); opacity: 1; }
+  50% { transform: scale(1.45); opacity: 1; }
 }
 
 .state-recording .waveform { display: flex; }
@@ -129,25 +138,23 @@ body {
 .state-processing .dots { display: flex; }
 
 @media (prefers-reduced-motion: reduce) {
-  .pill.show  { animation: none; transform: scale(1); opacity: 1; }
-  .pill.hide  { animation: none; transform: scale(0); opacity: 0; }
-  .bar { animation: none; transform: scaleY(0.25); }
-  .bar.active { transition: transform 120ms ease; }
-  .dots .dot { animation: none; opacity: 0.6; }
+  .pill.show { animation: none; transform: scale(1); opacity: 1; }
+  .pill.hide { animation: none; transform: scale(0.95); opacity: 0; }
+  .bar { animation: none; transform: scaleY(0.22); }
+  .bar.active { transition: transform 100ms linear; }
+  .dot { animation: none; opacity: 0.6; }
 }
 </style>
 </head>
 <body>
 
 <div class="pill state-recording" id="pill">
-  <div class="waveform" id="waveform" style="display:flex;align-items:center;gap:3px;height:24px;">
+  <div class="waveform">
     <div class="bar"></div><div class="bar"></div><div class="bar"></div>
     <div class="bar"></div><div class="bar"></div><div class="bar"></div>
     <div class="bar"></div><div class="bar"></div><div class="bar"></div>
-    <div class="bar"></div><div class="bar"></div><div class="bar"></div>
-    <div class="bar"></div>
   </div>
-  <div class="dots" id="dots">
+  <div class="dots">
     <div class="dot"></div><div class="dot"></div><div class="dot"></div>
   </div>
 </div>
@@ -159,11 +166,14 @@ const numBars = bars.length;
 const mid = (numBars - 1) / 2;
 const barMultipliers = bars.map((_, i) => {
   const dist = Math.abs(i - mid) / mid;
-  return 1.0 - dist * 0.55;
+  return 1.0 - dist * 0.50;
 });
 
 let audioActive = false;
 let audioTimeout = null;
+let smoothedLevel = 0;
+let pendingLevel = 0;
+let rafPending = false;
 
 function appear() {
   pill.classList.remove('hide');
@@ -176,31 +186,48 @@ function disappear() {
 }
 
 function setState(state) {
-  // Keep show/hide class, just swap state
   const isShowing = pill.classList.contains('show');
   pill.className = 'pill state-' + state + (isShowing ? ' show' : '');
-  // Return bars to idle
   bars.forEach(b => b.classList.remove('active'));
+  smoothedLevel = 0;
   audioActive = false;
 }
 
+function renderBars(level) {
+  const clamped = Math.max(0, Math.min(1, level));
+  for (let i = 0; i < numBars; i++) {
+    const scale = Math.max(0.1, Math.min(1, 0.12 + 0.88 * clamped * barMultipliers[i]));
+    bars[i].style.transform = 'scaleY(' + scale.toFixed(3) + ')';
+  }
+}
+
+function scheduleRender() {
+  if (rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(() => {
+    rafPending = false;
+    smoothedLevel = smoothedLevel * 0.68 + pendingLevel * 0.32;
+    renderBars(smoothedLevel);
+  });
+}
+
 function updateAudioLevelReal(level) {
+  pendingLevel = Number(level) || 0;
+
   if (!audioActive) {
     audioActive = true;
     bars.forEach(b => b.classList.add('active'));
   }
+
   clearTimeout(audioTimeout);
   audioTimeout = setTimeout(() => {
     audioActive = false;
     bars.forEach(b => b.classList.remove('active'));
-  }, 200);
+    pendingLevel = 0;
+    scheduleRender();
+  }, 180);
 
-  for (let i = 0; i < numBars; i++) {
-    const base = 0.15 + 0.85 * level * barMultipliers[i];
-    const jitter = 1 + (Math.random() - 0.5) * 0.25;
-    const scale = Math.max(0.1, Math.min(1.0, base * jitter));
-    bars[i].style.transform = 'scaleY(' + scale.toFixed(3) + ')';
-  }
+  scheduleRender();
 }
 </script>
 </body>

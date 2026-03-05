@@ -1,4 +1,5 @@
 import threading
+import ctypes
 import numpy as np
 import AVFoundation as AVF
 
@@ -27,9 +28,8 @@ class AudioRecorder:
         if frame_length == 0:
             return
 
-        # Extract channel 0 float data from AVAudioPCMBuffer
         ch0 = buffer.floatChannelData()[0]
-        arr = np.array([ch0[i] for i in range(frame_length)], dtype=np.float32)
+        arr = self._extract_float_channel(ch0, frame_length)
 
         with self._lock:
             recording = self._recording
@@ -40,6 +40,15 @@ class AudioRecorder:
             rms = float(np.sqrt(np.mean(arr ** 2)))
             level = min(1.0, rms / 0.15)
             self.on_level(level)
+
+    @staticmethod
+    def _extract_float_channel(ch0, frame_length: int) -> np.ndarray:
+        """Extract channel 0 from AVAudioPCMBuffer with fast path + safe fallback."""
+        try:
+            ptr = ctypes.cast(ch0, ctypes.POINTER(ctypes.c_float))
+            return np.ctypeslib.as_array(ptr, shape=(frame_length,)).copy()
+        except Exception:
+            return np.array([ch0[i] for i in range(frame_length)], dtype=np.float32)
 
     def prepare(self):
         """Create the audio engine once. Call at app startup."""

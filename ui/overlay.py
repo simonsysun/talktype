@@ -1,4 +1,5 @@
 import os
+import time
 import AppKit
 import Foundation
 import WebKit
@@ -13,13 +14,14 @@ class OverlayPanel:
     _PANEL_WIDTH = 140
     _PANEL_HEIGHT = 40
     _BOTTOM_OFFSET = 80  # px from bottom of usable screen area
-    _POP_OUT_MS = 200  # match CSS pop-out duration (180ms + margin)
+    _POP_OUT_MS = 180  # match CSS pop-out duration + margin
 
     def __init__(self):
         self._panel = None
         self._webview = None
         self._visible = False
         self._hide_timer = None
+        self._last_level_sent = 0.0
         self._setup()
 
     def _setup(self):
@@ -38,7 +40,7 @@ class OverlayPanel:
         self._panel.setTitlebarAppearsTransparent_(True)
         self._panel.setTitleVisibility_(AppKit.NSWindowTitleHidden)
         self._panel.setMovableByWindowBackground_(False)
-        self._panel.setHasShadow_(False)
+        self._panel.setHasShadow_(True)
         self._panel.setOpaque_(False)
         self._panel.setBackgroundColor_(AppKit.NSColor.clearColor())
         self._panel.setIgnoresMouseEvents_(True)
@@ -129,8 +131,14 @@ class OverlayPanel:
         self._eval_js(f"setState('{state}')")
 
     def update_audio_level(self, level: float):
-        if self._visible:
-            self._eval_js(f"updateAudioLevelReal({level:.3f})")
+        if not self._visible:
+            return
+        now = time.monotonic()
+        if (now - self._last_level_sent) < (1.0 / 45.0):
+            return
+        self._last_level_sent = now
+        clamped = max(0.0, min(1.0, float(level)))
+        self._eval_js(f"updateAudioLevelReal({clamped:.3f})")
 
     def _eval_js(self, js: str):
         if self._webview:

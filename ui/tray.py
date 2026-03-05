@@ -59,7 +59,20 @@ class WhisperTray(rumps.App):
             )
 
     def set_recording(self, active: bool):
-        self.title = "W·" if active else "W"
+        def _do():
+            self.title = "W·" if active else "W"
+        self._on_main(_do)
+
+    def set_processing(self, active: bool):
+        def _do():
+            self.title = "W…" if active else "W"
+        self._on_main(_do)
+
+    def notify_error(self, message: str):
+        self._on_main(lambda: rumps.notification("Whisper", "Error", message))
+
+    def notify_info(self, message: str):
+        self._on_main(lambda: rumps.notification("Whisper", "", message))
 
     def _quit(self, sender):
         if self._on_quit:

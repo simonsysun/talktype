@@ -17,6 +17,8 @@ class OpenAITranscriber:
     def __init__(self, model: str = DEFAULT_OPENAI_ASR_MODEL, timeout: float = 30.0):
         self.model = model
         self.timeout = timeout
+        self._cached_key = None
+        self._client = None
 
     @staticmethod
     def _to_wav_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
@@ -40,13 +42,15 @@ class OpenAITranscriber:
             raise RuntimeError(
                 "OpenAI API key is missing. Set it from Whisper tray menu."
             )
+        if self._client is None or self._cached_key != api_key:
+            self._client = OpenAI(api_key=api_key, timeout=self.timeout)
+            self._cached_key = api_key
 
         wav_bytes = self._to_wav_bytes(audio, sample_rate)
         file_obj = io.BytesIO(wav_bytes)
         file_obj.name = "speech.wav"
 
-        client = OpenAI(api_key=api_key, timeout=self.timeout)
-        resp = client.audio.transcriptions.create(
+        resp = self._client.audio.transcriptions.create(
             model=self.model,
             file=file_obj,
         )
