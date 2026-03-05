@@ -21,7 +21,7 @@ class MacOSPlatform(PlatformBase):
         self._event_tap = None
         self._event_tap_source = None
 
-    def _run_on_main(self, fn) -> None:
+    def run_on_main(self, fn) -> None:
         if AppKit.NSThread.isMainThread():
             fn()
         else:
@@ -68,7 +68,7 @@ class MacOSPlatform(PlatformBase):
         """Register a global hotkey and suppress the underlying key event if possible."""
 
         def fire_dictation():
-            self._run_on_main(on_dictation)
+            self.run_on_main(on_dictation)
 
         def tap_handler(proxy, event_type, event, refcon):
             if event_type in (
@@ -160,12 +160,26 @@ class MacOSPlatform(PlatformBase):
     def _resolve_app_executable(self) -> str:
         bundle = AppKit.NSBundle.mainBundle()
         exe = bundle.executablePath() if bundle else None
-        if exe:
-            return str(exe)
+        # Trust the bundle path if it's a genuine .app bundle (not Python.app).
+        # Validate by bundle identifier rather than hardcoded folder name,
+        # so renamed apps (e.g. "Whisper 2.app") still work.
+        if exe and bundle.bundleIdentifier() and "/Contents/MacOS/" in exe:
+            bundle_id = bundle.bundleIdentifier()
+            if bundle_id != "org.python.python" and not bundle_id.startswith("com.apple."):
+                return str(exe)
 
-        repo_root = Path(__file__).resolve().parent.parent
-        candidate = repo_root / "dist" / "Whisper.app" / "Contents" / "MacOS" / "Whisper"
-        return str(candidate)
+        # Check common install locations
+        for candidate in [
+            Path.home() / "Applications" / "Whisper.app" / "Contents" / "MacOS" / "Whisper",
+            Path(__file__).resolve().parent.parent / "dist" / "Whisper.app" / "Contents" / "MacOS" / "Whisper",
+        ]:
+            if candidate.exists():
+                return str(candidate)
+
+        raise RuntimeError(
+            "Cannot find Whisper.app. Install it first: "
+            "python3 scripts/bundle_macos_app.py --install ~/Applications"
+        )
 
     def _write_launch_agent(self) -> Path:
         path = self._launch_agent_path()
@@ -175,7 +189,7 @@ class MacOSPlatform(PlatformBase):
             "Label": self._LAUNCH_AGENT_LABEL,
             "ProgramArguments": [program],
             "RunAtLoad": True,
-            "KeepAlive": True,
+            "KeepAlive": {"SuccessfulExit": False},
             "ProcessType": "Interactive",
             "StandardOutPath": str(Path.home() / "Library" / "Logs" / "Whisper" / "launchagent.out.log"),
             "StandardErrorPath": str(Path.home() / "Library" / "Logs" / "Whisper" / "launchagent.err.log"),
@@ -185,19 +199,25 @@ class MacOSPlatform(PlatformBase):
             plistlib.dump(plist, f)
         return path
 
-    def _launchctl(self, *args: str) -> None:
-        subprocess.run(["launchctl", *args], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    @staticmethod
+    def _launchctl(*args: str, check: bool = False) -> int:
+        r = subprocess.run(
+            ["launchctl", *args],
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+        )
+        if check and r.returncode != 0:
+            detail = r.stderr.decode(errors="replace").strip()
+            raise RuntimeError(f"launchctl {args[0]} failed: {detail or r.returncode}")
+        return r.returncode
 
     def set_launch_at_login(self, enabled: bool) -> None:
         path = self._launch_agent_path()
         uid = str(os.getuid())
         domain = f"gui/{uid}"
         if enabled:
-            path = self._write_launch_agent()
-            self._launchctl("bootout", domain, str(path))
-            self._launchctl("bootstrap", domain, str(path))
-            self._launchctl("enable", f"{domain}/{self._LAUNCH_AGENT_LABEL}")
-            self._launchctl("kickstart", "-k", f"{domain}/{self._LAUNCH_AGENT_LABEL}")
+            self._write_launch_agent()
+            # Just write the plist — launchd auto-loads from ~/Library/LaunchAgents on next login.
+            # Do NOT bootstrap here: it would immediately start a second instance.
             return
 
         self._launchctl("bootout", domain, str(path))
@@ -205,6 +225,7 @@ class MacOSPlatform(PlatformBase):
             path.unlink()
 
     def is_launch_at_login_enabled(self) -> bool:
+        # Plist existence is the source of truth — launchd loads it on next login.
         return self._launch_agent_path().exists()
 
     def cleanup(self):

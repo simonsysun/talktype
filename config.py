@@ -7,8 +7,15 @@ DEFAULT_CONFIG = {
     "overlay_position": "center-bottom",
     "overlay_theme": "auto",
     "launch_at_login": False,
+    "asr_provider": "openai",
     "asr_model": "gpt-4o-mini-transcribe",
+    "openrouter_asr_model": "openai/gpt-4o-mini",
+    "openrouter_base_url": "https://openrouter.ai/api/v1",
     "asr_timeout_seconds": 30.0,
+    "silence_auto_stop_enabled": True,
+    "silence_auto_stop_seconds": 20,
+    "silence_rms_threshold": 0.008,
+    "min_transcribe_rms": 0.003,
 }
 
 CONFIG_PATH = os.path.expanduser("~/.whisper/config.yaml")
@@ -17,12 +24,16 @@ CONFIG_PATH = os.path.expanduser("~/.whisper/config.yaml")
 def load_config() -> dict:
     try:
         if os.path.exists(CONFIG_PATH):
-            with open(CONFIG_PATH) as f:
-                user = yaml.safe_load(f) or {}
+            with open(CONFIG_PATH, encoding="utf-8") as f:
+                user = yaml.safe_load(f)
+            if user is None:
+                user = {}
+            elif not isinstance(user, dict):
+                raise ValueError("config root must be a mapping")
             merged = {**DEFAULT_CONFIG, **user}
         else:
             merged = dict(DEFAULT_CONFIG)
-    except yaml.YAMLError as e:
+    except (OSError, TypeError, ValueError, yaml.YAMLError) as e:
         print(f"Warning: config file is corrupted ({e}), using defaults.")
         merged = dict(DEFAULT_CONFIG)
     # Force sample rate to 16kHz — required by ASR model
@@ -32,5 +43,7 @@ def load_config() -> dict:
 
 def save_config(cfg: dict) -> None:
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-    with open(CONFIG_PATH, "w") as f:
-        yaml.dump(cfg, f, default_flow_style=False)
+    tmp = CONFIG_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
+    os.replace(tmp, CONFIG_PATH)

@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Build and install Whisper.app to Applications."""
+"""Build and install Whisper.app to Applications.
+
+Uses bundle_macos_app.py (PyInstaller) for a fully self-contained app,
+or build_macos_app.py (dev wrapper) with --dev flag.
+"""
 
 from __future__ import annotations
 
 import argparse
-import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -14,19 +18,12 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def build_app(root: Path) -> Path:
-    build_script = root / "scripts" / "build_macos_app.py"
-    out = subprocess.check_output([sys.executable, str(build_script)], text=True).strip()
-    return Path(out)
-
-
-def install_app(app_src: Path, target_dir: Path) -> Path:
-    target_dir.mkdir(parents=True, exist_ok=True)
-    app_dst = target_dir / app_src.name
-    if app_dst.exists():
-        shutil.rmtree(app_dst)
-    shutil.copytree(app_src, app_dst)
-    return app_dst
+def stop_running_instance(app_path: Path) -> None:
+    subprocess.run(
+        ["pkill", "-f", str(app_path / "Contents" / "MacOS" / "Whisper")],
+        check=False,
+    )
+    time.sleep(0.3)
 
 
 def main() -> int:
@@ -41,15 +38,50 @@ def main() -> int:
         action="store_true",
         help="Open the app after installation",
     )
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Use dev build (repo-linked wrapper) instead of standalone bundle",
+    )
     args = parser.parse_args()
 
     root = repo_root()
-    app_src = build_app(root)
-    app_dst = install_app(app_src, Path(args.target).expanduser())
-    print(app_dst)
 
-    if args.open:
-        subprocess.run(["open", str(app_dst)], check=False)
+    if args.dev:
+        # Dev build: thin .app wrapper that points to repo + .venv
+        build_script = root / "scripts" / "build_macos_app.py"
+        out = subprocess.check_output(
+            [sys.executable, str(build_script)], text=True
+        ).strip()
+        app_src = Path(out)
+
+        import shutil
+        target_dir = Path(args.target).expanduser()
+        target_dir.mkdir(parents=True, exist_ok=True)
+        app_dst = target_dir / app_src.name
+        if app_dst.exists():
+            stop_running_instance(app_dst)
+            shutil.rmtree(app_dst)
+        shutil.copytree(app_src, app_dst)
+        print(app_dst)
+        if args.open:
+            # Kill any running Whisper instance before launching the new one
+            stop_running_instance(app_dst)
+            # Reset stale TCC entry — new build has a new code signature
+            subprocess.run(["tccutil", "reset", "Microphone", "dev.whisper.local"], check=False)
+            time.sleep(0.5)
+            subprocess.run(["open", str(app_dst)], check=False)
+    else:
+        # Standalone build: fully self-contained via PyInstaller
+        cmd = [
+            sys.executable,
+            str(root / "scripts" / "bundle_macos_app.py"),
+            "--install", str(Path(args.target).expanduser()),
+        ]
+        if args.open:
+            cmd.append("--open")
+        subprocess.run(cmd, check=True)
+
     return 0
 
 

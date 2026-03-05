@@ -226,33 +226,92 @@ def write_info_plist(root: Path, icon_name: str | None) -> None:
 
 
 def write_launcher(root: Path) -> None:
+    """Compile a native C launcher so macOS TCC attributes permissions to Whisper.app.
+
+    The binary forks python3 as a child process while staying alive as the
+    'responsible process' — macOS shows "Whisper" in permission dialogs instead
+    of "python3.14".
+    """
     launcher = macos_dir(root) / APP_NAME
     repo = root.resolve()
     python_bin = repo / ".venv" / "bin" / "python3"
-    repo_quoted = shlex.quote(str(repo))
-    python_quoted = shlex.quote(str(python_bin))
-    python_raw = str(python_bin).replace('"', '\\"')
-    script = f"""#!/bin/zsh
-set -euo pipefail
+    log_dir = Path.home() / "Library" / "Logs" / APP_NAME
 
-REPO_ROOT={repo_quoted}
-PYTHON_BIN={python_quoted}
-LOG_DIR="$HOME/Library/Logs/{APP_NAME}"
-LOG_FILE="$LOG_DIR/launcher.log"
-mkdir -p "$LOG_DIR"
+    # Escape backslashes and quotes for C string literals
+    def c_str(p: Path) -> str:
+        return str(p).replace("\\", "\\\\").replace('"', '\\"')
 
-if [[ ! -x "$PYTHON_BIN" ]]; then
-  osascript -e 'display alert "{APP_NAME}" message "Missing virtualenv Python at {python_raw}"'
-  exit 1
-fi
+    c_source = f'''\
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
-export PYTHONPATH="$REPO_ROOT${{PYTHONPATH:+:$PYTHONPATH}}"
-cd "$REPO_ROOT"
-exec "$PYTHON_BIN" "$REPO_ROOT/app.py" >>"$LOG_FILE" 2>&1
-"""
-    launcher.write_text(script)
-    mode = launcher.stat().st_mode
-    launcher.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+#define REPO_ROOT  "{c_str(repo)}"
+#define PYTHON_BIN "{c_str(python_bin)}"
+#define SCRIPT     REPO_ROOT "/app.py"
+#define LOG_DIR    "{c_str(log_dir)}"
+#define LOG_FILE   LOG_DIR "/launcher.log"
+
+static pid_t child_pid = 0;
+
+static void forward_signal(int sig) {{
+    if (child_pid > 0) kill(child_pid, sig);
+}}
+
+int main(int argc, char *argv[]) {{
+    if (access(PYTHON_BIN, X_OK) != 0) {{
+        fprintf(stderr, "Missing virtualenv Python at %s\\n", PYTHON_BIN);
+        return 1;
+    }}
+
+    mkdir(LOG_DIR, 0755);
+
+    child_pid = fork();
+    if (child_pid < 0) {{
+        perror("fork");
+        return 1;
+    }}
+
+    if (child_pid == 0) {{
+        /* Child: redirect stdout/stderr to log file, exec python */
+        FILE *log = fopen(LOG_FILE, "a");
+        if (log) {{
+            int fd = fileno(log);
+            dup2(fd, STDOUT_FILENO);
+            dup2(fd, STDERR_FILENO);
+            fclose(log);
+        }}
+
+        chdir(REPO_ROOT);
+        setenv("PYTHONPATH", REPO_ROOT, 1);
+
+        execl(PYTHON_BIN, "Whisper", "-u", SCRIPT, NULL);
+        perror("execl");
+        _exit(1);
+    }}
+
+    /* Parent: forward signals and wait — stays alive as 'responsible process' */
+    signal(SIGTERM, forward_signal);
+    signal(SIGINT, forward_signal);
+    signal(SIGHUP, forward_signal);
+
+    int status;
+    waitpid(child_pid, &status, 0);
+    return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+}}
+'''
+    c_file = macos_dir(root) / "launcher.c"
+    c_file.write_text(c_source)
+
+    subprocess.run(
+        ["cc", "-O2", "-o", str(launcher), str(c_file)],
+        check=True,
+    )
+    c_file.unlink()
 
 
 def clean_bundle(root: Path) -> None:

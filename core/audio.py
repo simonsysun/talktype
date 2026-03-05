@@ -22,6 +22,7 @@ class AudioRecorder:
         self._hw_sample_rate = 48000
         self._hw_format = None
         self._ready = False
+        self._tap_installed = False
 
     def _tap_callback(self, buffer, when):
         frame_length = buffer.frameLength()
@@ -39,11 +40,23 @@ class AudioRecorder:
         if self.on_level and recording:
             rms = float(np.sqrt(np.mean(arr ** 2)))
             level = min(1.0, rms / 0.15)
-            self.on_level(level)
+            try:
+                self.on_level(level)
+            except Exception as e:
+                print(f"[audio] level callback failed: {e}")
 
     @staticmethod
     def _extract_float_channel(ch0, frame_length: int) -> np.ndarray:
-        """Extract channel 0 from AVAudioPCMBuffer with fast path + safe fallback."""
+        """Extract channel 0 from AVAudioPCMBuffer.
+
+        Prefer PyObjC sequence access for correctness across macOS/PyObjC variants.
+        Some pointer-cast fast paths can silently yield zeros on certain systems.
+        """
+        try:
+            return np.fromiter((ch0[i] for i in range(frame_length)), dtype=np.float32, count=frame_length)
+        except Exception:
+            pass
+
         try:
             ptr = ctypes.cast(ch0, ctypes.POINTER(ctypes.c_float))
             return np.ctypeslib.as_array(ptr, shape=(frame_length,)).copy()
@@ -56,11 +69,7 @@ class AudioRecorder:
         input_node = self._engine.inputNode()
         self._hw_format = input_node.outputFormatForBus_(0)
         self._hw_sample_rate = int(self._hw_format.sampleRate())
-        if self._hw_sample_rate % self.sample_rate != 0:
-            raise RuntimeError(
-                f"Hardware sample rate {self._hw_sample_rate} is not a multiple "
-                f"of {self.sample_rate}. Use a different audio device."
-            )
+        print(f"[audio] hardware sample rate: {self._hw_sample_rate} Hz")
         self._ready = True
 
     def start(self):
@@ -68,28 +77,52 @@ class AudioRecorder:
         if not self._ready:
             self.prepare()
         with self._lock:
+            if self._recording:
+                return
             self._buffer = []
             self._recording = True
 
         input_node = self._engine.inputNode()
-        input_node.installTapOnBus_bufferSize_format_block_(
-            0, 4800, self._hw_format, self._tap_callback
-        )
+        try:
+            if self._tap_installed:
+                input_node.removeTapOnBus_(0)
+                self._tap_installed = False
+            input_node.installTapOnBus_bufferSize_format_block_(
+                0, 4800, self._hw_format, self._tap_callback
+            )
+            self._tap_installed = True
+            success, error = self._engine.startAndReturnError_(None)
+        except Exception:
+            success, error = False, "tap install failed"
 
-        success, error = self._engine.startAndReturnError_(None)
         if not success:
+            # If start fails, ensure tap/recording state is cleaned up so next retry can work.
+            with self._lock:
+                self._recording = False
+                self._buffer = []
+            try:
+                input_node.removeTapOnBus_(0)
+            except Exception:
+                pass
+            self._tap_installed = False
             raise RuntimeError(f"Failed to start audio engine: {error}")
 
     def stop(self) -> np.ndarray:
         """Stop recording and return audio as numpy array (float32, 16kHz mono)."""
         with self._lock:
+            if not self._recording and not self._tap_installed:
+                return np.array([], dtype=np.float32)
             self._recording = False
             chunks = self._buffer
             self._buffer = []
 
         if self._engine:
-            input_node = self._engine.inputNode()
-            input_node.removeTapOnBus_(0)
+            try:
+                if self._tap_installed:
+                    self._engine.inputNode().removeTapOnBus_(0)
+            except Exception:
+                pass
+            self._tap_installed = False
             self._engine.stop()
 
         if chunks:
@@ -97,10 +130,17 @@ class AudioRecorder:
         else:
             audio = np.array([], dtype=np.float32)
 
-        # Downsample from hardware rate to 16kHz
-        ratio = self._hw_sample_rate // self.sample_rate
-        if ratio > 1 and len(audio) > 0:
-            audio = audio[::ratio]
+        # Resample from hardware rate to target rate
+        if self._hw_sample_rate != self.sample_rate and len(audio) > 0:
+            if self._hw_sample_rate % self.sample_rate == 0:
+                # Integer ratio — simple decimation (48k→16k)
+                audio = audio[:: self._hw_sample_rate // self.sample_rate]
+            else:
+                # Non-integer ratio (e.g. 44.1k→16k) — linear interpolation
+                n_target = int(len(audio) * self.sample_rate / self._hw_sample_rate)
+                x_old = np.linspace(0, 1, len(audio), endpoint=False)
+                x_new = np.linspace(0, 1, n_target, endpoint=False)
+                audio = np.interp(x_new, x_old, audio).astype(np.float32)
 
         return audio
 
@@ -108,9 +148,11 @@ class AudioRecorder:
         """Tear down the audio engine. Call on app quit."""
         if self._engine:
             try:
-                self._engine.inputNode().removeTapOnBus_(0)
+                if self._tap_installed:
+                    self._engine.inputNode().removeTapOnBus_(0)
             except Exception:
                 pass
+            self._tap_installed = False
             self._engine.stop()
             self._engine = None
             self._ready = False

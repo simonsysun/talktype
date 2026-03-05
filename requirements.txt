@@ -8,3 +8,4 @@ pyobjc-framework-AVFoundation>=12.0
 pyyaml>=6.0
 openai>=1.12
 pyobjc-framework-Security>=12.0
+pyinstaller>=6.0

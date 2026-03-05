@@ -8,6 +8,7 @@ class PlatformBase(ABC):
     def paste_text(self, text: str) -> None:
         """Copy text to clipboard and paste into focused app."""
 
+    @abstractmethod
     def copy_text(self, text: str) -> None:
         """Copy text to clipboard only (no paste simulation)."""
 
@@ -26,3 +27,7 @@ class PlatformBase(ABC):
     @abstractmethod
     def is_launch_at_login_enabled(self) -> bool:
         """Return whether launch-at-login is enabled."""
+
+    @abstractmethod
+    def run_on_main(self, fn) -> None:
+        """Dispatch fn to the main/UI thread."""

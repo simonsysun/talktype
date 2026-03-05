@@ -3,7 +3,7 @@
 ## 1) Prepare environment
 
 ```bash
-cd /Users/siyuansun/Dev/whisper
+cd <repo-root>
 python3 -m venv .venv
 ./.venv/bin/pip install -r requirements.txt
 ```
@@ -16,9 +16,15 @@ Install to `~/Applications` (no sudo needed):
 ./.venv/bin/python3 scripts/install_macos_app.py --open
 ```
 
+This builds a standalone `.app` bundle via PyInstaller. For a lightweight dev build that links to the repo:
+
+```bash
+./.venv/bin/python3 scripts/install_macos_app.py --dev --open
+```
+
 ## 3) First run setup
 
-1. In menu bar app, click `Set OpenAI API Key...`
+1. In menu bar app, click `OpenAI API Key...`
 2. Grant `Microphone` permission in macOS Settings
 3. Grant `Accessibility` permission (for auto-paste)
 
