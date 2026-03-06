@@ -111,22 +111,32 @@ def draw_icon(size: int, png_path: Path) -> None:
     )
     gradient = AppKit.NSGradient.alloc().initWithColors_(
         [
-            AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(0.97, 0.95, 0.91, 1.0),
-            AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(0.89, 0.84, 0.76, 1.0),
+            AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(0.89, 0.59, 0.49, 1.0),
+            AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(0.96, 0.81, 0.69, 1.0),
         ]
     )
-    gradient.drawInBezierPath_angle_(base_path, -90.0)
+    gradient.drawInBezierPath_angle_(base_path, -40.0)
 
-    stroke = AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(0.27, 0.23, 0.18, 0.18)
+    highlight_rect = AppKit.NSMakeRect(
+        rect.origin.x + size * 0.10,
+        rect.origin.y + size * 0.46,
+        rect.size.width - size * 0.20,
+        size * 0.26,
+    )
+    highlight_path = AppKit.NSBezierPath.bezierPathWithOvalInRect_(highlight_rect)
+    AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(1.0, 0.98, 0.94, 0.10).setFill()
+    highlight_path.fill()
+
+    stroke = AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(1.0, 1.0, 1.0, 0.32)
     stroke.setStroke()
-    base_path.setLineWidth_(max(1.0, size * 0.006))
+    base_path.setLineWidth_(max(1.0, size * 0.002))
     base_path.stroke()
 
     shadow = AppKit.NSShadow.alloc().init()
-    shadow.setShadowOffset_(Foundation.NSMakeSize(0, -size * 0.018))
-    shadow.setShadowBlurRadius_(size * 0.035)
+    shadow.setShadowOffset_(Foundation.NSMakeSize(0, -size * 0.016))
+    shadow.setShadowBlurRadius_(size * 0.030)
     shadow.setShadowColor_(
-        AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(0.18, 0.14, 0.10, 0.18)
+        AppKit.NSColor.colorWithCalibratedRed_green_blue_alpha_(0.18, 0.14, 0.10, 0.14)
     )
     shadow.set()
 
@@ -141,7 +151,7 @@ def draw_icon(size: int, png_path: Path) -> None:
         ),
         AppKit.NSParagraphStyleAttributeName: paragraph,
     }
-    text_rect = AppKit.NSMakeRect(0, size * 0.16, size, size * 0.62)
+    text_rect = AppKit.NSMakeRect(0, size * 0.17, size, size * 0.60)
     AppKit.NSAttributedString.alloc().initWithString_attributes_(letter, attrs).drawInRect_(
         text_rect
     )
