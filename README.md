@@ -16,6 +16,8 @@ Lightweight macOS menu bar dictation app.
 - Default: `gpt-4o-mini-transcribe`
 - Optional: `gpt-4o-transcribe`
 
+At around 30 minutes of dictation per day, `gpt-4o-mini-transcribe` costs about **$2.7/month** and `gpt-4o-transcribe` about **$5.4/month**, while Wispr Flow Pro is **$15/month**.
+
 ## API key storage
 
 OpenAI API keys are stored locally in an encrypted file under `~/.talktype/keys/`.
