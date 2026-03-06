@@ -35,9 +35,3 @@ Current behavior is intentionally simple:
 - OpenAI API key
 - Microphone permission
 - Accessibility permission for direct typing
-
-## Build
-
-```bash
-./.venv/bin/python scripts/bundle_macos_app.py --install ~/Applications --adhoc
-```
