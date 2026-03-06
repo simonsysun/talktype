@@ -10,9 +10,12 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from core.app_identity import is_demo_build as current_is_demo_build
+from core.app_identity import state_dir
+
 
 DEMO_PRODUCT = "whisper-demo"
-DEMO_LICENSE_PATH = Path.home() / ".whisper" / "demo-license.json"
+DEMO_LICENSE_PATH = state_dir() / "demo-license.json"
 DEMO_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxln7Q3kbySH/KAJyT6LH
 UMi1p/d5153L51edpy7/cF27hnHMCxhpBUUcuA2/MXN0/Mzjsds9tZj7tTpcGtoj
@@ -30,17 +33,7 @@ class LicenseError(RuntimeError):
 
 
 def is_demo_build() -> bool:
-    try:
-        import AppKit
-
-        bundle = AppKit.NSBundle.mainBundle()
-        bundle_id = bundle.bundleIdentifier() if bundle else ""
-        if bundle_id and bundle_id.endswith(".demo"):
-            return True
-        name = bundle.objectForInfoDictionaryKey_("CFBundleName") if bundle else ""
-        return bool(name and str(name).endswith("-demo"))
-    except Exception:
-        return False
+    return current_is_demo_build()
 
 
 def _openssl_bin() -> str:

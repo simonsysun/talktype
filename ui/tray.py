@@ -7,11 +7,8 @@ import rumps
 from config import load_config, save_config
 from core.asr_api import (
     DEFAULT_OPENAI_ASR_MODEL,
-    DEFAULT_OPENROUTER_ASR_MODEL,
     OPENAI_ASR_ACCOUNT,
-    OPENAI_PROVIDER,
-    OPENROUTER_ASR_ACCOUNT,
-    OPENROUTER_PROVIDER,
+    PREMIUM_OPENAI_ASR_MODEL,
 )
 from core.keychain import delete_key, retrieve_key, store_key
 
@@ -23,7 +20,7 @@ class WhisperTray(rumps.App):
         self,
         on_quit=None,
         platform=None,
-        on_provider_change=None,
+        on_model_change=None,
         is_dictating=None,
         vocabulary_store=None,
         app_name="Whisper",
@@ -32,24 +29,32 @@ class WhisperTray(rumps.App):
         super().__init__(app_name, icon=None, quit_button=None)
         self._on_quit = on_quit
         self._platform = platform
-        self._on_provider_change = on_provider_change
+        self._on_model_change = on_model_change
         self._is_dictating = is_dictating
         self._vocabulary_store = vocabulary_store
         self._app_name = app_name
         self._demo_license_manager = demo_license_manager
         self._cfg = load_config()
         self._validation_seq = 0
-        self._provider = self._normalize_provider(self._cfg.get("asr_provider", OPENAI_PROVIDER))
+        self._model = self._normalize_model(self._cfg.get("asr_model", DEFAULT_OPENAI_ASR_MODEL))
+        self._cfg["asr_model"] = self._model
 
         self.title = "W"
 
         self._asr_item = rumps.MenuItem("", callback=None)
         self._key_status_item = rumps.MenuItem("", callback=None)
-
-        self._provider_openai_item = rumps.MenuItem("Use OpenAI", callback=self._use_openai)
-        self._provider_openrouter_item = rumps.MenuItem("Use OpenRouter", callback=self._use_openrouter)
-        self._key_menu_item = rumps.MenuItem("ASR API Key...", callback=self._set_api_key)
+        self._key_menu_item = rumps.MenuItem("OpenAI API Key...", callback=self._set_api_key)
+        self._model_menu = rumps.MenuItem("Model")
+        self._model_mini_item = rumps.MenuItem(
+            "GPT-4o mini Transcribe", callback=self._use_openai_mini_model
+        )
+        self._model_premium_item = rumps.MenuItem(
+            "GPT-4o Transcribe", callback=self._use_openai_premium_model
+        )
         self._vocab_menu = rumps.MenuItem("Vocabulary")
+        self._accessibility_item = rumps.MenuItem(
+            "Accessibility Settings...", callback=self._open_accessibility_settings
+        )
         self._demo_license_menu = (
             rumps.MenuItem("Demo License") if self._demo_license_manager is not None else None
         )
@@ -64,10 +69,10 @@ class WhisperTray(rumps.App):
             rumps.MenuItem("Dictation: Option+Space", callback=None),
             self._asr_item,
             self._key_status_item,
+            self._accessibility_item,
             None,
-            self._provider_openai_item,
-            self._provider_openrouter_item,
             self._key_menu_item,
+            self._model_menu,
             self._vocab_menu,
             self._launch_item,
             None,
@@ -77,20 +82,21 @@ class WhisperTray(rumps.App):
             menu_items.insert(8, self._demo_license_menu)
         self.menu = menu_items
 
-        self._refresh_provider_ui()
+        self._refresh_model_ui()
         self._refresh_key_status()
         self._refresh_vocabulary_menu()
         self._refresh_demo_license_menu()
 
-        # Validate existing key on startup for current provider.
+        # Validate existing key on startup.
         key = self._current_api_key()
         if key:
             self._validate_key(key, notify=False)
 
     @staticmethod
-    def _normalize_provider(provider: str) -> str:
-        p = (provider or OPENAI_PROVIDER).strip().lower()
-        return OPENROUTER_PROVIDER if p == OPENROUTER_PROVIDER else OPENAI_PROVIDER
+    def _normalize_model(model: str) -> str:
+        if model == PREMIUM_OPENAI_ASR_MODEL:
+            return PREMIUM_OPENAI_ASR_MODEL
+        return DEFAULT_OPENAI_ASR_MODEL
 
     def _save_cfg(self):
         save_config(self._cfg)
@@ -107,42 +113,21 @@ class WhisperTray(rumps.App):
         except Exception:
             return config_state
 
-    def _provider_label(self, provider: str | None = None) -> str:
-        p = self._normalize_provider(provider or self._provider)
-        return "OpenRouter" if p == OPENROUTER_PROVIDER else "OpenAI"
-
-    def _provider_account(self, provider: str | None = None) -> str:
-        p = self._normalize_provider(provider or self._provider)
-        return OPENROUTER_ASR_ACCOUNT if p == OPENROUTER_PROVIDER else OPENAI_ASR_ACCOUNT
-
-    def _provider_model(self, provider: str | None = None) -> str:
-        p = self._normalize_provider(provider or self._provider)
-        if p == OPENROUTER_PROVIDER:
-            return self._cfg.get("openrouter_asr_model", DEFAULT_OPENROUTER_ASR_MODEL)
-        return self._cfg.get("asr_model", DEFAULT_OPENAI_ASR_MODEL)
-
-    def _current_api_key(self, provider: str | None = None) -> str | None:
-        p = self._normalize_provider(provider or self._provider)
-        if p == OPENROUTER_PROVIDER:
-            return retrieve_key(OPENROUTER_ASR_ACCOUNT) or retrieve_key("OpenRouter")
+    def _current_api_key(self) -> str | None:
         return retrieve_key(OPENAI_ASR_ACCOUNT) or retrieve_key("OpenAI")
 
-    def _delete_provider_keys(self, provider: str | None = None) -> None:
-        p = self._normalize_provider(provider or self._provider)
-        if p == OPENROUTER_PROVIDER:
-            delete_key(OPENROUTER_ASR_ACCOUNT)
-            delete_key("OpenRouter")
-            return
+    def _delete_provider_keys(self) -> None:
         delete_key(OPENAI_ASR_ACCOUNT)
         delete_key("OpenAI")
 
-    def _refresh_provider_ui(self):
-        label = self._provider_label()
-        model = self._provider_model()
-        self._asr_item.title = f"ASR: {label} / {model}"
-        self._provider_openai_item.state = 1 if self._provider == OPENAI_PROVIDER else 0
-        self._provider_openrouter_item.state = 1 if self._provider == OPENROUTER_PROVIDER else 0
-        self._key_menu_item.title = f"{label} API Key..."
+    def _refresh_model_ui(self):
+        self._asr_item.title = f"ASR: OpenAI / {self._model}"
+        if getattr(self._model_menu, "_menu", None) is not None:
+            self._model_menu.clear()
+        self._model_mini_item.state = 1 if self._model == DEFAULT_OPENAI_ASR_MODEL else 0
+        self._model_premium_item.state = 1 if self._model == PREMIUM_OPENAI_ASR_MODEL else 0
+        self._model_menu.add(self._model_mini_item)
+        self._model_menu.add(self._model_premium_item)
 
     def _refresh_key_status(self):
         key = self._current_api_key()
@@ -200,62 +185,38 @@ class WhisperTray(rumps.App):
         # Mark any in-flight validation result as stale.
         self._validation_seq += 1
 
-    def _set_provider(self, provider: str):
-        provider = self._normalize_provider(provider)
-        if provider == self._provider:
+    def _set_model(self, model: str):
+        model = self._normalize_model(model)
+        if model == self._model:
             return
 
         if self._is_dictating and self._is_dictating():
-            self.notify_info("Cannot switch provider during dictation.")
+            self.notify_info("Cannot switch model during dictation.")
             return
 
-        prev_provider = self._provider
-
         self._invalidate_validations()
-        self._provider = provider
-        self._cfg["asr_provider"] = provider
-        if provider == OPENROUTER_PROVIDER:
-            self._cfg.setdefault("openrouter_asr_model", DEFAULT_OPENROUTER_ASR_MODEL)
-            self._cfg.setdefault("openrouter_base_url", "https://openrouter.ai/api/v1")
-        else:
-            self._cfg.setdefault("asr_model", DEFAULT_OPENAI_ASR_MODEL)
+        self._model = model
+        self._cfg["asr_model"] = model
         self._save_cfg()
+        self._refresh_model_ui()
 
-        self._refresh_provider_ui()
-        self._refresh_key_status()
-
-        key = self._current_api_key(provider)
-        if key:
-            self._validate_key(key, notify=False)
-        else:
-            # No key for this provider — prompt immediately; revert if cancelled
-            if not self._prompt_new_key():
-                self._provider = prev_provider
-                self._cfg["asr_provider"] = prev_provider
-                self._save_cfg()
-                self._refresh_provider_ui()
-                self._refresh_key_status()
-                self.notify_info("Provider switch cancelled (no API key entered).")
-                return
-
-        if self._on_provider_change:
+        if self._on_model_change:
             try:
-                self._on_provider_change(provider)
+                self._on_model_change(model)
             except Exception as e:
-                print(f"[tray] provider change callback failed: {e}")
+                print(f"[tray] model change callback failed: {e}")
 
-        self.notify_info(f"ASR provider switched to {self._provider_label(provider)}.")
+        self.notify_info(f"ASR model switched to {model}.")
 
-    def _use_openai(self, sender):
-        self._set_provider(OPENAI_PROVIDER)
+    def _use_openai_mini_model(self, sender):
+        self._set_model(DEFAULT_OPENAI_ASR_MODEL)
 
-    def _use_openrouter(self, sender):
-        self._set_provider(OPENROUTER_PROVIDER)
+    def _use_openai_premium_model(self, sender):
+        self._set_model(PREMIUM_OPENAI_ASR_MODEL)
 
     def _validate_key(self, key: str, notify: bool = True):
-        """Validate the current provider API key in a background thread."""
-        provider = self._provider
-        label = self._provider_label(provider)
+        """Validate the OpenAI API key in a background thread."""
+        label = "OpenAI"
         self._invalidate_validations()
         seq = self._validation_seq
         self._set_key_status("API Key: Checking...", checked=False)
@@ -264,20 +225,15 @@ class WhisperTray(rumps.App):
             try:
                 from openai import OpenAI
 
-                kwargs = {"api_key": key, "timeout": 10.0}
-                if provider == OPENROUTER_PROVIDER:
-                    kwargs["base_url"] = self._cfg.get(
-                        "openrouter_base_url", "https://openrouter.ai/api/v1"
-                    )
-                client = OpenAI(**kwargs)
+                client = OpenAI(api_key=key, timeout=10.0)
                 client.models.list()
-                if seq != self._validation_seq or provider != self._provider:
+                if seq != self._validation_seq:
                     return
                 self._set_key_status("API Key: Connected", checked=True)
                 if notify:
                     self.notify_info(f"{label} API key verified.")
             except Exception as e:
-                if seq != self._validation_seq or provider != self._provider:
+                if seq != self._validation_seq:
                     return
                 err = str(e).lower()
                 status_code = getattr(e, "status_code", None)
@@ -288,10 +244,10 @@ class WhisperTray(rumps.App):
                     or "unauthorized" in err
                 )
                 if is_auth_error:
-                    current = self._current_api_key(provider)
+                    current = self._current_api_key()
                     if current != key:
                         return
-                    self._delete_provider_keys(provider)
+                    self._delete_provider_keys()
                     self._set_key_status("API Key: Invalid", checked=False)
                     self.notify_error(f"{label} API key is invalid. Please enter a new one.")
                 else:
@@ -310,7 +266,7 @@ class WhisperTray(rumps.App):
         return f"{key[:3]}...{key[-4:]}"
 
     def _set_api_key(self, sender):
-        label = self._provider_label()
+        label = "OpenAI"
         existing = self._current_api_key()
         if existing:
             masked = self._mask_key(existing)
@@ -334,7 +290,7 @@ class WhisperTray(rumps.App):
 
     def _prompt_new_key(self) -> bool:
         """Prompt user for API key. Returns True if key was saved."""
-        label = self._provider_label()
+        label = "OpenAI"
         w = rumps.Window(
             message=f"Enter {label} API key for speech transcription:",
             title=f"{self._app_name} — {label} API Key",
@@ -346,7 +302,7 @@ class WhisperTray(rumps.App):
         resp = w.run()
         if resp.clicked and resp.text.strip():
             key = resp.text.strip()
-            if store_key(self._provider_account(), key):
+            if store_key(OPENAI_ASR_ACCOUNT, key):
                 self._validate_key(key, notify=True)
                 return True
             else:
@@ -435,6 +391,15 @@ class WhisperTray(rumps.App):
             self._save_cfg()
         except Exception as e:
             self.notify_error(f"Failed to update launch-at-login: {e}")
+
+    def _open_accessibility_settings(self, sender):
+        if self._platform is None:
+            self.notify_error("Accessibility settings are unavailable.")
+            return
+        try:
+            self._platform.open_accessibility_settings()
+        except Exception as e:
+            self.notify_error(f"Failed to open Accessibility settings: {e}")
 
     def _on_main(self, fn):
         if AppKit.NSThread.isMainThread():

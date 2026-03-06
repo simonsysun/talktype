@@ -1,62 +1,113 @@
-"""macOS key storage helper.
+"""Local encrypted API key storage.
 
-Primary storage is Keychain via Security framework. If Keychain operations fail
-in unsigned/dev environments, a local fallback file is used so the app remains
-functional.
+Primary storage is an app-local encrypted file under the app state directory.
+Legacy Keychain entries are read once for migration and then deleted.
 """
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import os
 import re
+import secrets
+import subprocess
 from pathlib import Path
 
-import Security
+from cryptography.fernet import Fernet, InvalidToken
+
+from core.app_identity import keychain_service, state_dir
+
+_SECURITY = "/usr/bin/security"
+_IOREG = "/usr/sbin/ioreg"
 
 
-_SERVICE = "com.whisper.api-keys"
-_ERR_SUCCESS = 0
-_ERR_ITEM_NOT_FOUND = -25300
-_FALLBACK_DIR = Path.home() / ".whisper" / "keys"
+def _keys_dir() -> Path:
+    return state_dir() / "keys"
 
 
-def _normalize_status(result) -> tuple[int, object | None]:
-    if isinstance(result, tuple) and len(result) == 2:
-        return int(result[0]), result[1]
-    return int(result), None
+def _master_key_path() -> Path:
+    return _keys_dir() / "master.key"
 
 
-def _fallback_path(provider: str) -> Path:
+def _encrypted_path(provider: str) -> Path:
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", provider)
-    return _FALLBACK_DIR / f"{safe}.key"
+    return _keys_dir() / f"{safe}.enc"
 
 
-def _store_fallback(provider: str, api_key: str) -> bool:
+def _ensure_keys_dir() -> Path:
+    keys_dir = _keys_dir()
+    keys_dir.mkdir(parents=True, exist_ok=True)
+    os.chmod(keys_dir, 0o700)
+    return keys_dir
+
+
+def _load_or_create_master_secret() -> bytes:
+    _ensure_keys_dir()
+    path = _master_key_path()
     try:
-        _FALLBACK_DIR.mkdir(parents=True, exist_ok=True)
-        os.chmod(_FALLBACK_DIR, 0o700)
-        path = _fallback_path(provider)
+        if path.exists():
+            return path.read_bytes()
+    except Exception:
+        pass
+
+    secret = secrets.token_bytes(32)
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(secret)
+    return secret
+
+
+def _machine_binding() -> bytes:
+    try:
+        result = subprocess.run(
+            [_IOREG, "-rd1", "-c", "IOPlatformExpertDevice"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        match = re.search(r'"IOPlatformUUID"\s*=\s*"([^"]+)"', result.stdout)
+        if match:
+            return match.group(1).encode("utf-8")
+    except Exception:
+        pass
+    return b"local-machine"
+
+
+def _fernet() -> Fernet:
+    master = _load_or_create_master_secret()
+    digest = hashlib.sha256(master + b"\0" + _machine_binding()).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def _store_encrypted(provider: str, api_key: str) -> bool:
+    try:
+        token = _fernet().encrypt(api_key.encode("utf-8"))
+        path = _encrypted_path(provider)
         fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w") as f:
-            f.write(api_key)
+        with os.fdopen(fd, "wb") as f:
+            f.write(token)
         return True
     except Exception:
         return False
 
 
-def _retrieve_fallback(provider: str) -> str | None:
-    path = _fallback_path(provider)
+def _retrieve_encrypted(provider: str) -> str | None:
+    path = _encrypted_path(provider)
     try:
         if not path.exists():
             return None
-        data = path.read_text(encoding="utf-8").strip()
-        return data or None
+        token = path.read_bytes()
+        value = _fernet().decrypt(token).decode("utf-8").strip()
+        return value or None
+    except InvalidToken:
+        return None
     except Exception:
         return None
 
 
-def _delete_fallback(provider: str) -> bool:
-    path = _fallback_path(provider)
+def _delete_encrypted(provider: str) -> bool:
+    path = _encrypted_path(provider)
     try:
         if path.exists():
             path.unlink()
@@ -66,54 +117,70 @@ def _delete_fallback(provider: str) -> bool:
     return False
 
 
-def store_key(provider: str, api_key: str) -> bool:
-    """Store an API key in Keychain. Falls back to local file if needed."""
-    delete_key(provider)
+def _retrieve_legacy_keychain(provider: str) -> str | None:
+    try:
+        result = subprocess.run(
+            [
+                _SECURITY,
+                "find-generic-password",
+                "-s",
+                keychain_service(),
+                "-a",
+                provider,
+                "-w",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        value = result.stdout.strip()
+        return value or None
+    except Exception:
+        return None
 
-    attrs = {
-        Security.kSecClass: Security.kSecClassGenericPassword,
-        Security.kSecAttrService: _SERVICE,
-        Security.kSecAttrAccount: provider,
-        Security.kSecValueData: api_key.encode("utf-8"),
-        Security.kSecAttrAccessible: Security.kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-    }
-    status, _ = _normalize_status(Security.SecItemAdd(attrs, None))
-    if status == _ERR_SUCCESS:
+
+def _delete_legacy_keychain(provider: str) -> bool:
+    try:
+        subprocess.run(
+            [
+                _SECURITY,
+                "delete-generic-password",
+                "-s",
+                keychain_service(),
+                "-a",
+                provider,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
         return True
+    except Exception:
+        return False
 
-    return _store_fallback(provider, api_key)
+
+def store_key(provider: str, api_key: str) -> bool:
+    """Store an API key in local encrypted storage."""
+    delete_key(provider)
+    return _store_encrypted(provider, api_key)
 
 
 def retrieve_key(provider: str) -> str | None:
-    """Retrieve an API key from Keychain, then fallback file."""
-    query = {
-        Security.kSecClass: Security.kSecClassGenericPassword,
-        Security.kSecAttrService: _SERVICE,
-        Security.kSecAttrAccount: provider,
-        Security.kSecReturnData: True,
-        Security.kSecMatchLimit: Security.kSecMatchLimitOne,
-    }
-    status, result = _normalize_status(Security.SecItemCopyMatching(query, None))
-    if status == _ERR_SUCCESS and result is not None:
-        try:
-            return bytes(result).decode("utf-8")
-        except Exception:
-            pass
+    """Retrieve an API key from local encrypted storage, migrating legacy Keychain on demand."""
+    value = _retrieve_encrypted(provider)
+    if value:
+        return value
 
-    return _retrieve_fallback(provider)
+    legacy = _retrieve_legacy_keychain(provider)
+    if legacy and _store_encrypted(provider, legacy):
+        _delete_legacy_keychain(provider)
+        return legacy
+
+    return legacy
 
 
 def delete_key(provider: str) -> bool:
-    """Delete an API key from Keychain and fallback file."""
-    query = {
-        Security.kSecClass: Security.kSecClassGenericPassword,
-        Security.kSecAttrService: _SERVICE,
-        Security.kSecAttrAccount: provider,
-    }
-    keychain_result = Security.SecItemDelete(query)
-    status, _ = _normalize_status(keychain_result)
-    keychain_deleted = status == _ERR_SUCCESS
-    fallback_deleted = _delete_fallback(provider)
-    if status in (_ERR_SUCCESS, _ERR_ITEM_NOT_FOUND):
-        return keychain_deleted or fallback_deleted
-    return fallback_deleted
+    """Delete an API key from local encrypted storage and any legacy Keychain entry."""
+    encrypted_deleted = _delete_encrypted(provider)
+    legacy_deleted = _delete_legacy_keychain(provider)
+    return encrypted_deleted or legacy_deleted

@@ -16,11 +16,11 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 
 from config import load_config, save_config
+from core.app_identity import app_name as current_app_name
+from core.app_identity import state_dir
 from core.asr_api import (
     DEFAULT_OPENAI_ASR_MODEL,
-    DEFAULT_OPENROUTER_ASR_MODEL,
-    OPENAI_PROVIDER,
-    OPENROUTER_PROVIDER,
+    PREMIUM_OPENAI_ASR_MODEL,
     OpenAITranscriber,
 )
 from core.audio import AudioRecorder
@@ -35,6 +35,7 @@ from ui.tray import WhisperTray
 
 class WhisperApp:
     def __init__(self):
+        self._app_name = current_app_name()
         self.cfg = load_config()
         self.platform = MacOSPlatform()
         self.overlay = None
@@ -42,17 +43,11 @@ class WhisperApp:
         self._demo_build = is_demo_build()
         self.licensing = DemoLicenseManager() if self._demo_build else None
         self.vocabulary = VocabularyStore()
-        self._provider_fallback_notice = None
-        self._ensure_provider_has_available_key()
-        provider = self._current_provider()
-        model = self._current_model(provider)
+        self._normalize_asr_config()
+        model = self._current_model()
         self.transcriber = OpenAITranscriber(
             model=model,
             timeout=float(self.cfg.get("asr_timeout_seconds", 30.0)),
-            provider=provider,
-            openrouter_base_url=self.cfg.get(
-                "openrouter_base_url", "https://openrouter.ai/api/v1"
-            ),
         )
         self.tray = None
         self._dictation_active = False
@@ -74,56 +69,35 @@ class WhisperApp:
         self._demo_activation_hint_shown = False
 
     @staticmethod
-    def _provider_has_key(provider: str) -> bool:
-        if provider == OPENROUTER_PROVIDER:
-            return bool(retrieve_key("OpenRouter-ASR") or retrieve_key("OpenRouter"))
+    def _provider_has_key() -> bool:
         return bool(retrieve_key("OpenAI-ASR") or retrieve_key("OpenAI"))
 
-    def _ensure_provider_has_available_key(self):
-        provider = self._current_provider()
-        if self._provider_has_key(provider):
-            return
-
-        alternate = OPENAI_PROVIDER if provider == OPENROUTER_PROVIDER else OPENROUTER_PROVIDER
-        if not self._provider_has_key(alternate):
-            return
-
-        self.cfg["asr_provider"] = alternate
-        if alternate == OPENROUTER_PROVIDER:
-            self.cfg.setdefault("openrouter_asr_model", DEFAULT_OPENROUTER_ASR_MODEL)
-            self.cfg.setdefault("openrouter_base_url", "https://openrouter.ai/api/v1")
-        else:
-            self.cfg.setdefault("asr_model", DEFAULT_OPENAI_ASR_MODEL)
+    def _normalize_asr_config(self):
+        model = self.cfg.get("asr_model", DEFAULT_OPENAI_ASR_MODEL)
+        if model not in {DEFAULT_OPENAI_ASR_MODEL, PREMIUM_OPENAI_ASR_MODEL}:
+            model = DEFAULT_OPENAI_ASR_MODEL
+        self.cfg["asr_model"] = model
+        self.cfg.pop("asr_provider", None)
+        self.cfg.pop("openrouter_asr_model", None)
+        self.cfg.pop("openrouter_base_url", None)
         save_config(self.cfg)
-        self._provider_fallback_notice = (
-            f"ASR provider switched to {alternate} because the configured provider had no saved API key."
-        )
 
-    def _current_provider(self) -> str:
-        provider = (self.cfg.get("asr_provider", OPENAI_PROVIDER) or OPENAI_PROVIDER).lower()
-        return OPENROUTER_PROVIDER if provider == OPENROUTER_PROVIDER else OPENAI_PROVIDER
-
-    def _current_model(self, provider: str | None = None) -> str:
-        p = provider or self._current_provider()
-        if p == OPENROUTER_PROVIDER:
-            return self.cfg.get("openrouter_asr_model", DEFAULT_OPENROUTER_ASR_MODEL)
-        return self.cfg.get("asr_model", DEFAULT_OPENAI_ASR_MODEL)
+    def _current_model(self) -> str:
+        model = self.cfg.get("asr_model", DEFAULT_OPENAI_ASR_MODEL)
+        if model == PREMIUM_OPENAI_ASR_MODEL:
+            return PREMIUM_OPENAI_ASR_MODEL
+        return DEFAULT_OPENAI_ASR_MODEL
 
     def _sync_transcriber_from_cfg(self):
-        provider = self._current_provider()
-        self.transcriber.provider = provider
-        self.transcriber.model = self._current_model(provider)
+        self.transcriber.model = self._current_model()
         self.transcriber.timeout = float(self.cfg.get("asr_timeout_seconds", 30.0))
-        self.transcriber.openrouter_base_url = self.cfg.get(
-            "openrouter_base_url", "https://openrouter.ai/api/v1"
-        )
 
-    def _on_provider_change(self, provider: str):
-        # Tray changed provider/model settings; reload and apply immediately.
+    def _on_model_change(self, model: str):
+        # Tray changed model settings; reload and apply immediately.
         self.cfg = load_config()
         with self._transcriber_lock:
             self._sync_transcriber_from_cfg()
-        print(f"[asr] provider switched to {provider}, model={self.transcriber.model}")
+        print(f"[asr] model switched to {model}")
 
     def _on_audio_level(self, level: float):
         """Called from audio thread with RMS level."""
@@ -154,24 +128,67 @@ class WhisperApp:
             self._start_dictation()
 
     @staticmethod
+    def _av_auth_not_determined() -> int:
+        return int(getattr(AVF, "AVAuthorizationStatusNotDetermined", 0))
+
+    @staticmethod
+    def _av_auth_restricted() -> int:
+        return int(getattr(AVF, "AVAuthorizationStatusRestricted", 1))
+
+    @staticmethod
+    def _av_auth_denied() -> int:
+        return int(getattr(AVF, "AVAuthorizationStatusDenied", 2))
+
+    @staticmethod
+    def _av_auth_authorized() -> int:
+        return int(getattr(AVF, "AVAuthorizationStatusAuthorized", 3))
+
+    @staticmethod
     def _mic_auth_status() -> int:
         try:
             return int(
                 AVF.AVCaptureDevice.authorizationStatusForMediaType_(AVF.AVMediaTypeAudio)
             )
         except Exception:
-            # Avoid false negatives if API is unavailable in environment.
-            return int(AVF.AVAuthorizationStatusAuthorized)
+            return WhisperApp._av_auth_authorized()
 
     @staticmethod
     def _mic_status_label(status: int) -> str:
         mapping = {
-            int(AVF.AVAuthorizationStatusNotDetermined): "not_determined",
-            int(AVF.AVAuthorizationStatusRestricted): "restricted",
-            int(AVF.AVAuthorizationStatusDenied): "denied",
-            int(AVF.AVAuthorizationStatusAuthorized): "authorized",
+            WhisperApp._av_auth_not_determined(): "not_determined",
+            WhisperApp._av_auth_restricted(): "restricted",
+            WhisperApp._av_auth_denied(): "denied",
+            WhisperApp._av_auth_authorized(): "authorized",
         }
         return mapping.get(int(status), f"unknown({status})")
+
+    @staticmethod
+    def _mic_status_is_authorized(status: int) -> bool:
+        return int(status) == WhisperApp._av_auth_authorized()
+
+    @staticmethod
+    def _mic_status_is_not_determined(status: int) -> bool:
+        return int(status) == WhisperApp._av_auth_not_determined()
+
+    @staticmethod
+    def _mic_status_is_denied(status: int) -> bool:
+        return int(status) in {
+            WhisperApp._av_auth_denied(),
+            WhisperApp._av_auth_restricted(),
+        }
+
+    @staticmethod
+    def _request_mic_permission(callback):
+        try:
+            AVF.AVCaptureDevice.requestAccessForMediaType_completionHandler_(
+                AVF.AVMediaTypeAudio,
+                callback,
+            )
+            return True
+        except Exception as e:
+            print(f"[audio] AVCaptureDevice permission request failed: {e}")
+
+        return False
 
     @staticmethod
     def _open_mic_settings():
@@ -181,12 +198,24 @@ class WhisperApp:
         except Exception:
             pass
 
+    @staticmethod
+    def _activate_app_for_permissions():
+        try:
+            AppKit.NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+        except Exception:
+            pass
+
     def _handle_mic_permission_result(self, granted: bool):
         self._mic_permission_request_in_flight = False
-        self._microphone_granted = bool(granted)
-        print(f"[audio] microphone permission callback: {'granted' if granted else 'denied'}")
+        status = self._mic_auth_status()
+        self._microphone_granted = bool(granted) or self._mic_status_is_authorized(status)
+        print(
+            "[audio] microphone permission callback: "
+            f"{'granted' if granted else 'denied'} "
+            f"(status={self._mic_status_label(status)}, raw={int(status)})"
+        )
 
-        if granted:
+        if self._microphone_granted:
             should_start = self._start_after_mic_permission
             self._start_after_mic_permission = False
             if should_start:
@@ -195,16 +224,22 @@ class WhisperApp:
 
         self._start_after_mic_permission = False
         if self.tray:
-            self.tray.notify_error(
-                "Microphone access denied. Enable in System Settings → Privacy → Microphone."
-            )
-        self._open_mic_settings()
+            if self._mic_status_is_denied(status):
+                self.tray.notify_error(
+                    "Microphone access denied. Enable in System Settings → Privacy → Microphone."
+                )
+            else:
+                self.tray.notify_error(
+                    f"Microphone prompt did not appear. Click {self._app_name} once and try Option+Space again."
+                )
+        if self._mic_status_is_denied(status):
+            self._open_mic_settings()
 
     def _start_dictation(self):
         if self.licensing is not None and not self.licensing.is_activated():
             if self.tray and not self._demo_activation_hint_shown:
                 self.tray.notify_info(
-                    "Whisper-demo is not activated. Open Demo License to copy this Mac's ID and import your license file."
+                    f"{self._app_name} is not activated. Open Demo License to copy this Mac's ID and import your license file."
                 )
                 self._demo_activation_hint_shown = True
             return
@@ -212,9 +247,9 @@ class WhisperApp:
         # Check microphone permission (non-blocking).
         if not self._microphone_granted:
             status = self._mic_auth_status()
-            if status == int(AVF.AVAuthorizationStatusAuthorized):
+            if self._mic_status_is_authorized(status):
                 self._microphone_granted = True
-            elif status == int(AVF.AVAuthorizationStatusNotDetermined):
+            elif self._mic_status_is_not_determined(status):
                 # Trigger system permission dialog non-blocking.
                 # Can't block main thread — dialog needs the run loop to display.
                 self._start_after_mic_permission = True
@@ -223,12 +258,18 @@ class WhisperApp:
                 else:
                     self._mic_permission_request_in_flight = True
                     print("[audio] microphone: not_determined — requesting permission")
-                    AVF.AVCaptureDevice.requestAccessForMediaType_completionHandler_(
-                        AVF.AVMediaTypeAudio,
+                    self._activate_app_for_permissions()
+                    requested = self._request_mic_permission(
                         lambda granted: self.platform.run_on_main(
                             lambda: self._handle_mic_permission_result(bool(granted))
-                        ),
+                        )
                     )
+                    if not requested:
+                        self._mic_permission_request_in_flight = False
+                        self._start_after_mic_permission = False
+                        if self.tray:
+                            self.tray.notify_error("Unable to request microphone permission.")
+                        return
                 if self.tray:
                     self.tray.notify_info(
                         "Microphone permission required. Please allow the system prompt."
@@ -343,7 +384,7 @@ class WhisperApp:
                         self.platform.copy_text(text)
                         if self.tray and not self._clipboard_hint_shown:
                             self.tray.notify_info(
-                                "Text copied to clipboard. Grant Accessibility for auto-paste."
+                                "Text copied to clipboard. Grant Accessibility for direct typing."
                             )
                             self._clipboard_hint_shown = True
                         print(f"[clipboard] {text}")
@@ -378,6 +419,15 @@ class WhisperApp:
     def run(self):
         print("Whisper — Voice-to-Text")
         print("=" * 40)
+        bundle = AppKit.NSBundle.mainBundle()
+        bundle_id = str(bundle.bundleIdentifier() or "")
+        bundle_path = str(bundle.bundlePath() or "")
+        executable_path = str(bundle.executablePath() or "")
+        os_version = AppKit.NSProcessInfo.processInfo().operatingSystemVersionString()
+        print(f"[app] bundle_id={bundle_id}")
+        print(f"[app] bundle_path={bundle_path}")
+        print(f"[app] executable={executable_path}")
+        print(f"[app] macOS={os_version}")
 
         # In dev-launcher mode the child interpreter can appear as "Python" in the Dock.
         # Force accessory activation policy so the app stays menu-bar-only.
@@ -398,23 +448,26 @@ class WhisperApp:
         self.tray = WhisperTray(
             on_quit=self._on_quit,
             platform=self.platform,
-            on_provider_change=self._on_provider_change,
+            on_model_change=self._on_model_change,
             is_dictating=lambda: self._dictation_active,
             vocabulary_store=self.vocabulary,
-            app_name="Whisper-demo" if self._demo_build else "Whisper",
+            app_name=self._app_name,
             demo_license_manager=self.licensing,
         )
 
         # Passive check only — do NOT call requestAccess here.
         # The run loop isn't active yet; a blocking request would auto-deny.
         status = self._mic_auth_status()
-        self._microphone_granted = status == int(AVF.AVAuthorizationStatusAuthorized)
-        print(f"[audio] microphone status at startup: {self._mic_status_label(status)}")
+        self._microphone_granted = self._mic_status_is_authorized(status)
+        print(
+            f"[audio] microphone status at startup: "
+            f"{self._mic_status_label(status)} (raw={int(status)})"
+        )
 
         self._accessibility_granted = self.platform.request_accessibility()
         if not self._accessibility_granted:
             print("Accessibility permission not granted.")
-            print("  Paste (Cmd+V) will not work until granted.")
+            print("  Direct typing will not work until granted.")
             print("  System Settings -> Privacy & Security -> Accessibility")
             if self.tray:
                 self.tray.notify_info(
@@ -436,26 +489,29 @@ class WhisperApp:
 
         self.overlay = OverlayPanel()
         self.platform.register_hotkey(on_dictation=self._on_dictation)
+        hotkey_mode = self.platform.hotkey_capture_mode()
 
         print()
         print("Ready!")
-        print("  Option+Space -> Dictation (speak -> paste)")
+        print("  Option+Space -> Dictation (speak -> type)")
+        print(f"  Hotkey capture: {hotkey_mode}")
         if self.licensing is not None:
             activated, summary = self.licensing.status_summary()
             print(f"  Demo license: {summary}")
             if not activated and self.tray:
                 self.tray.notify_info(
-                    "Whisper-demo requires activation. Open Demo License to copy the Machine ID and import your license file."
+                    f"{self._app_name} requires activation. Open Demo License to copy the Machine ID and import your license file."
                 )
-        print(
-            f"  ASR provider: {self._current_provider()} | model: {self._current_model()}"
-        )
-        print("  Set API key from tray menu: <Provider> API Key...")
+        print(f"  ASR model: {self._current_model()}")
+        print(f"  API key: {'present' if self._provider_has_key() else 'missing'}")
+        print("  Set API key from tray menu: OpenAI API Key...")
         if self._silence_auto_stop:
             print(f"  Silence auto-stop: {self._silence_timeout}s")
         print()
-        if self._provider_fallback_notice and self.tray:
-            self.tray.notify_info(self._provider_fallback_notice)
+        if hotkey_mode == "monitor" and self.tray:
+            self.tray.notify_error(
+                "Option+Space cannot override macOS until Accessibility is enabled. Open Accessibility Settings from the tray."
+            )
 
         self.tray.run()
 
@@ -473,7 +529,7 @@ def _ensure_single_instance():
             sys.exit(0)
     else:
         # Dev mode — use file lock
-        lock_dir = Path.home() / ".whisper"
+        lock_dir = state_dir()
         lock_dir.mkdir(parents=True, exist_ok=True)
         lock_file = lock_dir / ".lock"
         # Keep the file handle alive for the process lifetime

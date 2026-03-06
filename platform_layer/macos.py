@@ -2,6 +2,7 @@ import time
 import os
 import plistlib
 import subprocess
+import ctypes
 from pathlib import Path
 import AppKit
 import Quartz
@@ -9,10 +10,50 @@ from ApplicationServices import AXIsProcessTrustedWithOptions, kAXTrustedCheckOp
 from platform_layer.base import PlatformBase
 
 _MAIN_LOOP_MODES = [AppKit.NSDefaultRunLoopMode, AppKit.NSEventTrackingRunLoopMode]
+_CARBON = ctypes.cdll.LoadLibrary("/System/Library/Frameworks/Carbon.framework/Carbon")
+_CARBON_OPTION_KEY = 0x0800
+_CARBON_NO_ERR = 0
+_CARBON_EVENT_CLASS_KEYBOARD = int.from_bytes(b"keyb", "big")
+_CARBON_EVENT_HOTKEY_PRESSED = 6
+_CARBON_HOTKEY_SIGNATURE = int.from_bytes(b"WSPR", "big")
+
+
+class _EventTypeSpec(ctypes.Structure):
+    _fields_ = [("eventClass", ctypes.c_uint32), ("eventKind", ctypes.c_uint32)]
+
+
+class _EventHotKeyID(ctypes.Structure):
+    _fields_ = [("signature", ctypes.c_uint32), ("id", ctypes.c_uint32)]
+
+
+_CarbonHotKeyHandler = ctypes.CFUNCTYPE(ctypes.c_int32, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)
+_CARBON.GetApplicationEventTarget.restype = ctypes.c_void_p
+_CARBON.InstallEventHandler.argtypes = [
+    ctypes.c_void_p,
+    _CarbonHotKeyHandler,
+    ctypes.c_uint32,
+    ctypes.POINTER(_EventTypeSpec),
+    ctypes.c_void_p,
+    ctypes.POINTER(ctypes.c_void_p),
+]
+_CARBON.InstallEventHandler.restype = ctypes.c_int32
+_CARBON.RegisterEventHotKey.argtypes = [
+    ctypes.c_uint32,
+    ctypes.c_uint32,
+    _EventHotKeyID,
+    ctypes.c_void_p,
+    ctypes.c_uint32,
+    ctypes.POINTER(ctypes.c_void_p),
+]
+_CARBON.RegisterEventHotKey.restype = ctypes.c_int32
+_CARBON.UnregisterEventHotKey.argtypes = [ctypes.c_void_p]
+_CARBON.UnregisterEventHotKey.restype = ctypes.c_int32
+_CARBON.RemoveEventHandler.argtypes = [ctypes.c_void_p]
+_CARBON.RemoveEventHandler.restype = ctypes.c_int32
 
 
 class MacOSPlatform(PlatformBase):
-    """macOS-specific hotkeys (NSEvent), paste (CGEvent), and clipboard."""
+    """macOS-specific hotkeys, direct text injection, and clipboard."""
 
     def __init__(self):
         self._monitors = []
@@ -25,6 +66,10 @@ class MacOSPlatform(PlatformBase):
         self._app_name = str(bundle_name or "Whisper")
         self._launch_agent_label = f"{self._bundle_id}.launcher"
         self._log_dir = Path.home() / "Library" / "Logs" / self._app_name
+        self._hotkey_ref = None
+        self._hotkey_handler_ref = None
+        self._hotkey_handler = None
+        self._hotkey_mode = "unregistered"
 
     def run_on_main(self, fn) -> None:
         if AppKit.NSThread.isMainThread():
@@ -54,26 +99,32 @@ class MacOSPlatform(PlatformBase):
         pb.setString_forType_(text, AppKit.NSPasteboardTypeString)
 
     def paste_text(self, text: str) -> None:
-        """Copy text to system clipboard and simulate Cmd+V."""
-        self.copy_text(text)
+        """Type text into the focused app without touching the clipboard."""
+        if not text:
+            return
 
-        # Brief delay to ensure clipboard is ready
-        time.sleep(0.05)
-
-        # Simulate Cmd+V keypress
-        # Keycode 9 = 'v'
-        v_down = Quartz.CGEventCreateKeyboardEvent(None, 9, True)
-        v_up = Quartz.CGEventCreateKeyboardEvent(None, 9, False)
-        Quartz.CGEventSetFlags(v_down, Quartz.kCGEventFlagMaskCommand)
-        Quartz.CGEventSetFlags(v_up, Quartz.kCGEventFlagMaskCommand)
-        Quartz.CGEventPost(Quartz.kCGHIDEventTap, v_down)
-        Quartz.CGEventPost(Quartz.kCGHIDEventTap, v_up)
+        # CGEvent unicode payloads have practical size limits; type in chunks.
+        chunk_size = 64
+        for start in range(0, len(text), chunk_size):
+            chunk = text[start : start + chunk_size]
+            down = Quartz.CGEventCreateKeyboardEvent(None, 0, True)
+            up = Quartz.CGEventCreateKeyboardEvent(None, 0, False)
+            Quartz.CGEventKeyboardSetUnicodeString(down, len(chunk), chunk)
+            Quartz.CGEventKeyboardSetUnicodeString(up, len(chunk), chunk)
+            Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
+            Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
+            time.sleep(0.002)
 
     def register_hotkey(self, on_dictation) -> None:
         """Register a global hotkey and suppress the underlying key event if possible."""
 
         def fire_dictation():
             self.run_on_main(on_dictation)
+
+        if self._register_carbon_hotkey(fire_dictation):
+            self._hotkey_mode = "carbon"
+            print("[hotkey] using Carbon global hotkey registration")
+            return
 
         def tap_handler(proxy, event_type, event, refcon):
             if event_type in (
@@ -122,6 +173,8 @@ class MacOSPlatform(PlatformBase):
             Quartz.CGEventTapEnable(tap, True)
             self._event_tap = tap
             self._event_tap_source = source
+            self._hotkey_mode = "event_tap"
+            print("[hotkey] using CGEventTap fallback")
             return
 
         mask = AppKit.NSEventMaskKeyDown
@@ -151,6 +204,54 @@ class MacOSPlatform(PlatformBase):
             mask, handler
         )
         self._monitors.append(monitor)
+        self._hotkey_mode = "monitor"
+        print("[hotkey] using NSEvent global monitor fallback")
+
+    def _register_carbon_hotkey(self, fire_dictation) -> bool:
+        event_target = _CARBON.GetApplicationEventTarget()
+        if not event_target:
+            return False
+
+        event_spec = _EventTypeSpec(
+            eventClass=_CARBON_EVENT_CLASS_KEYBOARD,
+            eventKind=_CARBON_EVENT_HOTKEY_PRESSED,
+        )
+        hotkey_id = _EventHotKeyID(signature=_CARBON_HOTKEY_SIGNATURE, id=1)
+
+        def handler(next_handler, event_ref, user_data):
+            fire_dictation()
+            return _CARBON_NO_ERR
+
+        callback = _CarbonHotKeyHandler(handler)
+        handler_ref = ctypes.c_void_p()
+        status = _CARBON.InstallEventHandler(
+            event_target,
+            callback,
+            1,
+            ctypes.byref(event_spec),
+            None,
+            ctypes.byref(handler_ref),
+        )
+        if status != _CARBON_NO_ERR:
+            return False
+
+        hotkey_ref = ctypes.c_void_p()
+        status = _CARBON.RegisterEventHotKey(
+            49,  # Space
+            _CARBON_OPTION_KEY,
+            hotkey_id,
+            event_target,
+            0,
+            ctypes.byref(hotkey_ref),
+        )
+        if status != _CARBON_NO_ERR:
+            _CARBON.RemoveEventHandler(handler_ref)
+            return False
+
+        self._hotkey_handler = callback
+        self._hotkey_handler_ref = handler_ref
+        self._hotkey_ref = hotkey_ref
+        return True
 
     def request_accessibility(self) -> bool:
         """Check if accessibility permission is granted."""
@@ -158,6 +259,15 @@ class MacOSPlatform(PlatformBase):
             {kAXTrustedCheckOptionPrompt: True}
         )
         return bool(trusted)
+
+    def open_accessibility_settings(self) -> None:
+        subprocess.run(
+            ["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"],
+            check=False,
+        )
+
+    def hotkey_capture_mode(self) -> str:
+        return self._hotkey_mode
 
     def _launch_agent_path(self) -> Path:
         return Path.home() / "Library" / "LaunchAgents" / f"{self._launch_agent_label}.plist"
@@ -243,6 +353,13 @@ class MacOSPlatform(PlatformBase):
         return self._launch_agent_path().exists()
 
     def cleanup(self):
+        if self._hotkey_ref is not None:
+            _CARBON.UnregisterEventHotKey(self._hotkey_ref)
+            self._hotkey_ref = None
+        if self._hotkey_handler_ref is not None:
+            _CARBON.RemoveEventHandler(self._hotkey_handler_ref)
+            self._hotkey_handler_ref = None
+        self._hotkey_handler = None
         if self._event_tap_source is not None:
             Quartz.CFRunLoopRemoveSource(
                 Quartz.CFRunLoopGetMain(),
@@ -256,3 +373,4 @@ class MacOSPlatform(PlatformBase):
         for monitor in self._monitors:
             AppKit.NSEvent.removeMonitor_(monitor)
         self._monitors.clear()
+        self._hotkey_mode = "unregistered"

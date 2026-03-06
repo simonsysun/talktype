@@ -5,17 +5,21 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from core.app_identity import state_dir
 
-VOCABULARY_PATH = Path.home() / ".whisper" / "vocabulary.json"
 DEFAULT_ACTIVE_LIMIT = 50
 MAX_PROMPT_CHARS = 800
+
+
+def vocabulary_path() -> Path:
+    return state_dir() / "vocabulary.json"
 
 
 class VocabularyStore:
     """Persistent local vocabulary list used to bias transcription spelling."""
 
     def __init__(self, path: Path | None = None):
-        self.path = path or VOCABULARY_PATH
+        self.path = path or vocabulary_path()
         self._entries: list[dict] = []
         self._load()
 

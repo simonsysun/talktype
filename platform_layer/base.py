@@ -6,7 +6,7 @@ class PlatformBase(ABC):
 
     @abstractmethod
     def paste_text(self, text: str) -> None:
-        """Copy text to clipboard and paste into focused app."""
+        """Insert text into the focused app without changing the clipboard."""
 
     @abstractmethod
     def copy_text(self, text: str) -> None:
@@ -21,6 +21,10 @@ class PlatformBase(ABC):
         """Request accessibility permission. Returns True if granted."""
 
     @abstractmethod
+    def open_accessibility_settings(self) -> None:
+        """Open system accessibility settings for the app."""
+
+    @abstractmethod
     def set_launch_at_login(self, enabled: bool) -> None:
         """Enable or disable launch-at-login."""
 
@@ -31,3 +35,7 @@ class PlatformBase(ABC):
     @abstractmethod
     def run_on_main(self, fn) -> None:
         """Dispatch fn to the main/UI thread."""
+
+    @abstractmethod
+    def hotkey_capture_mode(self) -> str:
+        """Return the currently active hotkey capture mode."""

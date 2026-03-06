@@ -55,20 +55,17 @@ def main() -> int:
         ).strip()
         app_src = Path(out)
 
-        import shutil
         target_dir = Path(args.target).expanduser()
         target_dir.mkdir(parents=True, exist_ok=True)
         app_dst = target_dir / app_src.name
         if app_dst.exists():
             stop_running_instance(app_dst)
-            shutil.rmtree(app_dst)
-        shutil.copytree(app_src, app_dst)
+            subprocess.run(["rm", "-rf", str(app_dst)], check=True)
+        subprocess.run(["ditto", str(app_src), str(app_dst)], check=True)
         print(app_dst)
         if args.open:
             # Kill any running Whisper instance before launching the new one
             stop_running_instance(app_dst)
-            # Reset stale TCC entry — new build has a new code signature
-            subprocess.run(["tccutil", "reset", "Microphone", "dev.whisper.local"], check=False)
             time.sleep(0.5)
             subprocess.run(["open", str(app_dst)], check=False)
     else:

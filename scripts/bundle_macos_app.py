@@ -35,6 +35,65 @@ PYOBJC_FRAMEWORKS = [
 ]
 
 
+def _sign_app(app_path: Path, identity: str | None) -> None:
+    sign_identity = identity or "-"
+
+    subprocess.run(
+        ["xattr", "-cr", str(app_path)],
+        check=False,
+    )
+
+    def _codesign(path: Path) -> None:
+        subprocess.run(
+            [
+                "codesign",
+                "--force",
+                "--sign",
+                sign_identity,
+                "--timestamp=none",
+                str(path),
+            ],
+            check=True,
+        )
+
+    frameworks_dir = app_path / "Contents" / "Frameworks"
+    if frameworks_dir.exists():
+        nested_files = sorted(
+            [
+                p
+                for p in frameworks_dir.rglob("*")
+                if p.is_file() and p.suffix in {".so", ".dylib"}
+            ]
+        )
+        for nested in nested_files:
+            _codesign(nested)
+
+        nested_frameworks = sorted(
+            [p for p in frameworks_dir.rglob("*.framework") if p.is_dir()],
+            key=lambda p: len(p.parts),
+            reverse=True,
+        )
+        for framework in nested_frameworks:
+            _codesign(framework)
+
+        nested_execs = sorted(
+            [
+                p
+                for p in frameworks_dir.iterdir()
+                if p.is_file() and os.access(p, os.X_OK)
+            ]
+        )
+        for nested in nested_execs:
+            _codesign(nested)
+
+    macos_dir = app_path / "Contents" / "MacOS"
+    if macos_dir.exists():
+        for executable in sorted([p for p in macos_dir.iterdir() if p.is_file()]):
+            _codesign(executable)
+
+    _codesign(app_path)
+
+
 def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
@@ -109,7 +168,7 @@ def _check_pyinstaller() -> None:
         )
 
 
-def build_app(root: Path) -> Path:
+def build_app(root: Path, codesign_identity: str | None = None) -> Path:
     """Run PyInstaller to create the bundled .app."""
     _check_pyinstaller()
     dist = root / "dist"
@@ -162,6 +221,8 @@ def build_app(root: Path) -> Path:
         *hidden_imports,
         str(root / "app.py"),
     ]
+    if codesign_identity:
+        cmd.extend(["--codesign-identity", codesign_identity])
 
     # Add icon if we can generate one
     resources_tmp = build / "resources"
@@ -180,7 +241,7 @@ def build_app(root: Path) -> Path:
 
     # Patch Info.plist with our custom keys
     _patch_info_plist(app_path)
-
+    _sign_app(app_path, codesign_identity)
     return app_path
 
 
@@ -203,13 +264,16 @@ def _patch_info_plist(app_path: Path) -> None:
         plistlib.dump(info, f)
 
 
-def install_app(app_src: Path, target_dir: Path) -> Path:
+def install_app(app_src: Path, target_dir: Path, icon_path: Path | None = None) -> Path:
     target_dir.mkdir(parents=True, exist_ok=True)
     app_dst = target_dir / app_src.name
     if app_dst.exists():
         stop_running_instance(app_dst)
         shutil.rmtree(app_dst)
-    shutil.copytree(app_src, app_dst)
+    subprocess.run(
+        ["ditto", str(app_src), str(app_dst)],
+        check=True,
+    )
     return app_dst
 
 
@@ -225,23 +289,39 @@ def main() -> int:
         action="store_true",
         help="Open the app after build/install",
     )
+    parser.add_argument(
+        "--codesign-identity",
+        default="",
+        help="macOS code signing identity to use",
+    )
+    parser.add_argument(
+        "--adhoc",
+        action="store_true",
+        help="Disable identity-based signing and use the default ad hoc signing path",
+    )
     args = parser.parse_args()
 
     root = repo_root()
-    app_path = build_app(root)
+    env_identity = os.environ.get("WHISPER_CODESIGN_IDENTITY", "").strip()
+    codesign_identity = None if args.adhoc else (args.codesign_identity.strip() or env_identity or None)
+    if codesign_identity:
+        print(f"Using code signing identity: {codesign_identity}")
+    else:
+        print("Using ad hoc signing.")
+
+    app_path = build_app(root, codesign_identity=codesign_identity)
     print(f"Built: {app_path}")
 
     final_path = app_path
     if args.install:
         target = Path(args.install).expanduser()
-        final_path = install_app(app_path, target)
+        icon_path = app_path / "Contents" / "Resources" / f"{APP_NAME}.icns"
+        final_path = install_app(app_path, target, icon_path=icon_path)
         print(f"Installed: {final_path}")
 
     if args.open:
         # Kill any running Whisper instance before launching the new one
         stop_running_instance(final_path)
-        # Reset stale TCC entry — new build has a new code signature
-        subprocess.run(["tccutil", "reset", "Microphone", BUNDLE_ID], check=False)
         time.sleep(0.5)
         subprocess.run(["open", str(final_path)], check=False)
 
