@@ -35,3 +35,7 @@ Current behavior is intentionally simple:
 - OpenAI API key
 - Microphone permission
 - Accessibility permission for direct typing
+
+## License
+
+MIT
