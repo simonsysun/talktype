@@ -22,6 +22,7 @@ At around 30 minutes of dictation per day, `gpt-4o-mini-transcribe` costs about 
 
 OpenAI API keys are stored locally in an encrypted file under `~/.talktype/keys/`.
 The app uses a local random master key plus machine-bound encryption.
+For extra safety, consider setting a monthly usage limit on your OpenAI account.
 
 ## Vocabulary
 
