@@ -1,5 +1,7 @@
 # TalkType
 
+![TalkType logo](docs/assets/talktype-logo.png)
+
 Lightweight macOS menu bar dictation app.
 
 ## What it does
