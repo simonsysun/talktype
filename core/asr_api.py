@@ -6,17 +6,12 @@ from openai import OpenAI
 
 from core.keychain import retrieve_key
 
-
-OPENAI_PROVIDER = "openai"
-
 DEFAULT_OPENAI_ASR_MODEL = "gpt-4o-mini-transcribe"
 PREMIUM_OPENAI_ASR_MODEL = "gpt-4o-transcribe"
 
 OPENAI_ASR_ACCOUNT = "OpenAI-ASR"
 
-WHISPER_PROMPT_BARE = "{vocab}"
-WHISPER_PROMPT_CONTEXTUAL = "Previously mentioned: {vocab}"
-WHISPER_PROMPT_TEMPLATE = WHISPER_PROMPT_BARE
+TRANSCRIPTION_PROMPT_TEMPLATE = "{vocab}"
 
 
 class OpenAITranscriber:
@@ -70,7 +65,7 @@ class OpenAITranscriber:
         hints = [hint.strip() for hint in (vocabulary_hints or []) if hint and hint.strip()]
         if not hints:
             return None
-        return WHISPER_PROMPT_TEMPLATE.format(vocab=", ".join(hints))
+        return TRANSCRIPTION_PROMPT_TEMPLATE.format(vocab=", ".join(hints))
 
 
     def transcribe(

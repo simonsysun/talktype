@@ -291,7 +291,9 @@ def main() -> int:
     args = parser.parse_args()
 
     root = repo_root()
-    env_identity = os.environ.get("WHISPER_CODESIGN_IDENTITY", "").strip()
+    env_identity = os.environ.get("TALKTYPE_CODESIGN_IDENTITY", "").strip()
+    if not env_identity:
+        env_identity = os.environ.get("WHISPER_CODESIGN_IDENTITY", "").strip()
     codesign_identity = None if args.adhoc else (args.codesign_identity.strip() or env_identity or None)
     if codesign_identity:
         print(f"Using code signing identity: {codesign_identity}")
