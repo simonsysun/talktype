@@ -66,7 +66,7 @@ class OpenAITranscriber:
         self._client_timeout = self.timeout
 
     @staticmethod
-    def _build_whisper_prompt(vocabulary_hints: list[str] | None) -> str | None:
+    def _build_transcription_prompt(vocabulary_hints: list[str] | None) -> str | None:
         hints = [hint.strip() for hint in (vocabulary_hints or []) if hint and hint.strip()]
         if not hints:
             return None
@@ -84,7 +84,7 @@ class OpenAITranscriber:
 
         api_key = self._load_api_key()
         if not api_key:
-            raise RuntimeError("OpenAI API key is missing. Set it from Whisper tray menu.")
+            raise RuntimeError("OpenAI API key is missing. Set it from TalkType tray menu.")
         self._ensure_client(api_key)
 
         wav_bytes = self._to_wav_bytes(audio, sample_rate)
@@ -95,7 +95,7 @@ class OpenAITranscriber:
             "model": self.model,
             "file": file_obj,
         }
-        prompt = self._build_whisper_prompt(vocabulary_hints)
+        prompt = self._build_transcription_prompt(vocabulary_hints)
         if prompt:
             kwargs["prompt"] = prompt
 

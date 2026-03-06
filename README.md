@@ -1,4 +1,4 @@
-# Whisper
+# TalkType
 
 Lightweight macOS menu bar dictation app.
 
@@ -16,7 +16,7 @@ Lightweight macOS menu bar dictation app.
 
 ## API key storage
 
-OpenAI API keys are stored locally in an encrypted file under `~/.whisper/keys/`.
+OpenAI API keys are stored locally in an encrypted file under `~/.talktype/keys/`.
 The app uses a local random master key plus machine-bound encryption.
 
 ## Vocabulary

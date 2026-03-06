@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a development-friendly macOS app bundle for Whisper.
+"""Build a development-friendly macOS app bundle for TalkType.
 
 This creates a .app wrapper that launches the code directly from this repo
 using the existing virtualenv. That keeps iteration fast while still giving
@@ -21,8 +21,8 @@ import AppKit
 import Foundation
 
 
-APP_NAME = "Whisper"
-BUNDLE_ID = "dev.whisper.local"
+APP_NAME = "TalkType"
+BUNDLE_ID = "dev.talktype.local"
 MIN_SYSTEM_VERSION = "13.0"
 ICON_FONT_CANDIDATES = (
     "Didot-Bold",
@@ -216,7 +216,7 @@ def write_info_plist(root: Path, icon_name: str | None) -> None:
         "LSMinimumSystemVersion": MIN_SYSTEM_VERSION,
         "LSUIElement": True,
         "NSHighResolutionCapable": True,
-        "NSMicrophoneUsageDescription": "Whisper records your microphone for local dictation.",
+        "NSMicrophoneUsageDescription": "TalkType records your microphone for local dictation.",
         "NSPrincipalClass": "NSApplication",
     }
     if icon_name:
@@ -226,10 +226,10 @@ def write_info_plist(root: Path, icon_name: str | None) -> None:
 
 
 def write_launcher(root: Path) -> None:
-    """Compile a native C launcher so macOS TCC attributes permissions to Whisper.app.
+    """Compile a native C launcher so macOS TCC attributes permissions to TalkType.app.
 
     The binary forks python3 as a child process while staying alive as the
-    'responsible process' — macOS shows "Whisper" in permission dialogs instead
+    'responsible process' — macOS shows "TalkType" in permission dialogs instead
     of "python3.14".
     """
     launcher = macos_dir(root) / APP_NAME
@@ -289,7 +289,7 @@ int main(int argc, char *argv[]) {{
         chdir(REPO_ROOT);
         setenv("PYTHONPATH", REPO_ROOT, 1);
 
-        execl(PYTHON_BIN, "Whisper", "-u", SCRIPT, NULL);
+        execl(PYTHON_BIN, "TalkType", "-u", SCRIPT, NULL);
         perror("execl");
         _exit(1);
     }}

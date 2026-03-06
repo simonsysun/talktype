@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and install Whisper.app to Applications.
+"""Build and install TalkType.app to Applications.
 
 Uses bundle_macos_app.py (PyInstaller) for a fully self-contained app,
 or build_macos_app.py (dev wrapper) with --dev flag.
@@ -20,14 +20,14 @@ def repo_root() -> Path:
 
 def stop_running_instance(app_path: Path) -> None:
     subprocess.run(
-        ["pkill", "-f", str(app_path / "Contents" / "MacOS" / "Whisper")],
+        ["pkill", "-f", str(app_path / "Contents" / "MacOS" / "TalkType")],
         check=False,
     )
     time.sleep(0.3)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build and install Whisper.app")
+    parser = argparse.ArgumentParser(description="Build and install TalkType.app")
     parser.add_argument(
         "--target",
         default=str(Path.home() / "Applications"),
@@ -64,7 +64,7 @@ def main() -> int:
         subprocess.run(["ditto", str(app_src), str(app_dst)], check=True)
         print(app_dst)
         if args.open:
-            # Kill any running Whisper instance before launching the new one
+            # Kill any running TalkType instance before launching the new one
             stop_running_instance(app_dst)
             time.sleep(0.5)
             subprocess.run(["open", str(app_dst)], check=False)

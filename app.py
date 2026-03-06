@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Whisper — Voice-to-text dictation for macOS."""
+"""TalkType — Voice-to-text dictation for macOS."""
 
 import fcntl
 import os
@@ -24,15 +24,15 @@ from core.asr_api import (
     OpenAITranscriber,
 )
 from core.audio import AudioRecorder
-from core.keychain import retrieve_key
+from core.keychain import delete_key, retrieve_key
 from core.post_processor import post_process_transcript
 from core.vocabulary import VocabularyStore
 from platform_layer.macos import MacOSPlatform
 from ui.overlay import OverlayPanel
-from ui.tray import WhisperTray
+from ui.tray import TalkTypeTray
 
 
-class WhisperApp:
+class TalkTypeApp:
     def __init__(self):
         self._app_name = current_app_name()
         self.cfg = load_config()
@@ -76,6 +76,8 @@ class WhisperApp:
         self.cfg.pop("asr_provider", None)
         self.cfg.pop("openrouter_asr_model", None)
         self.cfg.pop("openrouter_base_url", None)
+        delete_key("OpenRouter-ASR")
+        delete_key("OpenRouter")
         save_config(self.cfg)
 
     def _current_model(self) -> str:
@@ -146,31 +148,31 @@ class WhisperApp:
                 AVF.AVCaptureDevice.authorizationStatusForMediaType_(AVF.AVMediaTypeAudio)
             )
         except Exception:
-            return WhisperApp._av_auth_authorized()
+            return TalkTypeApp._av_auth_authorized()
 
     @staticmethod
     def _mic_status_label(status: int) -> str:
         mapping = {
-            WhisperApp._av_auth_not_determined(): "not_determined",
-            WhisperApp._av_auth_restricted(): "restricted",
-            WhisperApp._av_auth_denied(): "denied",
-            WhisperApp._av_auth_authorized(): "authorized",
+            TalkTypeApp._av_auth_not_determined(): "not_determined",
+            TalkTypeApp._av_auth_restricted(): "restricted",
+            TalkTypeApp._av_auth_denied(): "denied",
+            TalkTypeApp._av_auth_authorized(): "authorized",
         }
         return mapping.get(int(status), f"unknown({status})")
 
     @staticmethod
     def _mic_status_is_authorized(status: int) -> bool:
-        return int(status) == WhisperApp._av_auth_authorized()
+        return int(status) == TalkTypeApp._av_auth_authorized()
 
     @staticmethod
     def _mic_status_is_not_determined(status: int) -> bool:
-        return int(status) == WhisperApp._av_auth_not_determined()
+        return int(status) == TalkTypeApp._av_auth_not_determined()
 
     @staticmethod
     def _mic_status_is_denied(status: int) -> bool:
         return int(status) in {
-            WhisperApp._av_auth_denied(),
-            WhisperApp._av_auth_restricted(),
+            TalkTypeApp._av_auth_denied(),
+            TalkTypeApp._av_auth_restricted(),
         }
 
     @staticmethod
@@ -405,7 +407,7 @@ class WhisperApp:
         self.platform.cleanup()
 
     def run(self):
-        print("Whisper — Voice-to-Text")
+        print("TalkType — Voice-to-Text")
         print("=" * 40)
         bundle = AppKit.NSBundle.mainBundle()
         bundle_id = str(bundle.bundleIdentifier() or "")
@@ -433,7 +435,7 @@ class WhisperApp:
             except Exception as e:
                 print(f"[launch] failed to ensure launch-at-login: {e}")
 
-        self.tray = WhisperTray(
+        self.tray = TalkTypeTray(
             on_quit=self._on_quit,
             platform=self.platform,
             on_model_change=self._on_model_change,
@@ -525,16 +527,16 @@ def _setup_logging():
     """Redirect stdout/stderr to log file for bundled (--windowed) app."""
     try:
         bundle = AppKit.NSBundle.mainBundle()
-        app_name = "Whisper"
+        app_name = "TalkType"
         if bundle:
             bundle_name = bundle.objectForInfoDictionaryKey_("CFBundleName")
             if bundle_name:
                 app_name = str(bundle_name)
         log_dir = Path.home() / "Library" / "Logs" / app_name
         log_dir.mkdir(parents=True, exist_ok=True)
-        log_file = log_dir / "whisper.log"
+        log_file = log_dir / "talktype.log"
         if log_file.exists():
-            log_file.rename(log_dir / "whisper.log.prev")
+            log_file.rename(log_dir / "talktype.log.prev")
         fh = open(log_file, "w", buffering=1)  # line-buffered
         sys.stdout = sys.stderr = fh
     except Exception:
@@ -544,5 +546,5 @@ def _setup_logging():
 if __name__ == "__main__":
     _ensure_single_instance()
     _setup_logging()
-    app = WhisperApp()
+    app = TalkTypeApp()
     app.run()

@@ -7,6 +7,11 @@ from pathlib import Path
 import AppKit
 import Quartz
 from ApplicationServices import AXIsProcessTrustedWithOptions, kAXTrustedCheckOptionPrompt
+from core.app_identity import (
+    LEGACY_APP_NAME,
+    app_name as current_app_name,
+    bundle_id as current_bundle_id,
+)
 from platform_layer.base import PlatformBase
 
 _MAIN_LOOP_MODES = [AppKit.NSDefaultRunLoopMode, AppKit.NSEventTrackingRunLoopMode]
@@ -62,8 +67,8 @@ class MacOSPlatform(PlatformBase):
         bundle = AppKit.NSBundle.mainBundle()
         bundle_id = bundle.bundleIdentifier() if bundle else None
         bundle_name = bundle.objectForInfoDictionaryKey_("CFBundleName") if bundle else None
-        self._bundle_id = str(bundle_id or "dev.whisper.local")
-        self._app_name = str(bundle_name or "Whisper")
+        self._bundle_id = str(bundle_id or current_bundle_id())
+        self._app_name = str(bundle_name or current_app_name())
         self._launch_agent_label = f"{self._bundle_id}.launcher"
         self._log_dir = Path.home() / "Library" / "Logs" / self._app_name
         self._hotkey_ref = None
@@ -277,13 +282,13 @@ class MacOSPlatform(PlatformBase):
         exe = bundle.executablePath() if bundle else None
         # Trust the bundle path if it's a genuine .app bundle (not Python.app).
         # Validate by bundle identifier rather than hardcoded folder name,
-        # so renamed apps (e.g. "Whisper 2.app") still work.
+        # so renamed apps still work.
         if exe and bundle.bundleIdentifier() and "/Contents/MacOS/" in exe:
             bundle_id = bundle.bundleIdentifier()
             if bundle_id != "org.python.python" and not bundle_id.startswith("com.apple."):
                 return str(exe)
 
-        preferred_names = [self._app_name, "Whisper"]
+        preferred_names = [self._app_name, "TalkType", LEGACY_APP_NAME]
         seen: set[str] = set()
         candidates = []
         for name in preferred_names:

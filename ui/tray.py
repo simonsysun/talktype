@@ -12,7 +12,7 @@ from core.asr_api import (
 from core.keychain import delete_key, retrieve_key, store_key
 
 
-class WhisperTray(rumps.App):
+class TalkTypeTray(rumps.App):
     """Menu bar app using rumps. Owns the NSApplication main runloop."""
 
     def __init__(
@@ -22,7 +22,7 @@ class WhisperTray(rumps.App):
         on_model_change=None,
         is_dictating=None,
         vocabulary_store=None,
-        app_name="Whisper",
+        app_name="TalkType",
     ):
         super().__init__(app_name, icon=None, quit_button=None)
         self._on_quit = on_quit

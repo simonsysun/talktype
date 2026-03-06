@@ -16,7 +16,7 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 
-from core.app_identity import keychain_service, state_dir
+from core.app_identity import keychain_service, legacy_keychain_services, state_dir
 
 _SECURITY = "/usr/bin/security"
 _IOREG = "/usr/sbin/ioreg"
@@ -118,45 +118,61 @@ def _delete_encrypted(provider: str) -> bool:
 
 
 def _retrieve_legacy_keychain(provider: str) -> str | None:
-    try:
-        result = subprocess.run(
-            [
-                _SECURITY,
-                "find-generic-password",
-                "-s",
-                keychain_service(),
-                "-a",
-                provider,
-                "-w",
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        value = result.stdout.strip()
-        return value or None
-    except Exception:
-        return None
+    services = [keychain_service(), *legacy_keychain_services()]
+    seen: set[str] = set()
+    for service in services:
+        if service in seen:
+            continue
+        seen.add(service)
+        try:
+            result = subprocess.run(
+                [
+                    _SECURITY,
+                    "find-generic-password",
+                    "-s",
+                    service,
+                    "-a",
+                    provider,
+                    "-w",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            value = result.stdout.strip()
+            if value:
+                return value
+        except Exception:
+            continue
+    return None
 
 
 def _delete_legacy_keychain(provider: str) -> bool:
-    try:
-        subprocess.run(
-            [
-                _SECURITY,
-                "delete-generic-password",
-                "-s",
-                keychain_service(),
-                "-a",
-                provider,
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        return True
-    except Exception:
-        return False
+    deleted = False
+    services = [keychain_service(), *legacy_keychain_services()]
+    seen: set[str] = set()
+    for service in services:
+        if service in seen:
+            continue
+        seen.add(service)
+        try:
+            subprocess.run(
+                [
+                    _SECURITY,
+                    "delete-generic-password",
+                    "-s",
+                    service,
+                    "-a",
+                    provider,
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            deleted = True
+        except Exception:
+            continue
+    return deleted
 
 
 def store_key(provider: str, api_key: str) -> bool:

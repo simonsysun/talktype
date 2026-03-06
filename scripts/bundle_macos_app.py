@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a fully self-contained Whisper.app using PyInstaller.
+"""Build a fully self-contained TalkType.app using PyInstaller.
 
 The resulting .app embeds Python, all dependencies, and the app code.
 Users do not need Python or any other tools installed.
@@ -17,8 +17,8 @@ import time
 from pathlib import Path
 
 
-APP_NAME = "Whisper"
-BUNDLE_ID = "dev.whisper.local"
+APP_NAME = "TalkType"
+BUNDLE_ID = "dev.talktype.local"
 MIN_SYSTEM_VERSION = "13.0"
 
 PYOBJC_FRAMEWORKS = [
@@ -255,7 +255,7 @@ def _patch_info_plist(app_path: Path) -> None:
         "LSUIElement": True,  # menu bar app, no dock icon
         "LSMinimumSystemVersion": MIN_SYSTEM_VERSION,
         "NSHighResolutionCapable": True,
-        "NSMicrophoneUsageDescription": "Whisper records your microphone for voice-to-text dictation.",
+        "NSMicrophoneUsageDescription": "TalkType records your microphone for voice-to-text dictation.",
         "NSPrincipalClass": "NSApplication",
         "LSApplicationCategoryType": "public.app-category.productivity",
     })
@@ -278,7 +278,7 @@ def install_app(app_src: Path, target_dir: Path, icon_path: Path | None = None) 
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Bundle and install standalone Whisper.app")
+    parser = argparse.ArgumentParser(description="Bundle and install standalone TalkType.app")
     parser.add_argument(
         "--install",
         default="",
@@ -320,7 +320,7 @@ def main() -> int:
         print(f"Installed: {final_path}")
 
     if args.open:
-        # Kill any running Whisper instance before launching the new one
+        # Kill any running TalkType instance before launching the new one
         stop_running_instance(final_path)
         time.sleep(0.5)
         subprocess.run(["open", str(final_path)], check=False)
