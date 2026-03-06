@@ -130,7 +130,7 @@ def draw_icon(size: int, png_path: Path) -> None:
     )
     shadow.set()
 
-    letter = "W"
+    letter = "T"
     font = choose_font(size * 0.62)
     paragraph = AppKit.NSParagraphStyle.defaultParagraphStyle().mutableCopy()
     paragraph.setAlignment_(AppKit.NSCenterTextAlignment)

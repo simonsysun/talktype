@@ -368,8 +368,20 @@ class TalkTypeApp:
                         # Stale result — user already started a new session
                         self.platform.copy_text(text)
                         return
+                    self._accessibility_granted = self.platform.accessibility_granted(
+                        prompt=False
+                    )
                     if self._accessibility_granted:
-                        self.platform.paste_text(text)
+                        try:
+                            self.platform.paste_text(text)
+                        except Exception as e:
+                            print(f"[paste] direct typing failed: {e}")
+                            self.platform.copy_text(text)
+                            if self.tray:
+                                self.tray.notify_error(
+                                    "Direct typing failed. Text was copied to clipboard instead."
+                                )
+                            print(f"[clipboard] {text}")
                     else:
                         self.platform.copy_text(text)
                         if self.tray and not self._clipboard_hint_shown:

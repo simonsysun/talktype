@@ -36,7 +36,7 @@ class TalkTypeTray(rumps.App):
         self._model = self._normalize_model(self._cfg.get("asr_model", DEFAULT_OPENAI_ASR_MODEL))
         self._cfg["asr_model"] = self._model
 
-        self.title = "W"
+        self.title = "T"
 
         self._asr_item = rumps.MenuItem("", callback=None)
         self._key_status_item = rumps.MenuItem("", callback=None)
@@ -385,13 +385,13 @@ class TalkTypeTray(rumps.App):
 
     def set_recording(self, active: bool):
         def _do():
-            self.title = "W·" if active else "W"
+            self.title = "T·" if active else "T"
 
         self._on_main(_do)
 
     def set_processing(self, active: bool):
         def _do():
-            self.title = "W…" if active else "W"
+            self.title = "T…" if active else "T"
 
         self._on_main(_do)
 

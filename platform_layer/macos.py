@@ -258,12 +258,15 @@ class MacOSPlatform(PlatformBase):
         self._hotkey_ref = hotkey_ref
         return True
 
-    def request_accessibility(self) -> bool:
-        """Check if accessibility permission is granted."""
+    def accessibility_granted(self, prompt: bool = False) -> bool:
         trusted = AXIsProcessTrustedWithOptions(
-            {kAXTrustedCheckOptionPrompt: True}
+            {kAXTrustedCheckOptionPrompt: bool(prompt)}
         )
         return bool(trusted)
+
+    def request_accessibility(self) -> bool:
+        """Check if accessibility permission is granted."""
+        return self.accessibility_granted(prompt=True)
 
     def open_accessibility_settings(self) -> None:
         subprocess.run(

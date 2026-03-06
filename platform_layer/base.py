@@ -21,6 +21,10 @@ class PlatformBase(ABC):
         """Request accessibility permission. Returns True if granted."""
 
     @abstractmethod
+    def accessibility_granted(self, prompt: bool = False) -> bool:
+        """Return whether accessibility permission is currently granted."""
+
+    @abstractmethod
     def open_accessibility_settings(self) -> None:
         """Open system accessibility settings for the app."""
 
