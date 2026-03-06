@@ -8,3 +8,4 @@ dist/
 build/
 *.spec
 *.log
+.demo-license/

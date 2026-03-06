@@ -14,12 +14,17 @@ _MAIN_LOOP_MODES = [AppKit.NSDefaultRunLoopMode, AppKit.NSEventTrackingRunLoopMo
 class MacOSPlatform(PlatformBase):
     """macOS-specific hotkeys (NSEvent), paste (CGEvent), and clipboard."""
 
-    _LAUNCH_AGENT_LABEL = "dev.whisper.local.launcher"
-
     def __init__(self):
         self._monitors = []
         self._event_tap = None
         self._event_tap_source = None
+        bundle = AppKit.NSBundle.mainBundle()
+        bundle_id = bundle.bundleIdentifier() if bundle else None
+        bundle_name = bundle.objectForInfoDictionaryKey_("CFBundleName") if bundle else None
+        self._bundle_id = str(bundle_id or "dev.whisper.local")
+        self._app_name = str(bundle_name or "Whisper")
+        self._launch_agent_label = f"{self._bundle_id}.launcher"
+        self._log_dir = Path.home() / "Library" / "Logs" / self._app_name
 
     def run_on_main(self, fn) -> None:
         if AppKit.NSThread.isMainThread():
@@ -155,7 +160,7 @@ class MacOSPlatform(PlatformBase):
         return bool(trusted)
 
     def _launch_agent_path(self) -> Path:
-        return Path.home() / "Library" / "LaunchAgents" / f"{self._LAUNCH_AGENT_LABEL}.plist"
+        return Path.home() / "Library" / "LaunchAgents" / f"{self._launch_agent_label}.plist"
 
     def _resolve_app_executable(self) -> str:
         bundle = AppKit.NSBundle.mainBundle()
@@ -168,17 +173,26 @@ class MacOSPlatform(PlatformBase):
             if bundle_id != "org.python.python" and not bundle_id.startswith("com.apple."):
                 return str(exe)
 
-        # Check common install locations
-        for candidate in [
-            Path.home() / "Applications" / "Whisper.app" / "Contents" / "MacOS" / "Whisper",
-            Path(__file__).resolve().parent.parent / "dist" / "Whisper.app" / "Contents" / "MacOS" / "Whisper",
-        ]:
+        preferred_names = [self._app_name, "Whisper"]
+        seen: set[str] = set()
+        candidates = []
+        for name in preferred_names:
+            if name in seen:
+                continue
+            seen.add(name)
+            candidates.extend(
+                [
+                    Path.home() / "Applications" / f"{name}.app" / "Contents" / "MacOS" / name,
+                    Path(__file__).resolve().parent.parent / "dist" / f"{name}.app" / "Contents" / "MacOS" / name,
+                ]
+            )
+
+        for candidate in candidates:
             if candidate.exists():
                 return str(candidate)
 
         raise RuntimeError(
-            "Cannot find Whisper.app. Install it first: "
-            "python3 scripts/bundle_macos_app.py --install ~/Applications"
+            f"Cannot find {self._app_name}.app. Install it first."
         )
 
     def _write_launch_agent(self) -> Path:
@@ -186,15 +200,15 @@ class MacOSPlatform(PlatformBase):
         path.parent.mkdir(parents=True, exist_ok=True)
         program = self._resolve_app_executable()
         plist = {
-            "Label": self._LAUNCH_AGENT_LABEL,
+            "Label": self._launch_agent_label,
             "ProgramArguments": [program],
             "RunAtLoad": True,
             "KeepAlive": {"SuccessfulExit": False},
             "ProcessType": "Interactive",
-            "StandardOutPath": str(Path.home() / "Library" / "Logs" / "Whisper" / "launchagent.out.log"),
-            "StandardErrorPath": str(Path.home() / "Library" / "Logs" / "Whisper" / "launchagent.err.log"),
+            "StandardOutPath": str(self._log_dir / "launchagent.out.log"),
+            "StandardErrorPath": str(self._log_dir / "launchagent.err.log"),
         }
-        (Path.home() / "Library" / "Logs" / "Whisper").mkdir(parents=True, exist_ok=True)
+        self._log_dir.mkdir(parents=True, exist_ok=True)
         with path.open("wb") as f:
             plistlib.dump(plist, f)
         return path

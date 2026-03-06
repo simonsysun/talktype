@@ -1,4 +1,5 @@
 import threading
+from pathlib import Path
 
 import AppKit
 import rumps
@@ -25,13 +26,17 @@ class WhisperTray(rumps.App):
         on_provider_change=None,
         is_dictating=None,
         vocabulary_store=None,
+        app_name="Whisper",
+        demo_license_manager=None,
     ):
-        super().__init__("Whisper", icon=None, quit_button=None)
+        super().__init__(app_name, icon=None, quit_button=None)
         self._on_quit = on_quit
         self._platform = platform
         self._on_provider_change = on_provider_change
         self._is_dictating = is_dictating
         self._vocabulary_store = vocabulary_store
+        self._app_name = app_name
+        self._demo_license_manager = demo_license_manager
         self._cfg = load_config()
         self._validation_seq = 0
         self._provider = self._normalize_provider(self._cfg.get("asr_provider", OPENAI_PROVIDER))
@@ -45,13 +50,17 @@ class WhisperTray(rumps.App):
         self._provider_openrouter_item = rumps.MenuItem("Use OpenRouter", callback=self._use_openrouter)
         self._key_menu_item = rumps.MenuItem("ASR API Key...", callback=self._set_api_key)
         self._vocab_menu = rumps.MenuItem("Vocabulary")
+        self._demo_license_menu = (
+            rumps.MenuItem("Demo License") if self._demo_license_manager is not None else None
+        )
+        self._demo_status_item = rumps.MenuItem("", callback=None)
 
         self._launch_item = rumps.MenuItem(
             "Launch at Login", callback=self._toggle_launch_at_login
         )
         self._launch_item.state = self._initial_launch_state()
 
-        self.menu = [
+        menu_items = [
             rumps.MenuItem("Dictation: Option+Space", callback=None),
             self._asr_item,
             self._key_status_item,
@@ -62,12 +71,16 @@ class WhisperTray(rumps.App):
             self._vocab_menu,
             self._launch_item,
             None,
-            rumps.MenuItem("Quit Whisper", callback=self._quit),
+            rumps.MenuItem(f"Quit {self._app_name}", callback=self._quit),
         ]
+        if self._demo_license_menu is not None:
+            menu_items.insert(8, self._demo_license_menu)
+        self.menu = menu_items
 
         self._refresh_provider_ui()
         self._refresh_key_status()
         self._refresh_vocabulary_menu()
+        self._refresh_demo_license_menu()
 
         # Validate existing key on startup for current provider.
         key = self._current_api_key()
@@ -158,6 +171,23 @@ class WhisperTray(rumps.App):
             item._vocab_entry_id = entry["id"]
             item._vocab_canonical = entry["canonical"]
             self._vocab_menu.add(item)
+
+    def _refresh_demo_license_menu(self):
+        if self._demo_license_menu is None:
+            return
+
+        if getattr(self._demo_license_menu, "_menu", None) is not None:
+            self._demo_license_menu.clear()
+
+        activated, summary = self._demo_license_manager.status_summary()
+        self._demo_status_item.title = f"Status: {summary}"
+        self._demo_license_menu.add(self._demo_status_item)
+        self._demo_license_menu.add(
+            rumps.MenuItem("Copy Machine ID", callback=self._copy_machine_id)
+        )
+        self._demo_license_menu.add(
+            rumps.MenuItem("Import License File...", callback=self._import_license_file)
+        )
 
     def _set_key_status(self, title: str, checked: bool) -> None:
         def _do():
@@ -285,7 +315,7 @@ class WhisperTray(rumps.App):
         if existing:
             masked = self._mask_key(existing)
             result = rumps.alert(
-                title=f"Whisper — {label} API Key",
+                title=f"{self._app_name} — {label} API Key",
                 message=f"Current key: {masked}",
                 ok="Change Key",
                 cancel="Done",
@@ -297,7 +327,7 @@ class WhisperTray(rumps.App):
                 self._invalidate_validations()
                 self._delete_provider_keys()
                 self._refresh_key_status()
-                rumps.notification("Whisper", "", f"{label} API key cleared.")
+                rumps.notification(self._app_name, "", f"{label} API key cleared.")
             # Done/cancel or unknown code -> no-op
         else:
             self._prompt_new_key()
@@ -307,7 +337,7 @@ class WhisperTray(rumps.App):
         label = self._provider_label()
         w = rumps.Window(
             message=f"Enter {label} API key for speech transcription:",
-            title=f"Whisper — {label} API Key",
+            title=f"{self._app_name} — {label} API Key",
             default_text="",
             ok="Save",
             cancel="Cancel",
@@ -330,7 +360,7 @@ class WhisperTray(rumps.App):
 
         window = rumps.Window(
             message="Add a word or phrase to bias transcription spelling:",
-            title="Whisper — Vocabulary",
+            title=f"{self._app_name} — Vocabulary",
             default_text="",
             ok="Save",
             cancel="Cancel",
@@ -373,7 +403,7 @@ class WhisperTray(rumps.App):
         entry_id = getattr(sender, "_vocab_entry_id", None)
         canonical = getattr(sender, "_vocab_canonical", sender.title)
         result = rumps.alert(
-            title="Whisper — Vocabulary",
+            title=f"{self._app_name} — Vocabulary",
             message=f"Remove '{canonical}' from saved vocabulary?",
             ok="Remove",
             cancel="Cancel",
@@ -428,10 +458,48 @@ class WhisperTray(rumps.App):
         self._on_main(_do)
 
     def notify_error(self, message: str):
-        self._on_main(lambda: rumps.notification("Whisper", "Error", message))
+        self._on_main(lambda: rumps.notification(self._app_name, "Error", message))
 
     def notify_info(self, message: str):
-        self._on_main(lambda: rumps.notification("Whisper", "", message))
+        self._on_main(lambda: rumps.notification(self._app_name, "", message))
+
+    def _copy_machine_id(self, sender):
+        if self._demo_license_manager is None:
+            return
+        machine_id = self._demo_license_manager.machine_id()
+        if self._platform is not None:
+            self._platform.copy_text(machine_id)
+        self.notify_info(f"Machine ID copied: {machine_id}")
+
+    def _import_license_file(self, sender):
+        if self._demo_license_manager is None:
+            return
+
+        def _pick_file():
+            panel = AppKit.NSOpenPanel.openPanel()
+            panel.setCanChooseFiles_(True)
+            panel.setCanChooseDirectories_(False)
+            panel.setAllowsMultipleSelection_(False)
+            panel.setAllowedFileTypes_(["whisper-demo-license", "json"])
+            panel.setAllowsOtherFileTypes_(True)
+            if panel.runModal() != AppKit.NSModalResponseOK:
+                return None
+            url = panel.URL()
+            return Path(str(url.path())) if url else None
+
+        try:
+            path = _pick_file()
+            if path is None:
+                return
+            license_data = self._demo_license_manager.import_license(path)
+        except Exception as e:
+            self.notify_error(str(e))
+            return
+
+        self._refresh_demo_license_menu()
+        self.notify_info(
+            f"Activated demo license: {license_data['seat_code']} ({license_data['licensee']})"
+        )
 
     def _quit(self, sender):
         if self._on_quit:

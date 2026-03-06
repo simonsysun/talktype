@@ -15,7 +15,7 @@ import numpy as np
 # Add project root to path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from config import load_config
+from config import load_config, save_config
 from core.asr_api import (
     DEFAULT_OPENAI_ASR_MODEL,
     DEFAULT_OPENROUTER_ASR_MODEL,
@@ -24,6 +24,8 @@ from core.asr_api import (
     OpenAITranscriber,
 )
 from core.audio import AudioRecorder
+from core.keychain import retrieve_key
+from core.licensing import DemoLicenseManager, is_demo_build
 from core.post_processor import post_process_transcript
 from core.vocabulary import VocabularyStore
 from platform_layer.macos import MacOSPlatform
@@ -37,7 +39,11 @@ class WhisperApp:
         self.platform = MacOSPlatform()
         self.overlay = None
         self.recorder = None
+        self._demo_build = is_demo_build()
+        self.licensing = DemoLicenseManager() if self._demo_build else None
         self.vocabulary = VocabularyStore()
+        self._provider_fallback_notice = None
+        self._ensure_provider_has_available_key()
         provider = self._current_provider()
         model = self._current_model(provider)
         self.transcriber = OpenAITranscriber(
@@ -65,6 +71,33 @@ class WhisperApp:
         self._silence_auto_stop = bool(self.cfg.get("silence_auto_stop_enabled", True))
         self._silence_timeout = float(self.cfg.get("silence_auto_stop_seconds", 20))
         self._last_speech_time = 0.0  # monotonic timestamp of last above-threshold audio
+        self._demo_activation_hint_shown = False
+
+    @staticmethod
+    def _provider_has_key(provider: str) -> bool:
+        if provider == OPENROUTER_PROVIDER:
+            return bool(retrieve_key("OpenRouter-ASR") or retrieve_key("OpenRouter"))
+        return bool(retrieve_key("OpenAI-ASR") or retrieve_key("OpenAI"))
+
+    def _ensure_provider_has_available_key(self):
+        provider = self._current_provider()
+        if self._provider_has_key(provider):
+            return
+
+        alternate = OPENAI_PROVIDER if provider == OPENROUTER_PROVIDER else OPENROUTER_PROVIDER
+        if not self._provider_has_key(alternate):
+            return
+
+        self.cfg["asr_provider"] = alternate
+        if alternate == OPENROUTER_PROVIDER:
+            self.cfg.setdefault("openrouter_asr_model", DEFAULT_OPENROUTER_ASR_MODEL)
+            self.cfg.setdefault("openrouter_base_url", "https://openrouter.ai/api/v1")
+        else:
+            self.cfg.setdefault("asr_model", DEFAULT_OPENAI_ASR_MODEL)
+        save_config(self.cfg)
+        self._provider_fallback_notice = (
+            f"ASR provider switched to {alternate} because the configured provider had no saved API key."
+        )
 
     def _current_provider(self) -> str:
         provider = (self.cfg.get("asr_provider", OPENAI_PROVIDER) or OPENAI_PROVIDER).lower()
@@ -168,6 +201,14 @@ class WhisperApp:
         self._open_mic_settings()
 
     def _start_dictation(self):
+        if self.licensing is not None and not self.licensing.is_activated():
+            if self.tray and not self._demo_activation_hint_shown:
+                self.tray.notify_info(
+                    "Whisper-demo is not activated. Open Demo License to copy this Mac's ID and import your license file."
+                )
+                self._demo_activation_hint_shown = True
+            return
+
         # Check microphone permission (non-blocking).
         if not self._microphone_granted:
             status = self._mic_auth_status()
@@ -360,6 +401,8 @@ class WhisperApp:
             on_provider_change=self._on_provider_change,
             is_dictating=lambda: self._dictation_active,
             vocabulary_store=self.vocabulary,
+            app_name="Whisper-demo" if self._demo_build else "Whisper",
+            demo_license_manager=self.licensing,
         )
 
         # Passive check only — do NOT call requestAccess here.
@@ -397,6 +440,13 @@ class WhisperApp:
         print()
         print("Ready!")
         print("  Option+Space -> Dictation (speak -> paste)")
+        if self.licensing is not None:
+            activated, summary = self.licensing.status_summary()
+            print(f"  Demo license: {summary}")
+            if not activated and self.tray:
+                self.tray.notify_info(
+                    "Whisper-demo requires activation. Open Demo License to copy the Machine ID and import your license file."
+                )
         print(
             f"  ASR provider: {self._current_provider()} | model: {self._current_model()}"
         )
@@ -404,6 +454,8 @@ class WhisperApp:
         if self._silence_auto_stop:
             print(f"  Silence auto-stop: {self._silence_timeout}s")
         print()
+        if self._provider_fallback_notice and self.tray:
+            self.tray.notify_info(self._provider_fallback_notice)
 
         self.tray.run()
 
@@ -436,7 +488,13 @@ def _ensure_single_instance():
 def _setup_logging():
     """Redirect stdout/stderr to log file for bundled (--windowed) app."""
     try:
-        log_dir = Path.home() / "Library" / "Logs" / "Whisper"
+        bundle = AppKit.NSBundle.mainBundle()
+        app_name = "Whisper"
+        if bundle:
+            bundle_name = bundle.objectForInfoDictionaryKey_("CFBundleName")
+            if bundle_name:
+                app_name = str(bundle_name)
+        log_dir = Path.home() / "Library" / "Logs" / app_name
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = log_dir / "whisper.log"
         if log_file.exists():

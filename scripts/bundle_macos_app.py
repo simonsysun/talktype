@@ -8,6 +8,7 @@ Users do not need Python or any other tools installed.
 from __future__ import annotations
 
 import argparse
+import os
 import plistlib
 import shutil
 import subprocess
@@ -49,6 +50,17 @@ def stop_running_instance(app_path: Path) -> None:
 def generate_icon(root: Path, resources_dir: Path) -> Path | None:
     """Generate app icon using the existing build script's icon generation."""
     try:
+        if APP_NAME != "Whisper":
+            for existing in (
+                root / "dist" / "Whisper.app" / "Contents" / "Resources" / "Whisper.icns",
+                root / "build" / "resources" / "Whisper.icns",
+            ):
+                if existing.exists():
+                    resources_dir.mkdir(parents=True, exist_ok=True)
+                    icns_path = resources_dir / f"{APP_NAME}.icns"
+                    shutil.copy2(existing, icns_path)
+                    return icns_path
+
         # Import icon generation from the dev build script
         sys.path.insert(0, str(root / "scripts"))
         import build_macos_app as dev_build
@@ -158,7 +170,9 @@ def build_app(root: Path) -> Path:
         cmd.extend(["--icon", str(icon_path)])
 
     print(f"Running PyInstaller...")
-    subprocess.run(cmd, check=True, cwd=str(root))
+    env = dict(os.environ)
+    env["PYINSTALLER_CONFIG_DIR"] = str(build / "pyinstaller-config")
+    subprocess.run(cmd, check=True, cwd=str(root), env=env)
 
     app_path = dist / f"{APP_NAME}.app"
     if not app_path.exists():
