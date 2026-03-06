@@ -25,7 +25,6 @@ from core.asr_api import (
 )
 from core.audio import AudioRecorder
 from core.keychain import retrieve_key
-from core.licensing import DemoLicenseManager, is_demo_build
 from core.post_processor import post_process_transcript
 from core.vocabulary import VocabularyStore
 from platform_layer.macos import MacOSPlatform
@@ -40,8 +39,6 @@ class WhisperApp:
         self.platform = MacOSPlatform()
         self.overlay = None
         self.recorder = None
-        self._demo_build = is_demo_build()
-        self.licensing = DemoLicenseManager() if self._demo_build else None
         self.vocabulary = VocabularyStore()
         self._normalize_asr_config()
         model = self._current_model()
@@ -66,10 +63,9 @@ class WhisperApp:
         self._silence_auto_stop = bool(self.cfg.get("silence_auto_stop_enabled", True))
         self._silence_timeout = float(self.cfg.get("silence_auto_stop_seconds", 20))
         self._last_speech_time = 0.0  # monotonic timestamp of last above-threshold audio
-        self._demo_activation_hint_shown = False
 
     @staticmethod
-    def _provider_has_key() -> bool:
+    def _has_api_key() -> bool:
         return bool(retrieve_key("OpenAI-ASR") or retrieve_key("OpenAI"))
 
     def _normalize_asr_config(self):
@@ -236,14 +232,6 @@ class WhisperApp:
             self._open_mic_settings()
 
     def _start_dictation(self):
-        if self.licensing is not None and not self.licensing.is_activated():
-            if self.tray and not self._demo_activation_hint_shown:
-                self.tray.notify_info(
-                    f"{self._app_name} is not activated. Open Demo License to copy this Mac's ID and import your license file."
-                )
-                self._demo_activation_hint_shown = True
-            return
-
         # Check microphone permission (non-blocking).
         if not self._microphone_granted:
             status = self._mic_auth_status()
@@ -452,7 +440,6 @@ class WhisperApp:
             is_dictating=lambda: self._dictation_active,
             vocabulary_store=self.vocabulary,
             app_name=self._app_name,
-            demo_license_manager=self.licensing,
         )
 
         # Passive check only — do NOT call requestAccess here.
@@ -495,15 +482,8 @@ class WhisperApp:
         print("Ready!")
         print("  Option+Space -> Dictation (speak -> type)")
         print(f"  Hotkey capture: {hotkey_mode}")
-        if self.licensing is not None:
-            activated, summary = self.licensing.status_summary()
-            print(f"  Demo license: {summary}")
-            if not activated and self.tray:
-                self.tray.notify_info(
-                    f"{self._app_name} requires activation. Open Demo License to copy the Machine ID and import your license file."
-                )
         print(f"  ASR model: {self._current_model()}")
-        print(f"  API key: {'present' if self._provider_has_key() else 'missing'}")
+        print(f"  API key: {'present' if self._has_api_key() else 'missing'}")
         print("  Set API key from tray menu: OpenAI API Key...")
         if self._silence_auto_stop:
             print(f"  Silence auto-stop: {self._silence_timeout}s")
