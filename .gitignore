@@ -8,3 +8,5 @@ dist/
 build/
 *.spec
 *.log
+swift/
+.claude/
