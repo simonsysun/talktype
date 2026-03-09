@@ -11,7 +11,7 @@ struct AppConfig: Codable {
     var silenceAutoStopEnabled: Bool = true
     var silenceAutoStopSeconds: Double = 20
     var silenceRmsThreshold: Double = 0.008
-    var minTranscribeRms: Double = 0.003
+    var minTranscribeRms: Double = 0.008
 
     enum CodingKeys: String, CodingKey {
         case dictationHotkey = "dictation_hotkey"

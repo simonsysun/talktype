@@ -220,7 +220,14 @@ final class DictationManager {
                 }
                 self.transcriberLock.unlock()
 
-                let processed = PostProcessor.postProcess(text: text, vocabEntries: self.vocabularyStore.listEntries())
+                let vocabEntries = self.vocabularyStore.listEntries()
+                let processed = PostProcessor.postProcess(text: text, vocabEntries: vocabEntries)
+
+                if PostProcessor.isLikelyHallucination(processed, audioRMS: rms, vocabEntries: vocabEntries) {
+                    print("[asr] hallucination detected: \"\(processed)\" with rms=\(String(format: "%.5f", rms))")
+                    self.trayDelegate?.notifyInfo("No speech detected (transcription discarded).")
+                    return
+                }
 
                 guard !processed.isEmpty else {
                     self.trayDelegate?.notifyInfo("No text recognized. Try speaking more clearly.")
