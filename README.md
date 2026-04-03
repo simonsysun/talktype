@@ -6,9 +6,10 @@ Native Swift macOS menu bar dictation app.
 
 ## What it does
 
-- Start and stop dictation with `Option + Space`
+- Start and stop dictation with `Cmd+Shift+Space` (customizable)
 - Transcribe with OpenAI speech-to-text
 - Type directly into the current app when Accessibility is enabled
+- Automatically restore focus to the original app if you switch away during recording
 - Keep custom vocabulary for names, acronyms, and product terms
 
 ## Models
@@ -17,6 +18,10 @@ Native Swift macOS menu bar dictation app.
 - Optional: `gpt-4o-transcribe`
 
 At around 30 minutes of dictation per day, `gpt-4o-mini-transcribe` costs about **$2.7/month** and `gpt-4o-transcribe` about **$5.4/month**, while Wispr Flow Pro is **$15/month**.
+
+## Custom hotkey
+
+Click `Change Hotkey...` in the menu bar to set your preferred key combination. System shortcut conflicts are detected automatically.
 
 ## API key storage
 
@@ -36,7 +41,7 @@ Current behavior is intentionally simple:
 
 ## Requirements
 
-- macOS
+- macOS 13.0+
 - OpenAI API key
 - Microphone permission
 - Accessibility permission for direct typing
