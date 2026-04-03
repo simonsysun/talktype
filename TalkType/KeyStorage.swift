@@ -114,14 +114,19 @@ enum KeyStorage {
         return Data("local-machine".utf8)
     }
 
+    private static var cachedKey: SymmetricKey?
+
     private static func symmetricKey() -> SymmetricKey? {
+        if let cached = cachedKey { return cached }
         guard let master = loadOrCreateMasterSecret() else { return nil }
         let binding = machineBinding()
         var combined = master
         combined.append(0) // null separator
         combined.append(binding)
         let hash = SHA256.hash(data: combined)
-        return SymmetricKey(data: hash)
+        let key = SymmetricKey(data: hash)
+        cachedKey = key
+        return key
     }
 
     private static func retrieveEncrypted(provider: String) -> String? {

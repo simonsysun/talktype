@@ -20,6 +20,8 @@
 		A10011 /* AppIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10011; };
 		A10012 /* PostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10012; };
 		A10013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10015; };
+		A10014 /* HotkeySettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10016; };
+		A10015 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = PKG10002; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -39,6 +41,7 @@
 		B10014 /* TalkType.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TalkType.entitlements; sourceTree = "<group>"; };
 		B10015 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C10001 /* TalkType.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkType.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10016 /* HotkeySettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeySettingsWindow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -46,6 +49,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10015 /* KeyboardShortcuts in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -75,6 +79,7 @@
 				B10010 /* Config.swift */,
 				B10011 /* AppIdentity.swift */,
 				B10012 /* PostProcessor.swift */,
+				B10016 /* HotkeySettingsWindow.swift */,
 				B10013 /* Info.plist */,
 				B10014 /* TalkType.entitlements */,
 				B10015 /* Assets.xcassets */,
@@ -106,6 +111,9 @@
 			dependencies = (
 			);
 			name = TalkType;
+			packageProductDependencies = (
+				PKG10002 /* KeyboardShortcuts */,
+			);
 			productName = TalkType;
 			productReference = C10001 /* TalkType.app */;
 			productType = "com.apple.product-type.application";
@@ -130,6 +138,9 @@
 			);
 			mainGroup = E10001;
 			productRefGroup = E10003 /* Products */;
+			packageReferences = (
+				PKG10001 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -137,6 +148,25 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		PKG10001 /* KeyboardShortcuts */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		PKG10002 /* KeyboardShortcuts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKG10001 /* KeyboardShortcuts */;
+			productName = KeyboardShortcuts;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin PBXSourcesBuildPhase section */
 		F10002 /* Sources */ = {
@@ -155,6 +185,7 @@
 				A10010 /* Config.swift in Sources */,
 				A10011 /* AppIdentity.swift in Sources */,
 				A10012 /* PostProcessor.swift in Sources */,
+				A10014 /* HotkeySettingsWindow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -6,6 +6,7 @@ private let maxPromptChars = 800
 /// Persistent vocabulary list for biasing transcription spelling. JSON storage.
 final class VocabularyStore {
     private var entries: [VocabEntry] = []
+    private let lock = NSLock()
     let path: URL
 
     init(path: URL? = nil) {
@@ -16,7 +17,9 @@ final class VocabularyStore {
     // MARK: - Public API
 
     func listEntries() -> [VocabEntry] {
-        entries
+        lock.lock()
+        defer { lock.unlock() }
+        return entries
     }
 
     @discardableResult
@@ -25,6 +28,9 @@ final class VocabularyStore {
         guard !normalized.isEmpty else {
             throw VocabError.emptyEntry
         }
+
+        lock.lock()
+        defer { lock.unlock() }
 
         // Check for case-insensitive duplicate
         if let existing = entries.first(where: { $0.canonical.caseInsensitiveCompare(normalized) == .orderedSame }) {
@@ -45,15 +51,21 @@ final class VocabularyStore {
 
     @discardableResult
     func remove(entryID: String) -> Bool {
+        lock.lock()
         let before = entries.count
         entries.removeAll { $0.id == entryID }
-        guard entries.count < before else { return false }
+        let removed = entries.count < before
+        lock.unlock()
+        guard removed else { return false }
         save()
         return true
     }
 
     func getActiveVocabulary(limit: Int = defaultActiveLimit, maxChars: Int = maxPromptChars) -> [String] {
-        let sorted = entries.sorted { ($0.addedAt) > ($1.addedAt) }
+        lock.lock()
+        let snapshot = entries
+        lock.unlock()
+        let sorted = snapshot.sorted { ($0.addedAt) > ($1.addedAt) }
         var active: [String] = []
         var totalChars = 0
 

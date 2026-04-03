@@ -12,7 +12,6 @@ final class AudioRecorder {
     private var buffer: [[Float]] = []
     private var recording = false
     private var tapInstalled = false
-    private var ready = false
     private let lock = NSLock()
 
     var isRecording: Bool { recording }
@@ -111,7 +110,6 @@ final class AudioRecorder {
             engine.stop()
         }
         engine = nil
-        ready = false
     }
 
     // MARK: - Private

@@ -1,23 +1,19 @@
 import Foundation
 
 struct AppConfig: Codable {
-    var dictationHotkey: String = "option+space"
+    var dictationHotkey: String = "cmd+shift+space"
     var sampleRate: Int = 16000
-    var overlayPosition: String = "center-bottom"
-    var overlayTheme: String = "auto"
     var launchAtLogin: Bool = false
     var asrModel: String = "gpt-4o-mini-transcribe"
     var asrTimeoutSeconds: Double = 30.0
     var silenceAutoStopEnabled: Bool = true
     var silenceAutoStopSeconds: Double = 20
     var silenceRmsThreshold: Double = 0.008
-    var minTranscribeRms: Double = 0.008
+    var minTranscribeRms: Double = 0.012
 
     enum CodingKeys: String, CodingKey {
         case dictationHotkey = "dictation_hotkey"
         case sampleRate = "sample_rate"
-        case overlayPosition = "overlay_position"
-        case overlayTheme = "overlay_theme"
         case launchAtLogin = "launch_at_login"
         case asrModel = "asr_model"
         case asrTimeoutSeconds = "asr_timeout_seconds"

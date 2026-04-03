@@ -1,4 +1,6 @@
+import Carbon
 import Cocoa
+import KeyboardShortcuts
 import ServiceManagement
 import UserNotifications
 
@@ -19,6 +21,8 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     private var modelPremiumItem: NSMenuItem!
     private var vocabMenu: NSMenu!
     private var launchItem: NSMenuItem!
+    private var hotkeyDisplayItem: NSMenuItem!
+    private var hotkeySettingsWindow: HotkeySettingsWindow!
 
     static func main() {
         setbuf(stdout, nil)
@@ -65,6 +69,9 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         // Setup menu bar
         setupStatusItem()
 
+        // Request notification permission once
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in }
+
         // Check mic permission (passive)
         dictationManager.checkMicPermission()
 
@@ -85,6 +92,18 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             self?.dictationManager.toggleDictation()
         }
 
+        // Settings window
+        hotkeySettingsWindow = HotkeySettingsWindow()
+
+        // Observe hotkey changes to update menu display
+        NotificationCenter.default.addObserver(
+            forName: Notification.Name("KeyboardShortcuts_shortcutByNameDidChange"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.hotkeyDisplayItem?.title = "Dictation: \(self?.hotkeyDisplayString() ?? "?")"
+        }
+
         // Launch at login sync
         if config.launchAtLogin {
             syncLaunchAtLogin()
@@ -93,7 +112,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         let mode = hotkeyManager.captureMode.rawValue
         print()
         print("Ready!")
-        print("  Option+Space -> Dictation (speak -> type)")
+        print("  \(hotkeyDisplayString()) -> Dictation (speak -> type)")
         print("  Hotkey capture: \(mode)")
         print("  ASR model: \(config.asrModel)")
         print("  API key: \(hasAPIKey() ? "present" : "missing")")
@@ -103,7 +122,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         print()
 
         if hotkeyManager.captureMode == .monitor {
-            notifyError("Option+Space cannot override macOS until Accessibility is enabled. Open Accessibility Settings from the tray.")
+            notifyError("Hotkey cannot override macOS until Accessibility is enabled. Open Accessibility Settings from the tray.")
         }
 
         // Validate key on startup
@@ -125,7 +144,12 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
 
-        menu.addItem(NSMenuItem(title: "Dictation: Option+Space", action: nil, keyEquivalent: ""))
+        hotkeyDisplayItem = NSMenuItem(title: "Dictation: \(hotkeyDisplayString())", action: nil, keyEquivalent: "")
+        menu.addItem(hotkeyDisplayItem)
+
+        let hotkeyItem = NSMenuItem(title: "Change Hotkey...", action: #selector(openHotkeySettings), keyEquivalent: "")
+        hotkeyItem.target = self
+        menu.addItem(hotkeyItem)
 
         asrItem = NSMenuItem(title: "ASR: OpenAI / \(config.asrModel)", action: nil, keyEquivalent: "")
         menu.addItem(asrItem)
@@ -200,7 +224,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         config.asrModel = model
         ConfigManager.save(config)
         refreshModelUI()
-        dictationManager.updateModel(model)
+        dictationManager.reloadConfig(config)
         notifyInfo("ASR model switched to \(model).")
     }
 
@@ -424,6 +448,95 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: - Hotkey settings
+
+    @objc private func openHotkeySettings() {
+        hotkeySettingsWindow.show()
+    }
+
+    private func hotkeyDisplayString() -> String {
+        guard let shortcut = KeyboardShortcuts.getShortcut(for: .dictation) else {
+            return "Cmd+Shift+Space"
+        }
+        var parts: [String] = []
+        let mods = shortcut.modifiers
+        if mods.contains(.command) { parts.append("Cmd") }
+        if mods.contains(.shift) { parts.append("Shift") }
+        if mods.contains(.option) { parts.append("Opt") }
+        if mods.contains(.control) { parts.append("Ctrl") }
+        if let key = shortcut.key {
+            parts.append(keyName(key))
+        }
+        return parts.joined(separator: "+")
+    }
+
+    private func keyName(_ key: KeyboardShortcuts.Key) -> String {
+        // Common special keys
+        switch key {
+        case .space: return "Space"
+        case .return: return "Return"
+        case .tab: return "Tab"
+        case .escape: return "Esc"
+        case .delete: return "Delete"
+        case .deleteForward: return "Fwd Delete"
+        case .upArrow: return "Up"
+        case .downArrow: return "Down"
+        case .leftArrow: return "Left"
+        case .rightArrow: return "Right"
+        case .home: return "Home"
+        case .end: return "End"
+        case .pageUp: return "Page Up"
+        case .pageDown: return "Page Down"
+        case .f1: return "F1"
+        case .f2: return "F2"
+        case .f3: return "F3"
+        case .f4: return "F4"
+        case .f5: return "F5"
+        case .f6: return "F6"
+        case .f7: return "F7"
+        case .f8: return "F8"
+        case .f9: return "F9"
+        case .f10: return "F10"
+        case .f11: return "F11"
+        case .f12: return "F12"
+        default:
+            // Use Carbon to get the character for this keycode
+            if let character = characterForKeyCode(UInt16(key.rawValue)) {
+                return character.uppercased()
+            }
+            return "Key(\(key.rawValue))"
+        }
+    }
+
+    private func characterForKeyCode(_ keyCode: UInt16) -> String? {
+        let source = TISCopyCurrentASCIICapableKeyboardLayoutInputSource()?.takeRetainedValue()
+        guard let source = source,
+              let layoutDataRef = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else {
+            return nil
+        }
+        let layoutData = unsafeBitCast(layoutDataRef, to: CFData.self) as Data
+        var deadKeyState: UInt32 = 0
+        var chars = [UniChar](repeating: 0, count: 4)
+        var length: Int = 0
+        let result = layoutData.withUnsafeBytes { ptr -> OSStatus in
+            guard let baseAddress = ptr.baseAddress else { return -1 }
+            return UCKeyTranslate(
+                baseAddress.assumingMemoryBound(to: UCKeyboardLayout.self),
+                keyCode,
+                UInt16(kUCKeyActionDisplay),
+                0,
+                UInt32(LMGetKbdType()),
+                UInt32(kUCKeyTranslateNoDeadKeysBit),
+                &deadKeyState,
+                4,
+                &length,
+                &chars
+            )
+        }
+        guard result == noErr, length > 0 else { return nil }
+        return String(utf16CodeUnits: chars, count: length)
+    }
+
     // MARK: - Menu actions
 
     @objc private func openAccessibility() {
@@ -473,7 +586,6 @@ extension TalkTypeApp: TrayDelegate {
 
     private func sendNotification(title: String, subtitle: String, body: String) {
         let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.alert]) { _, _ in }
         let content = UNMutableNotificationContent()
         content.title = title
         if !subtitle.isEmpty { content.subtitle = subtitle }

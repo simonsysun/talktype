@@ -11,7 +11,7 @@ enum AppIdentity {
     static let keychainService = "com.talktype.api-keys"
     static let legacyKeychainService = "com.whisper.api-keys"
 
-    static var stateDir: URL {
+    static let stateDir: URL = {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let target = home.appendingPathComponent(standardStateDir)
         let legacy = home.appendingPathComponent(legacyStateDir)
@@ -28,5 +28,5 @@ enum AppIdentity {
             }
         }
         return target
-    }
+    }()
 }

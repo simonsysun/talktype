@@ -28,6 +28,9 @@ final class DictationManager {
     // Silence auto-stop
     private var lastSpeechTime: TimeInterval = 0
 
+    // Focus restoration
+    private var originApp: NSRunningApplication?
+
     init(config: AppConfig, vocabularyStore: VocabularyStore, overlay: OverlayWindow) {
         self.config = config
         self.vocabularyStore = vocabularyStore
@@ -136,6 +139,14 @@ final class DictationManager {
         state = .recording
         lastSpeechTime = ProcessInfo.processInfo.systemUptime
 
+        // Capture the frontmost app for focus restoration after transcription
+        let front = NSWorkspace.shared.frontmostApplication
+        if front?.bundleIdentifier != Bundle.main.bundleIdentifier {
+            originApp = front
+        } else {
+            originApp = nil
+        }
+
         do {
             try recorder.start()
             sessionID += 1
@@ -209,7 +220,14 @@ final class DictationManager {
             }
 
             do {
-                let hints = self.vocabularyStore.getActiveVocabulary()
+                // Skip vocab hints on low-confidence audio to prevent hallucination
+                let hints: [String]?
+                if rms < PostProcessor.hallucinationRmsThreshold {
+                    hints = nil
+                    print("[asr] low RMS (\(String(format: "%.5f", rms))) — skipping vocabulary hints")
+                } else {
+                    hints = self.vocabularyStore.getActiveVocabulary()
+                }
                 self.transcriberLock.lock()
                 let text: String
                 do {
@@ -234,23 +252,47 @@ final class DictationManager {
                     return
                 }
 
-                // Stale check
-                guard self.sessionID == session else {
-                    DispatchQueue.main.async { TextInserter.copyToClipboard(processed) }
-                    return
-                }
-
                 DispatchQueue.main.async {
-                    let hasAccessibility = TextInserter.accessibilityGranted(prompt: false)
-                    if hasAccessibility {
-                        TextInserter.typeText(processed)
-                    } else {
+                    // Stale check — must read sessionID on main thread
+                    guard self.sessionID == session else {
+                        self.originApp = nil
                         TextInserter.copyToClipboard(processed)
-                        if !self.clipboardHintShown {
-                            self.trayDelegate?.notifyInfo("Text copied to clipboard. Grant Accessibility for direct typing.")
-                            self.clipboardHintShown = true
+                        return
+                    }
+
+                    // Restore original app focus if user switched away
+                    let needsRestore: Bool
+                    if let origin = self.originApp,
+                       !origin.isTerminated,
+                       origin.processIdentifier != NSWorkspace.shared.frontmostApplication?.processIdentifier {
+                        origin.activate()
+                        needsRestore = true
+                    } else {
+                        needsRestore = false
+                    }
+                    self.originApp = nil
+
+                    // Insert text (with short delay if restoring focus)
+                    let insertBlock = { [weak self] in
+                        guard let self = self else { return }
+                        let hasAccessibility = TextInserter.accessibilityGranted(prompt: false)
+                        if hasAccessibility {
+                            TextInserter.typeText(processed)
+                        } else {
+                            TextInserter.copyToClipboard(processed)
+                            if !self.clipboardHintShown {
+                                self.trayDelegate?.notifyInfo("Text copied to clipboard. Grant Accessibility for direct typing.")
+                                self.clipboardHintShown = true
+                            }
+                            print("[clipboard] \(processed)")
                         }
-                        print("[clipboard] \(processed)")
+                    }
+
+                    if needsRestore {
+                        // Give window server time to complete activation
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: insertBlock)
+                    } else {
+                        insertBlock()
                     }
                 }
             } catch let error as TranscriberError {

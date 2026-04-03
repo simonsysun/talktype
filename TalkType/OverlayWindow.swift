@@ -17,7 +17,7 @@ final class OverlayWindow {
         let style: NSWindow.StyleMask = [.nonactivatingPanel, .titled, .fullSizeContentView]
         panel = NSPanel(contentRect: frame, styleMask: style, backing: .buffered, defer: false)
         panel.becomesKeyOnlyIfNeeded = true
-        panel.level = .floating
+        panel.level = .statusBar
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
         panel.isMovableByWindowBackground = false
@@ -68,13 +68,12 @@ final class OverlayWindow {
     }
 
     func updateAudioLevel(_ level: Float) {
-        guard visible else { return }
-        let now = ProcessInfo.processInfo.systemUptime
-        guard now - lastLevelSent >= 1.0 / 45.0 else { return }
-        lastLevelSent = now
-
         let clamped = max(0, min(1, level))
         onMain {
+            guard self.visible else { return }
+            let now = ProcessInfo.processInfo.systemUptime
+            guard now - self.lastLevelSent >= 1.0 / 45.0 else { return }
+            self.lastLevelSent = now
             self.hostingView.updateLevel(clamped)
         }
     }
