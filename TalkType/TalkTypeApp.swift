@@ -385,7 +385,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self = self else { return }
             do {
-                try Transcriber.validateKey(key, modelsEndpoint: endpoint)
+                try Transcriber.validateKey(key, modelsEndpoint: endpoint, provider: provider)
                 guard seq == self.validationSeq else { return }
                 DispatchQueue.main.async {
                     self.keyStatusItem?.title = "API Key: Connected"
