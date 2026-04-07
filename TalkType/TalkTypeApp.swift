@@ -230,7 +230,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
     private func setProvider(_ provider: ASRProvider) {
         guard provider.rawValue != config.asrProvider else { return }
-        if dictationManager.state == .recording {
+        if dictationManager.state != .idle {
             notifyInfo("Cannot switch provider during dictation.")
             return
         }
@@ -277,7 +277,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
     private func setModel(_ model: String) {
         guard model != config.asrModel else { return }
-        if dictationManager.state == .recording {
+        if dictationManager.state != .idle {
             notifyInfo("Cannot switch model during dictation.")
             return
         }
@@ -669,8 +669,8 @@ extension TalkTypeApp: TrayDelegate {
 extension TranscriberError: Equatable {
     static func == (lhs: TranscriberError, rhs: TranscriberError) -> Bool {
         switch (lhs, rhs) {
-        case (.missingAPIKey, .missingAPIKey): return true
-        case (.invalidAPIKey, .invalidAPIKey): return true
+        case (.missingAPIKey(let a), .missingAPIKey(let b)): return a == b
+        case (.invalidAPIKey(let a), .invalidAPIKey(let b)): return a == b
         case (.emptyResponse, .emptyResponse): return true
         case (.apiError(let a, _), .apiError(let b, _)): return a == b
         default: return false

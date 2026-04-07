@@ -102,6 +102,9 @@ final class Transcriber {
         // model field
         body.appendMultipart(name: "model", value: model, boundary: boundary)
 
+        // response format — explicit to avoid relying on provider defaults
+        body.appendMultipart(name: "response_format", value: "json", boundary: boundary)
+
         // prompt field (optional)
         if let prompt = prompt {
             body.appendMultipart(name: "prompt", value: prompt, boundary: boundary)
