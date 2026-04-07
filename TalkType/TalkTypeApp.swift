@@ -17,12 +17,14 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     // Menu items needing dynamic updates
     private var asrItem: NSMenuItem!
     private var keyStatusItem: NSMenuItem!
-    private var modelMiniItem: NSMenuItem!
-    private var modelPremiumItem: NSMenuItem!
+    private var modelMenu: NSMenu!
     private var vocabMenu: NSMenu!
     private var launchItem: NSMenuItem!
     private var hotkeyDisplayItem: NSMenuItem!
     private var hotkeySettingsWindow: HotkeySettingsWindow!
+    private var providerOpenAIItem: NSMenuItem!
+    private var providerGroqItem: NSMenuItem!
+    private var keyMenuItem: NSMenuItem!
 
     static func main() {
         setbuf(stdout, nil)
@@ -46,9 +48,11 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         // Load config
         config = ConfigManager.load()
 
-        // Normalize model
-        if config.asrModel != defaultOpenAIASRModel && config.asrModel != premiumOpenAIASRModel {
-            config.asrModel = defaultOpenAIASRModel
+        // Normalize provider and model
+        let provider = ASRProvider(rawValue: config.asrProvider) ?? .openai
+        let validModels = provider.models.map(\.id)
+        if !validModels.contains(config.asrModel) {
+            config.asrModel = provider.defaultModel
         }
         ConfigManager.save(config)
 
@@ -114,6 +118,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         print("Ready!")
         print("  \(hotkeyDisplayString()) -> Dictation (speak -> type)")
         print("  Hotkey capture: \(mode)")
+        print("  ASR provider: \(currentProvider.displayName)")
         print("  ASR model: \(config.asrModel)")
         print("  API key: \(hasAPIKey() ? "present" : "missing")")
         if config.silenceAutoStopEnabled {
@@ -151,7 +156,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         hotkeyItem.target = self
         menu.addItem(hotkeyItem)
 
-        asrItem = NSMenuItem(title: "ASR: OpenAI / \(config.asrModel)", action: nil, keyEquivalent: "")
+        asrItem = NSMenuItem(title: "ASR: \(currentProvider.displayName) / \(config.asrModel)", action: nil, keyEquivalent: "")
         menu.addItem(asrItem)
 
         keyStatusItem = NSMenuItem(title: hasAPIKey() ? "API Key: Saved" : "API Key: Missing", action: nil, keyEquivalent: "")
@@ -163,23 +168,30 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
-        let keyMenuItem = NSMenuItem(title: "OpenAI API Key...", action: #selector(setAPIKey), keyEquivalent: "")
+        // Provider submenu
+        let providerMenu = NSMenu()
+        providerOpenAIItem = NSMenuItem(title: "OpenAI", action: #selector(useProviderOpenAI), keyEquivalent: "")
+        providerOpenAIItem.target = self
+        providerGroqItem = NSMenuItem(title: "Groq", action: #selector(useProviderGroq), keyEquivalent: "")
+        providerGroqItem.target = self
+        providerMenu.addItem(providerOpenAIItem)
+        providerMenu.addItem(providerGroqItem)
+        let providerItem = NSMenuItem(title: "Provider", action: nil, keyEquivalent: "")
+        providerItem.submenu = providerMenu
+        menu.addItem(providerItem)
+
+        // API key menu item
+        keyMenuItem = NSMenuItem(title: "\(currentProvider.displayName) API Key...", action: #selector(setAPIKey), keyEquivalent: "")
         keyMenuItem.target = self
         menu.addItem(keyMenuItem)
 
         // Model submenu
-        let modelMenu = NSMenu()
-        modelMiniItem = NSMenuItem(title: "GPT-4o mini Transcribe", action: #selector(useModelMini), keyEquivalent: "")
-        modelMiniItem.target = self
-        modelPremiumItem = NSMenuItem(title: "GPT-4o Transcribe", action: #selector(useModelPremium), keyEquivalent: "")
-        modelPremiumItem.target = self
-        modelMenu.addItem(modelMiniItem)
-        modelMenu.addItem(modelPremiumItem)
+        modelMenu = NSMenu()
         let modelItem = NSMenuItem(title: "Model", action: nil, keyEquivalent: "")
         modelItem.submenu = modelMenu
         menu.addItem(modelItem)
 
-        refreshModelUI()
+        refreshProviderUI()
 
         // Vocabulary submenu
         vocabMenu = NSMenu()
@@ -203,16 +215,61 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
     }
 
-    // MARK: - Model
+    // MARK: - Provider
 
-    private func refreshModelUI() {
-        asrItem?.title = "ASR: OpenAI / \(config.asrModel)"
-        modelMiniItem?.state = config.asrModel == defaultOpenAIASRModel ? .on : .off
-        modelPremiumItem?.state = config.asrModel == premiumOpenAIASRModel ? .on : .off
+    private var currentProvider: ASRProvider {
+        ASRProvider(rawValue: config.asrProvider) ?? .openai
     }
 
-    @objc private func useModelMini() { setModel(defaultOpenAIASRModel) }
-    @objc private func useModelPremium() { setModel(premiumOpenAIASRModel) }
+    @objc private func useProviderOpenAI() { setProvider(.openai) }
+    @objc private func useProviderGroq() { setProvider(.groq) }
+
+    private func setProvider(_ provider: ASRProvider) {
+        guard provider.rawValue != config.asrProvider else { return }
+        if dictationManager.state == .recording {
+            notifyInfo("Cannot switch provider during dictation.")
+            return
+        }
+        validationSeq += 1
+        config.asrProvider = provider.rawValue
+        config.asrModel = provider.defaultModel
+        ConfigManager.save(config)
+        refreshProviderUI()
+        dictationManager.reloadConfig(config)
+        notifyInfo("ASR switched to \(provider.displayName) / \(config.asrModel).")
+
+        // Validate key for new provider
+        if let key = currentAPIKey() {
+            validateKey(key, notify: false)
+        } else {
+            refreshKeyStatus()
+        }
+    }
+
+    private func refreshProviderUI() {
+        let provider = currentProvider
+        asrItem?.title = "ASR: \(provider.displayName) / \(config.asrModel)"
+        providerOpenAIItem?.state = provider == .openai ? .on : .off
+        providerGroqItem?.state = provider == .groq ? .on : .off
+        keyMenuItem?.title = "\(provider.displayName) API Key..."
+
+        // Rebuild model submenu for current provider
+        modelMenu?.removeAllItems()
+        for (id, label) in provider.models {
+            let item = NSMenuItem(title: label, action: #selector(selectModel(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = id
+            item.state = config.asrModel == id ? .on : .off
+            modelMenu?.addItem(item)
+        }
+    }
+
+    // MARK: - Model
+
+    @objc private func selectModel(_ sender: NSMenuItem) {
+        guard let modelID = sender.representedObject as? String else { return }
+        setModel(modelID)
+    }
 
     private func setModel(_ model: String) {
         guard model != config.asrModel else { return }
@@ -223,7 +280,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         validationSeq += 1
         config.asrModel = model
         ConfigManager.save(config)
-        refreshModelUI()
+        refreshProviderUI()
         dictationManager.reloadConfig(config)
         notifyInfo("ASR model switched to \(model).")
     }
@@ -231,11 +288,15 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     // MARK: - API Key
 
     private func currentAPIKey() -> String? {
-        if let envKey = ProcessInfo.processInfo.environment["TALKTYPE_API_KEY"], !envKey.isEmpty {
+        let provider = currentProvider
+        if let envKey = ProcessInfo.processInfo.environment[provider.envVar], !envKey.isEmpty {
             return envKey
         }
-        return KeyStorage.retrieveKey(provider: openAIASRAccount)
-            ?? KeyStorage.retrieveKey(provider: "OpenAI")
+        let key = KeyStorage.retrieveKey(provider: provider.keyAccount)
+        if key == nil && provider == .openai {
+            return KeyStorage.retrieveKey(provider: "OpenAI")
+        }
+        return key
     }
 
     private func hasAPIKey() -> Bool {
@@ -243,11 +304,12 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     }
 
     @objc private func setAPIKey() {
+        let provider = currentProvider
         let existing = currentAPIKey()
         if let existing = existing {
             let masked = maskKey(existing)
             let alert = NSAlert()
-            alert.messageText = "TalkType - OpenAI API Key"
+            alert.messageText = "TalkType - \(provider.displayName) API Key"
             alert.informativeText = "Current key: \(masked)"
             alert.addButton(withTitle: "Change Key")
             alert.addButton(withTitle: "Done")
@@ -259,10 +321,10 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
                 promptNewKey()
             case .alertThirdButtonReturn: // Clear
                 validationSeq += 1
-                KeyStorage.deleteKey(provider: openAIASRAccount)
-                KeyStorage.deleteKey(provider: "OpenAI")
+                KeyStorage.deleteKey(provider: provider.keyAccount)
+                if provider == .openai { KeyStorage.deleteKey(provider: "OpenAI") }
                 refreshKeyStatus()
-                notifyInfo("OpenAI API key cleared.")
+                notifyInfo("\(provider.displayName) API key cleared.")
             default:
                 break
             }
@@ -272,9 +334,10 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     }
 
     private func promptNewKey() {
+        let provider = currentProvider
         let alert = NSAlert()
-        alert.messageText = "TalkType - OpenAI API Key"
-        alert.informativeText = "Enter OpenAI API key for speech transcription:"
+        alert.messageText = "TalkType - \(provider.displayName) API Key"
+        alert.informativeText = "Enter \(provider.displayName) API key for speech transcription:"
         alert.addButton(withTitle: "Save")
         alert.addButton(withTitle: "Cancel")
 
@@ -287,7 +350,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         let key = input.stringValue.trimmingCharacters(in: .whitespaces)
         guard !key.isEmpty else { return }
 
-        if KeyStorage.storeKey(provider: openAIASRAccount, apiKey: key) {
+        if KeyStorage.storeKey(provider: provider.keyAccount, apiKey: key) {
             validateKey(key, notify: true)
         } else {
             notifyError("Failed to save API key.")
@@ -308,6 +371,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     private func validateKey(_ key: String, notify: Bool) {
         validationSeq += 1
         let seq = validationSeq
+        let provider = currentProvider
         DispatchQueue.main.async { self.keyStatusItem?.title = "API Key: Checking..." }
 
         DispatchQueue.global(qos: .utility).async { [weak self] in
@@ -318,20 +382,20 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
                 DispatchQueue.main.async {
                     self.keyStatusItem?.title = "API Key: Connected"
                 }
-                if notify { self.notifyInfo("OpenAI API key verified.") }
-            } catch let error as TranscriberError where error == .invalidAPIKey {
+                if notify { self.notifyInfo("\(provider.displayName) API key verified.") }
+            } catch let error as TranscriberError where error.isInvalidAPIKey {
                 guard seq == self.validationSeq else { return }
                 let current = self.currentAPIKey()
                 guard current == key else { return }
-                KeyStorage.deleteKey(provider: openAIASRAccount)
-                KeyStorage.deleteKey(provider: "OpenAI")
+                KeyStorage.deleteKey(provider: provider.keyAccount)
+                if provider == .openai { KeyStorage.deleteKey(provider: "OpenAI") }
                 DispatchQueue.main.async { self.keyStatusItem?.title = "API Key: Invalid" }
-                self.notifyError("OpenAI API key is invalid. Please enter a new one.")
+                self.notifyError("\(provider.displayName) API key is invalid. Please enter a new one.")
             } catch {
                 guard seq == self.validationSeq else { return }
                 DispatchQueue.main.async { self.keyStatusItem?.title = "API Key: Saved (offline)" }
                 if notify {
-                    self.notifyInfo("OpenAI API key saved but couldn't verify (network error).")
+                    self.notifyInfo("\(provider.displayName) API key saved but couldn't verify (network error).")
                 }
             }
         }
@@ -605,5 +669,10 @@ extension TranscriberError: Equatable {
         case (.apiError(let a, _), .apiError(let b, _)): return a == b
         default: return false
         }
+    }
+
+    var isInvalidAPIKey: Bool {
+        if case .invalidAPIKey = self { return true }
+        return false
     }
 }

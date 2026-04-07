@@ -7,17 +7,29 @@ Native Swift macOS menu bar dictation app.
 ## What it does
 
 - Start and stop dictation with `Cmd+Shift+Space` (customizable)
-- Transcribe with OpenAI speech-to-text
+- Transcribe with OpenAI or Groq speech-to-text
 - Type directly into the current app when Accessibility is enabled
 - Automatically restore focus to the original app if you switch away during recording
 - Keep custom vocabulary for names, acronyms, and product terms
 
-## Models
+## Providers
 
-- Default: `gpt-4o-mini-transcribe`
-- Optional: `gpt-4o-transcribe`
+Switch providers from the menu bar under `Provider`.
 
-At around 30 minutes of dictation per day, `gpt-4o-mini-transcribe` costs about **$2.7/month** and `gpt-4o-transcribe` about **$5.4/month**, while Wispr Flow Pro is **$15/month**.
+### OpenAI
+
+- Models: `gpt-4o-mini-transcribe` (default), `gpt-4o-transcribe`
+- ~30 min/day costs about **$2.7/month** (mini) or **$5.4/month** (premium)
+- Requires an [OpenAI API key](https://platform.openai.com/api-keys)
+
+### Groq
+
+- Models: `whisper-large-v3` (default), `whisper-large-v3-turbo`
+- Runs the same open-source Whisper model on Groq's LPU hardware — **~200x faster** than GPU
+- **Free tier**: 2,000 requests/day, 25 MB max file size, no credit card required
+- Requires a [Groq API key](https://console.groq.com/keys)
+
+Both providers use the same Whisper architecture, so transcription accuracy is equivalent.
 
 ## Custom hotkey
 
@@ -25,9 +37,9 @@ Click `Change Hotkey...` in the menu bar to set your preferred key combination. 
 
 ## API key storage
 
-OpenAI API keys are stored locally in an encrypted file under `~/.talktype/keys/`.
+API keys are stored locally in an encrypted file under `~/.talktype/keys/`.
 The app uses a local random master key plus machine-bound encryption.
-For extra safety, consider setting a monthly usage limit on your OpenAI account.
+Each provider's key is stored separately. You can also set keys via environment variables: `TALKTYPE_API_KEY` (OpenAI) or `TALKTYPE_GROQ_API_KEY` (Groq).
 
 ## Vocabulary
 
@@ -42,7 +54,7 @@ Current behavior is intentionally simple:
 ## Requirements
 
 - macOS 13.0+
-- OpenAI API key
+- API key (OpenAI or Groq)
 - Microphone permission
 - Accessibility permission for direct typing
 

@@ -1,15 +1,83 @@
 import Foundation
 
+// MARK: - Provider definitions
+
+enum ASRProvider: String, Codable {
+    case openai
+    case groq
+
+    var displayName: String {
+        switch self {
+        case .openai: return "OpenAI"
+        case .groq: return "Groq"
+        }
+    }
+
+    var transcriptionEndpoint: String {
+        switch self {
+        case .openai: return "https://api.openai.com/v1/audio/transcriptions"
+        case .groq: return "https://api.groq.com/openai/v1/audio/transcriptions"
+        }
+    }
+
+    var modelsEndpoint: String {
+        switch self {
+        case .openai: return "https://api.openai.com/v1/models"
+        case .groq: return "https://api.groq.com/openai/v1/models"
+        }
+    }
+
+    var defaultModel: String {
+        switch self {
+        case .openai: return defaultOpenAIASRModel
+        case .groq: return defaultGroqASRModel
+        }
+    }
+
+    var models: [(id: String, label: String)] {
+        switch self {
+        case .openai: return [
+            (defaultOpenAIASRModel, "GPT-4o mini Transcribe"),
+            (premiumOpenAIASRModel, "GPT-4o Transcribe"),
+        ]
+        case .groq: return [
+            (defaultGroqASRModel, "Whisper Large v3"),
+            (turboGroqASRModel, "Whisper Large v3 Turbo"),
+        ]
+        }
+    }
+
+    var keyAccount: String {
+        switch self {
+        case .openai: return openAIASRAccount
+        case .groq: return groqASRAccount
+        }
+    }
+
+    var envVar: String {
+        switch self {
+        case .openai: return "TALKTYPE_API_KEY"
+        case .groq: return "TALKTYPE_GROQ_API_KEY"
+        }
+    }
+}
+
 let defaultOpenAIASRModel = "gpt-4o-mini-transcribe"
 let premiumOpenAIASRModel = "gpt-4o-transcribe"
 let openAIASRAccount = "OpenAI-ASR"
 
-/// Speech-to-text via OpenAI transcription API. Uses raw URLSession, no SDK.
+let defaultGroqASRModel = "whisper-large-v3"
+let turboGroqASRModel = "whisper-large-v3-turbo"
+let groqASRAccount = "Groq-ASR"
+
+/// Speech-to-text via OpenAI-compatible transcription API. Supports OpenAI and Groq providers.
 final class Transcriber {
     var model: String
     var timeout: TimeInterval
+    var provider: ASRProvider
 
-    init(model: String = defaultOpenAIASRModel, timeout: TimeInterval = 30.0) {
+    init(provider: ASRProvider = .openai, model: String = defaultOpenAIASRModel, timeout: TimeInterval = 30.0) {
+        self.provider = provider
         self.model = model
         self.timeout = timeout
     }
@@ -22,7 +90,7 @@ final class Transcriber {
         guard !audio.isEmpty else { return "" }
 
         guard let apiKey = loadAPIKey() else {
-            throw TranscriberError.missingAPIKey
+            throw TranscriberError.missingAPIKey(provider: provider)
         }
 
         let wavData = buildWAV(audio: audio, sampleRate: sampleRate)
@@ -49,7 +117,7 @@ final class Transcriber {
         // closing boundary
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
 
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/audio/transcriptions")!)
+        var request = URLRequest(url: URL(string: provider.transcriptionEndpoint)!)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -101,7 +169,7 @@ final class Transcriber {
 
     /// Validate an API key by calling the models endpoint.
     func validateKey(_ key: String) throws {
-        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/models")!)
+        var request = URLRequest(url: URL(string: provider.modelsEndpoint)!)
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 10.0
 
@@ -115,7 +183,7 @@ final class Transcriber {
                 return
             }
             if let http = response as? HTTPURLResponse, http.statusCode == 401 {
-                requestError = TranscriberError.invalidAPIKey
+                requestError = TranscriberError.invalidAPIKey(provider: self.provider)
                 return
             }
         }
@@ -128,11 +196,15 @@ final class Transcriber {
     // MARK: - Private
 
     private func loadAPIKey() -> String? {
-        if let key = ProcessInfo.processInfo.environment["TALKTYPE_API_KEY"], !key.isEmpty {
+        if let key = ProcessInfo.processInfo.environment[provider.envVar], !key.isEmpty {
             return key
         }
-        return KeyStorage.retrieveKey(provider: openAIASRAccount)
-            ?? KeyStorage.retrieveKey(provider: "OpenAI")
+        let key = KeyStorage.retrieveKey(provider: provider.keyAccount)
+        // Legacy fallback for OpenAI only
+        if key == nil && provider == .openai {
+            return KeyStorage.retrieveKey(provider: "OpenAI")
+        }
+        return key
     }
 
     private func buildPrompt(vocabularyHints: [String]?) -> String? {
@@ -178,17 +250,17 @@ final class Transcriber {
 }
 
 enum TranscriberError: LocalizedError {
-    case missingAPIKey
-    case invalidAPIKey
+    case missingAPIKey(provider: ASRProvider)
+    case invalidAPIKey(provider: ASRProvider)
     case emptyResponse
     case apiError(statusCode: Int, body: String)
 
     var errorDescription: String? {
         switch self {
-        case .missingAPIKey:
-            return "OpenAI API key is missing. Set it from TalkType tray menu."
-        case .invalidAPIKey:
-            return "OpenAI API key is invalid."
+        case .missingAPIKey(let provider):
+            return "\(provider.displayName) API key is missing. Set it from TalkType tray menu."
+        case .invalidAPIKey(let provider):
+            return "\(provider.displayName) API key is invalid."
         case .emptyResponse:
             return "Empty response from transcription API."
         case .apiError(let code, let body):

@@ -36,7 +36,9 @@ final class DictationManager {
         self.vocabularyStore = vocabularyStore
         self.overlay = overlay
 
+        let provider = ASRProvider(rawValue: config.asrProvider) ?? .openai
         self.transcriber = Transcriber(
+            provider: provider,
             model: config.asrModel,
             timeout: config.asrTimeoutSeconds
         )
@@ -96,6 +98,7 @@ final class DictationManager {
     func reloadConfig(_ newConfig: AppConfig) {
         config = newConfig
         transcriberLock.lock()
+        transcriber.provider = ASRProvider(rawValue: newConfig.asrProvider) ?? .openai
         transcriber.model = newConfig.asrModel
         transcriber.timeout = newConfig.asrTimeoutSeconds
         transcriberLock.unlock()

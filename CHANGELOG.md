@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.2.0 — 2026-04-07
+
+### New Features
+
+- **Groq provider**: Switch between OpenAI and Groq for speech-to-text from the menu bar (`Provider` submenu). Groq runs the same Whisper model on custom LPU hardware at ~200x speed with a generous free tier (2,000 requests/day).
+- **Groq models**: `whisper-large-v3` (default) and `whisper-large-v3-turbo`.
+- **Per-provider API keys**: Each provider stores its own encrypted API key. Environment variables: `TALKTYPE_API_KEY` (OpenAI), `TALKTYPE_GROQ_API_KEY` (Groq).
+- **Dynamic model menu**: Model submenu updates automatically when switching providers.
+
 ## v1.1.0 — 2026-04-03
 
 ### New Features

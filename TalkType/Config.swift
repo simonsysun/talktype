@@ -4,6 +4,7 @@ struct AppConfig: Codable {
     var dictationHotkey: String = "cmd+shift+space"
     var sampleRate: Int = 16000
     var launchAtLogin: Bool = false
+    var asrProvider: String = "openai"
     var asrModel: String = "gpt-4o-mini-transcribe"
     var asrTimeoutSeconds: Double = 30.0
     var silenceAutoStopEnabled: Bool = true
@@ -15,6 +16,7 @@ struct AppConfig: Codable {
         case dictationHotkey = "dictation_hotkey"
         case sampleRate = "sample_rate"
         case launchAtLogin = "launch_at_login"
+        case asrProvider = "asr_provider"
         case asrModel = "asr_model"
         case asrTimeoutSeconds = "asr_timeout_seconds"
         case silenceAutoStopEnabled = "silence_auto_stop_enabled"
