@@ -49,7 +49,11 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         config = ConfigManager.load()
 
         // Normalize provider and model
-        let provider = ASRProvider(rawValue: config.asrProvider) ?? .openai
+        if ASRProvider(rawValue: config.asrProvider) == nil {
+            print("[config] unknown asr_provider '\(config.asrProvider)', defaulting to openai")
+            config.asrProvider = ASRProvider.openai.rawValue
+        }
+        let provider = ASRProvider(rawValue: config.asrProvider)!
         let validModels = provider.models.map(\.id)
         if !validModels.contains(config.asrModel) {
             config.asrModel = provider.defaultModel
@@ -372,12 +376,16 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         validationSeq += 1
         let seq = validationSeq
         let provider = currentProvider
+        let keyAccount = provider.keyAccount
         DispatchQueue.main.async { self.keyStatusItem?.title = "API Key: Checking..." }
+
+        // Build the validation request on the main thread to avoid racing with reloadConfig
+        let endpoint = provider.modelsEndpoint
 
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self = self else { return }
             do {
-                try self.dictationManager.transcriber.validateKey(key)
+                try Transcriber.validateKey(key, modelsEndpoint: endpoint)
                 guard seq == self.validationSeq else { return }
                 DispatchQueue.main.async {
                     self.keyStatusItem?.title = "API Key: Connected"
@@ -385,9 +393,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
                 if notify { self.notifyInfo("\(provider.displayName) API key verified.") }
             } catch let error as TranscriberError where error.isInvalidAPIKey {
                 guard seq == self.validationSeq else { return }
-                let current = self.currentAPIKey()
-                guard current == key else { return }
-                KeyStorage.deleteKey(provider: provider.keyAccount)
+                KeyStorage.deleteKey(provider: keyAccount)
                 if provider == .openai { KeyStorage.deleteKey(provider: "OpenAI") }
                 DispatchQueue.main.async { self.keyStatusItem?.title = "API Key: Invalid" }
                 self.notifyError("\(provider.displayName) API key is invalid. Please enter a new one.")

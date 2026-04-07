@@ -167,9 +167,14 @@ final class Transcriber {
         return result
     }
 
-    /// Validate an API key by calling the models endpoint.
+    /// Validate an API key by calling the models endpoint (instance method).
     func validateKey(_ key: String) throws {
-        var request = URLRequest(url: URL(string: provider.modelsEndpoint)!)
+        try Transcriber.validateKey(key, modelsEndpoint: provider.modelsEndpoint)
+    }
+
+    /// Validate an API key against a specific models endpoint (thread-safe, no instance state).
+    static func validateKey(_ key: String, modelsEndpoint: String) throws {
+        var request = URLRequest(url: URL(string: modelsEndpoint)!)
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 10.0
 
@@ -183,7 +188,7 @@ final class Transcriber {
                 return
             }
             if let http = response as? HTTPURLResponse, http.statusCode == 401 {
-                requestError = TranscriberError.invalidAPIKey(provider: self.provider)
+                requestError = TranscriberError.invalidAPIKey(provider: .openai)
                 return
             }
         }
