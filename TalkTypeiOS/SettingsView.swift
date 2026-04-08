@@ -154,16 +154,20 @@ struct SettingsView: View {
         guard !trimmed.isEmpty else { return }
 
         isSavingKey = true
-        Task {
+        Task.detached {
+            // Run validation on a non-cooperative thread (validateKey uses semaphore)
             do {
                 try Transcriber.validateKey(trimmed, modelsEndpoint: provider.modelsEndpoint, provider: provider)
-                if KeyStorage.storeKey(provider: provider.keyAccount, apiKey: trimmed) {
-                    await MainActor.run {
+                let stored = KeyStorage.storeKey(provider: provider.keyAccount, apiKey: trimmed)
+                await MainActor.run {
+                    if stored {
                         apiKey = ""
                         keyAlertMessage = "API key saved successfully."
-                        showingKeyAlert = true
-                        isSavingKey = false
+                    } else {
+                        keyAlertMessage = "Failed to save API key to keychain."
                     }
+                    showingKeyAlert = true
+                    isSavingKey = false
                 }
             } catch {
                 await MainActor.run {

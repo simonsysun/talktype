@@ -20,6 +20,8 @@ class KeyboardViewController: UIInputViewController {
 
     private var audioRecorder: AudioRecorder?
     private var transcriber: Transcriber?
+    private var transcriptionTask: Task<Void, Never>?
+    private var errorDismissTask: DispatchWorkItem?
 
     // MARK: - UI
 
@@ -36,6 +38,7 @@ class KeyboardViewController: UIInputViewController {
     private let barCount = 9
     private let dotCount = 3
     private let keyboardHeight: CGFloat = 200
+    private let maxRecordingSeconds: TimeInterval = 120
 
     // MARK: - Lifecycle
 
@@ -49,6 +52,7 @@ class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        setupTranscriber()
         audioRecorder = AudioRecorder(sampleRate: 16000) { [weak self] level in
             DispatchQueue.main.async { self?.updateLevelBars(level) }
         }
@@ -57,11 +61,14 @@ class KeyboardViewController: UIInputViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        transcriptionTask?.cancel()
+        transcriptionTask = nil
         if case .recording = state {
             _ = audioRecorder?.stop()
         }
         audioRecorder?.shutdown()
         audioRecorder = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     // MARK: - Setup
@@ -235,6 +242,12 @@ class KeyboardViewController: UIInputViewController {
                     try session.setActive(true)
                     try self.audioRecorder?.start()
                     self.state = .recording
+
+                    // Auto-stop after max duration to prevent OOM in extension
+                    DispatchQueue.main.asyncAfter(deadline: .now() + self.maxRecordingSeconds) { [weak self] in
+                        guard let self, case .recording = self.state else { return }
+                        self.stopAndTranscribe()
+                    }
                 } catch {
                     self.state = .error("Could not start recording: \(error.localizedDescription)")
                 }
@@ -247,16 +260,20 @@ class KeyboardViewController: UIInputViewController {
 
         guard let audio = audioRecorder?.stop(), !audio.isEmpty else {
             state = .idle
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             return
         }
 
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         state = .processing
 
         let vocabStore = VocabularyStore()
         let hints = vocabStore.getActiveVocabulary()
         let vocabEntries = vocabStore.listEntries()
 
-        Task { @MainActor in
+        transcriptionTask?.cancel()
+        transcriptionTask = Task { @MainActor [weak self] in
+            guard let self else { return }
             do {
                 guard let transcriber else {
                     state = .error("No API key configured. Open TalkType app to set up.")
@@ -275,6 +292,8 @@ class KeyboardViewController: UIInputViewController {
                     vocabularyHints: hints.isEmpty ? nil : hints
                 )
 
+                guard !Task.isCancelled else { return }
+
                 if PostProcessor.isLikelyHallucination(text, audioRMS: rms, vocabEntries: vocabEntries) {
                     state = .idle
                     return
@@ -282,12 +301,16 @@ class KeyboardViewController: UIInputViewController {
 
                 text = PostProcessor.postProcess(text: text, vocabEntries: vocabEntries)
 
+                guard !Task.isCancelled else { return }
+
                 if !text.isEmpty {
                     textDocumentProxy.insertText(text)
                 }
                 state = .idle
             } catch {
-                state = .error(error.localizedDescription)
+                if !Task.isCancelled {
+                    state = .error(error.localizedDescription)
+                }
             }
         }
     }
@@ -398,12 +421,14 @@ class KeyboardViewController: UIInputViewController {
         statusLabel.text = message
         statusLabel.alpha = 1
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+        errorDismissTask?.cancel()
+        let task = DispatchWorkItem { [weak self] in
             UIView.animate(withDuration: 0.3) {
                 self?.statusLabel.alpha = 0
             }
-            self?.state = .idle
         }
+        errorDismissTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: task)
     }
 
     private func updateLevelBars(_ level: Float) {

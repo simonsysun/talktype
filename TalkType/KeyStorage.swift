@@ -51,11 +51,11 @@ enum KeyStorage {
     #if os(iOS)
     private static func storeKeychain(provider: String, apiKey: String) -> Bool {
         guard let data = apiKey.data(using: .utf8) else { return false }
+        // No kSecAttrAccessGroup — iOS uses the first shared group from entitlements
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: AppIdentity.keychainService,
             kSecAttrAccount as String: provider,
-            kSecAttrAccessGroup as String: AppIdentity.appGroupID,
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
         ]
@@ -68,7 +68,6 @@ enum KeyStorage {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: AppIdentity.keychainService,
             kSecAttrAccount as String: provider,
-            kSecAttrAccessGroup as String: AppIdentity.appGroupID,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
@@ -84,7 +83,6 @@ enum KeyStorage {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: AppIdentity.keychainService,
             kSecAttrAccount as String: provider,
-            kSecAttrAccessGroup as String: AppIdentity.appGroupID,
         ]
         return SecItemDelete(query as CFDictionary) == errSecSuccess
     }
