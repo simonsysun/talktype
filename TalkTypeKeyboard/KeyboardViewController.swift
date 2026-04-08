@@ -13,7 +13,7 @@ class KeyboardViewController: UIInputViewController {
     }
 
     private var state: DictationState = .idle {
-        didSet { updateUI() }
+        didSet { animateStateChange() }
     }
 
     // MARK: - Components
@@ -24,38 +24,39 @@ class KeyboardViewController: UIInputViewController {
     private var errorDismissTask: DispatchWorkItem?
     private var autoStopTimer: DispatchWorkItem?
 
-    // MARK: - UI
+    // MARK: - UI (minimal: 1 button, 1 ring, 1 label, 1 globe)
 
     private let micButton = UIButton(type: .custom)
     private let statusLabel = UILabel()
     private let ringLayer = CAShapeLayer()
-    private var levelBars: [CALayer] = []
-    private var processingDots: [CALayer] = []
-    private let feedbackGenerator = UIImpactFeedbackGenerator(style: .medium)
+    private let spinnerLayer = CAShapeLayer()
+    private let feedbackGenerator = UIImpactFeedbackGenerator(style: .light)
 
-    // MARK: - Constants
+    // MARK: - Layout
 
-    private let buttonSize: CGFloat = 88
-    private let barCount = 9
-    private let dotCount = 3
-    private let keyboardHeight: CGFloat = 200
+    private let buttonSize: CGFloat = 72
+    private let keyboardHeight: CGFloat = 160
     private let maxRecordingSeconds: TimeInterval = 120
+
+    // MARK: - Cached configs
+
+    private let idleSymbolConfig = UIImage.SymbolConfiguration(pointSize: 26, weight: .medium)
+    private let recordingSymbolConfig = UIImage.SymbolConfiguration(pointSize: 28, weight: .semibold)
 
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.translatesAutoresizingMaskIntoConstraints = false
-        setupLayout()
-        setupTranscriber()
+        buildUI()
         feedbackGenerator.prepare()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        setupTranscriber()
+        reloadConfig()
         audioRecorder = AudioRecorder(sampleRate: 16000) { [weak self] level in
-            DispatchQueue.main.async { self?.updateLevelBars(level) }
+            DispatchQueue.main.async { self?.updateRingLevel(level) }
         }
         audioRecorder?.prepare()
     }
@@ -64,6 +65,7 @@ class KeyboardViewController: UIInputViewController {
         super.viewWillDisappear(animated)
         transcriptionTask?.cancel()
         transcriptionTask = nil
+        autoStopTimer?.cancel()
         if case .recording = state {
             _ = audioRecorder?.stop()
         }
@@ -72,9 +74,7 @@ class KeyboardViewController: UIInputViewController {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    // MARK: - Setup
-
-    private func setupTranscriber() {
+    private func reloadConfig() {
         let config = ConfigManager.load()
         transcriber = Transcriber(
             provider: ASRProvider(rawValue: config.asrProvider) ?? .openai,
@@ -83,153 +83,112 @@ class KeyboardViewController: UIInputViewController {
         )
     }
 
-    private func setupLayout() {
-        let container = UIView()
-        container.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(container)
+    // MARK: - UI Construction
 
-        let heightConstraint = container.heightAnchor.constraint(equalToConstant: keyboardHeight)
+    private func buildUI() {
+        let heightConstraint = view.heightAnchor.constraint(equalToConstant: keyboardHeight)
         heightConstraint.priority = .defaultHigh
-
-        NSLayoutConstraint.activate([
-            container.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            container.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            container.topAnchor.constraint(equalTo: view.topAnchor),
-            container.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            heightConstraint,
-        ])
+        heightConstraint.isActive = true
 
         // Mic button
         micButton.translatesAutoresizingMaskIntoConstraints = false
-        micButton.addTarget(self, action: #selector(micTapped), for: .touchUpInside)
-        container.addSubview(micButton)
-
-        NSLayoutConstraint.activate([
-            micButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            micButton.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: -10),
-            micButton.widthAnchor.constraint(equalToConstant: buttonSize),
-            micButton.heightAnchor.constraint(equalToConstant: buttonSize),
-        ])
-
-        configureMicButton()
-        setupRingLayer()
-        setupLevelBars()
-        setupProcessingDots()
-
-        // Status label (for errors)
-        statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        statusLabel.textAlignment = .center
-        statusLabel.textColor = .secondaryLabel
-        statusLabel.alpha = 0
-        container.addSubview(statusLabel)
-
-        NSLayoutConstraint.activate([
-            statusLabel.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            statusLabel.topAnchor.constraint(equalTo: micButton.bottomAnchor, constant: 12),
-            statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 16),
-            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -16),
-        ])
-
-        // Globe button (switch keyboards)
-        let globeButton = UIButton(type: .system)
-        globeButton.translatesAutoresizingMaskIntoConstraints = false
-        let globeImage = UIImage(systemName: "globe")?.withConfiguration(
-            UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)
-        )
-        globeButton.setImage(globeImage, for: .normal)
-        globeButton.tintColor = .label
-        globeButton.addTarget(self, action: #selector(handleInputModeList(from:with:)), for: .allTouchEvents)
-        container.addSubview(globeButton)
-
-        NSLayoutConstraint.activate([
-            globeButton.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            globeButton.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8),
-            globeButton.widthAnchor.constraint(equalToConstant: 44),
-            globeButton.heightAnchor.constraint(equalToConstant: 44),
-        ])
-    }
-
-    private func configureMicButton() {
-        let config = UIImage.SymbolConfiguration(pointSize: 32, weight: .medium)
-        let micImage = UIImage(systemName: "mic.fill", withConfiguration: config)
-        micButton.setImage(micImage, for: .normal)
+        micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: idleSymbolConfig), for: .normal)
         micButton.tintColor = .label
-        micButton.backgroundColor = .secondarySystemBackground
+        micButton.backgroundColor = .tertiarySystemBackground
         micButton.layer.cornerRadius = buttonSize / 2
-        micButton.layer.borderWidth = 2
-        micButton.layer.borderColor = UIColor.separator.cgColor
-
         micButton.layer.shadowColor = UIColor.black.cgColor
-        micButton.layer.shadowOffset = CGSize(width: 0, height: 2)
-        micButton.layer.shadowRadius = 8
-        micButton.layer.shadowOpacity = 0.1
-    }
+        micButton.layer.shadowOffset = .init(width: 0, height: 1)
+        micButton.layer.shadowRadius = 4
+        micButton.layer.shadowOpacity = 0.08
+        micButton.addTarget(self, action: #selector(micDown), for: .touchDown)
+        micButton.addTarget(self, action: #selector(micTapped), for: .touchUpInside)
+        micButton.addTarget(self, action: #selector(micUp), for: [.touchUpOutside, .touchCancel])
+        view.addSubview(micButton)
 
-    private func setupRingLayer() {
+        // Ring layer (audio level + spinner)
         let ringPath = UIBezierPath(
-            arcCenter: CGPoint(x: buttonSize / 2, y: buttonSize / 2),
-            radius: buttonSize / 2 + 6,
-            startAngle: -.pi / 2,
-            endAngle: .pi * 1.5,
-            clockwise: true
+            arcCenter: .init(x: buttonSize / 2, y: buttonSize / 2),
+            radius: buttonSize / 2 + 5,
+            startAngle: -.pi / 2, endAngle: .pi * 1.5, clockwise: true
         )
         ringLayer.path = ringPath.cgPath
-        ringLayer.fillColor = UIColor.clear.cgColor
-        ringLayer.strokeColor = UIColor.systemRed.cgColor
-        ringLayer.lineWidth = 3
-        ringLayer.opacity = 0
+        ringLayer.fillColor = nil
+        ringLayer.strokeColor = UIColor.systemRed.withAlphaComponent(0.6).cgColor
+        ringLayer.lineWidth = 2.5
+        ringLayer.lineCap = .round
+        ringLayer.strokeEnd = 0
         micButton.layer.addSublayer(ringLayer)
+
+        // Spinner arc (processing)
+        spinnerLayer.path = ringPath.cgPath
+        spinnerLayer.fillColor = nil
+        spinnerLayer.strokeColor = UIColor.tintColor.cgColor
+        spinnerLayer.lineWidth = 2.5
+        spinnerLayer.lineCap = .round
+        spinnerLayer.strokeStart = 0
+        spinnerLayer.strokeEnd = 0.25
+        spinnerLayer.opacity = 0
+        micButton.layer.addSublayer(spinnerLayer)
+
+        // Status label
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        statusLabel.font = .preferredFont(forTextStyle: .caption2)
+        statusLabel.textColor = .secondaryLabel
+        statusLabel.textAlignment = .center
+        statusLabel.alpha = 0
+        statusLabel.numberOfLines = 2
+        view.addSubview(statusLabel)
+
+        // Globe button
+        let globe = UIButton(type: .system)
+        globe.translatesAutoresizingMaskIntoConstraints = false
+        globe.setImage(UIImage(systemName: "globe", withConfiguration:
+            UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)), for: .normal)
+        globe.tintColor = .secondaryLabel
+        globe.addTarget(self, action: #selector(handleInputModeList(from:with:)), for: .allTouchEvents)
+        view.addSubview(globe)
+
+        NSLayoutConstraint.activate([
+            micButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            micButton.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -6),
+            micButton.widthAnchor.constraint(equalToConstant: buttonSize),
+            micButton.heightAnchor.constraint(equalToConstant: buttonSize),
+
+            statusLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            statusLabel.topAnchor.constraint(equalTo: micButton.bottomAnchor, constant: 8),
+            statusLabel.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, constant: -40),
+
+            globe.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            globe.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6),
+            globe.widthAnchor.constraint(equalToConstant: 40),
+            globe.heightAnchor.constraint(equalToConstant: 40),
+        ])
     }
 
-    private func setupLevelBars() {
-        let barWidth: CGFloat = 3
-        let barSpacing: CGFloat = 4
-        let totalWidth = CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * barSpacing
-        let startX = (buttonSize - totalWidth) / 2
+    // MARK: - Touch Feedback
 
-        for i in 0..<barCount {
-            let bar = CALayer()
-            let x = startX + CGFloat(i) * (barWidth + barSpacing)
-            bar.frame = CGRect(x: x, y: buttonSize / 2 - 2, width: barWidth, height: 4)
-            bar.backgroundColor = UIColor.systemRed.cgColor
-            bar.cornerRadius = barWidth / 2
-            bar.opacity = 0
-            micButton.layer.addSublayer(bar)
-            levelBars.append(bar)
+    @objc private func micDown() {
+        UIView.animate(withDuration: 0.15, delay: 0, options: .curveEaseIn) {
+            self.micButton.transform = CGAffineTransform(scaleX: 0.92, y: 0.92)
         }
     }
 
-    private func setupProcessingDots() {
-        let dotSize: CGFloat = 6
-        let dotSpacing: CGFloat = 10
-        let totalWidth = CGFloat(dotCount) * dotSize + CGFloat(dotCount - 1) * dotSpacing
-        let startX = (buttonSize - totalWidth) / 2
-
-        for i in 0..<dotCount {
-            let dot = CALayer()
-            let x = startX + CGFloat(i) * (dotSize + dotSpacing)
-            dot.frame = CGRect(x: x, y: buttonSize / 2 - dotSize / 2, width: dotSize, height: dotSize)
-            dot.backgroundColor = UIColor.systemBlue.cgColor
-            dot.cornerRadius = dotSize / 2
-            dot.opacity = 0
-            micButton.layer.addSublayer(dot)
-            processingDots.append(dot)
+    @objc private func micUp() {
+        UIView.animate(withDuration: 0.2, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 0, options: []) {
+            self.micButton.transform = .identity
         }
     }
-
-    // MARK: - Actions
 
     @objc private func micTapped() {
+        micUp()
         switch state {
-        case .idle, .error:
-            startRecording()
-        case .recording:
-            stopAndTranscribe()
-        case .processing:
-            break
+        case .idle, .error: startRecording()
+        case .recording: stopAndTranscribe()
+        case .processing: break
         }
     }
+
+    // MARK: - Recording
 
     private func startRecording() {
         feedbackGenerator.impactOccurred()
@@ -247,7 +206,6 @@ class KeyboardViewController: UIInputViewController {
                     try self.audioRecorder?.start()
                     self.state = .recording
 
-                    // Auto-stop after max duration to prevent OOM in extension
                     self.autoStopTimer?.cancel()
                     let timer = DispatchWorkItem { [weak self] in
                         guard let self, case .recording = self.state else { return }
@@ -256,7 +214,7 @@ class KeyboardViewController: UIInputViewController {
                     self.autoStopTimer = timer
                     DispatchQueue.main.asyncAfter(deadline: .now() + self.maxRecordingSeconds, execute: timer)
                 } catch {
-                    self.state = .error("Could not start recording: \(error.localizedDescription)")
+                    self.state = .error("Recording failed.")
                 }
             }
         }
@@ -264,6 +222,7 @@ class KeyboardViewController: UIInputViewController {
 
     private func stopAndTranscribe() {
         feedbackGenerator.impactOccurred()
+        autoStopTimer?.cancel()
 
         guard let audio = audioRecorder?.stop(), !audio.isEmpty else {
             state = .idle
@@ -283,196 +242,149 @@ class KeyboardViewController: UIInputViewController {
             guard let self else { return }
             do {
                 guard let transcriber else {
-                    state = .error("No API key configured. Open TalkType app to set up.")
+                    state = .error("No API key. Open TalkType app.")
                     return
                 }
 
                 let rms = AudioRecorder.calculateRMS(audio)
                 let config = ConfigManager.load()
-                if rms < Float(config.minTranscribeRms) {
-                    state = .idle
-                    return
-                }
+                if rms < Float(config.minTranscribeRms) { state = .idle; return }
 
                 var text = try await transcriber.transcribeAsync(
                     audio: audio,
                     vocabularyHints: hints.isEmpty ? nil : hints
                 )
-
                 guard !Task.isCancelled else { return }
 
                 if PostProcessor.isLikelyHallucination(text, audioRMS: rms, vocabEntries: vocabEntries) {
-                    state = .idle
-                    return
+                    state = .idle; return
                 }
-
                 text = PostProcessor.postProcess(text: text, vocabEntries: vocabEntries)
-
                 guard !Task.isCancelled else { return }
 
-                if !text.isEmpty {
-                    textDocumentProxy.insertText(text)
-                }
+                if !text.isEmpty { textDocumentProxy.insertText(text) }
                 state = .idle
             } catch {
-                if !Task.isCancelled {
-                    state = .error(error.localizedDescription)
-                }
+                if !Task.isCancelled { state = .error("Transcription failed.") }
             }
         }
     }
 
-    // MARK: - UI Updates
+    // MARK: - State Animations
 
-    private func updateUI() {
+    private func animateStateChange() {
         switch state {
-        case .idle:
-            showIdleState()
-        case .recording:
-            showRecordingState()
-        case .processing:
-            showProcessingState()
-        case .error(let message):
-            showError(message)
+        case .idle:      toIdle()
+        case .recording: toRecording()
+        case .processing: toProcessing()
+        case .error(let msg): toError(msg)
         }
     }
 
-    private func showIdleState() {
-        micButton.tintColor = .label
-        micButton.backgroundColor = .secondarySystemBackground
-        micButton.layer.borderColor = UIColor.separator.cgColor
+    private func toIdle() {
+        stopSpinner()
 
-        let config = UIImage.SymbolConfiguration(pointSize: 32, weight: .medium)
-        micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: config), for: .normal)
+        UIView.animate(withDuration: 0.35, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0, options: []) {
+            self.micButton.backgroundColor = .tertiarySystemBackground
+            self.micButton.tintColor = .label
+            self.micButton.transform = .identity
+            self.statusLabel.alpha = 0
+        }
 
-        // Hide ring
-        ringLayer.removeAllAnimations()
-        ringLayer.opacity = 0
+        micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: idleSymbolConfig), for: .normal)
 
-        // Hide bars
         CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        levelBars.forEach { $0.opacity = 0 }
+        CATransaction.setAnimationDuration(0.25)
+        ringLayer.strokeEnd = 0
+        ringLayer.opacity = 0
         CATransaction.commit()
-
-        // Hide dots
-        processingDots.forEach {
-            $0.removeAllAnimations()
-            $0.opacity = 0
-        }
-
-        statusLabel.alpha = 0
     }
 
-    private func showRecordingState() {
-        micButton.tintColor = .white
-        micButton.backgroundColor = .systemRed
-        micButton.layer.borderColor = UIColor.systemRed.cgColor
+    private func toRecording() {
+        stopSpinner()
+        errorDismissTask?.cancel()
 
-        let config = UIImage.SymbolConfiguration(pointSize: 32, weight: .medium)
-        micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: config), for: .normal)
+        UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.65, initialSpringVelocity: 0.3, options: []) {
+            self.micButton.backgroundColor = UIColor.systemRed
+            self.micButton.tintColor = .white
+            self.micButton.transform = CGAffineTransform(scaleX: 1.08, y: 1.08)
+            self.statusLabel.alpha = 0
+        }
 
-        // Pulsing ring
+        micButton.setImage(UIImage(systemName: "mic.fill", withConfiguration: recordingSymbolConfig), for: .normal)
+
+        ringLayer.strokeColor = UIColor.systemRed.withAlphaComponent(0.5).cgColor
         ringLayer.opacity = 1
-        let pulse = CABasicAnimation(keyPath: "opacity")
-        pulse.fromValue = 1.0
-        pulse.toValue = 0.3
-        pulse.duration = 0.8
-        pulse.autoreverses = true
-        pulse.repeatCount = .infinity
-        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        ringLayer.add(pulse, forKey: "pulse")
-
-        // Show bars
-        levelBars.forEach { $0.opacity = 1 }
-
-        // Hide dots
-        processingDots.forEach { $0.opacity = 0 }
-
-        statusLabel.alpha = 0
     }
 
-    private func showProcessingState() {
-        micButton.tintColor = .white
-        micButton.backgroundColor = .systemBlue
-        micButton.layer.borderColor = UIColor.systemBlue.cgColor
+    private func toProcessing() {
+        UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0, options: []) {
+            self.micButton.backgroundColor = UIColor.tintColor
+            self.micButton.tintColor = .white
+            self.micButton.transform = .identity
+        }
 
-        let config = UIImage.SymbolConfiguration(pointSize: 24, weight: .medium)
-        micButton.setImage(UIImage(systemName: "ellipsis", withConfiguration: config), for: .normal)
+        micButton.setImage(UIImage(systemName: "waveform", withConfiguration: idleSymbolConfig), for: .normal)
 
-        // Hide ring and bars
-        ringLayer.removeAllAnimations()
-        ringLayer.opacity = 0
+        // Hide level ring
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        levelBars.forEach { $0.opacity = 0 }
+        ringLayer.strokeEnd = 0
+        ringLayer.opacity = 0
         CATransaction.commit()
 
-        // Animated dots
-        for (i, dot) in processingDots.enumerated() {
-            dot.opacity = 1
-            let bounce = CABasicAnimation(keyPath: "transform.scale")
-            bounce.fromValue = 0.5
-            bounce.toValue = 1.2
-            bounce.duration = 0.4
-            bounce.autoreverses = true
-            bounce.repeatCount = .infinity
-            bounce.beginTime = CACurrentMediaTime() + Double(i) * 0.15
-            bounce.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            dot.add(bounce, forKey: "bounce")
-        }
+        // Start spinner
+        startSpinner()
     }
 
-    private func showError(_ message: String) {
-        showIdleState()
+    private func toError(_ message: String) {
+        toIdle()
         statusLabel.text = message
-        statusLabel.alpha = 1
+        UIView.animate(withDuration: 0.2) { self.statusLabel.alpha = 1 }
 
         errorDismissTask?.cancel()
         let task = DispatchWorkItem { [weak self] in
-            UIView.animate(withDuration: 0.3) {
-                self?.statusLabel.alpha = 0
-            }
+            UIView.animate(withDuration: 0.3) { self?.statusLabel.alpha = 0 }
         }
         errorDismissTask = task
         DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: task)
     }
 
-    private func updateLevelBars(_ level: Float) {
-        guard case .recording = state else { return }
+    // MARK: - Audio Level Ring
 
+    private func updateRingLevel(_ level: Float) {
+        guard case .recording = state else { return }
+        let clamped = min(1.0, level * 1.5)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-
-        let center = barCount / 2
-        for (i, bar) in levelBars.enumerated() {
-            let distance = abs(i - center)
-            let dampening = 1.0 - Float(distance) / Float(center + 1) * 0.6
-            let barLevel = level * dampening
-            let minHeight: CGFloat = 4
-            let maxHeight: CGFloat = 30
-            let height = minHeight + CGFloat(barLevel) * (maxHeight - minHeight)
-            bar.frame = CGRect(
-                x: bar.frame.origin.x,
-                y: buttonSize / 2 - height / 2,
-                width: bar.frame.width,
-                height: height
-            )
-        }
-
+        ringLayer.strokeEnd = CGFloat(0.05 + clamped * 0.95)
         CATransaction.commit()
+    }
+
+    // MARK: - Spinner
+
+    private func startSpinner() {
+        spinnerLayer.opacity = 1
+        let rotation = CABasicAnimation(keyPath: "transform.rotation.z")
+        rotation.fromValue = 0
+        rotation.toValue = Double.pi * 2
+        rotation.duration = 0.9
+        rotation.repeatCount = .infinity
+        rotation.timingFunction = CAMediaTimingFunction(name: .linear)
+        spinnerLayer.add(rotation, forKey: "spin")
+    }
+
+    private func stopSpinner() {
+        spinnerLayer.removeAllAnimations()
+        spinnerLayer.opacity = 0
     }
 
     // MARK: - Trait Changes
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        micButton.layer.borderColor = UIColor.separator.cgColor
-        if case .recording = state {
-            micButton.layer.borderColor = UIColor.systemRed.cgColor
-        }
-        if case .processing = state {
-            micButton.layer.borderColor = UIColor.systemBlue.cgColor
+        if case .idle = state {
+            micButton.layer.shadowColor = UIColor.black.cgColor
         }
     }
 }
