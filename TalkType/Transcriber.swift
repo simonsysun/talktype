@@ -170,6 +170,60 @@ final class Transcriber {
         return result
     }
 
+    /// Async transcription for iOS keyboard extension (non-blocking).
+    func transcribeAsync(
+        audio: [Float],
+        sampleRate: Int = 16000,
+        vocabularyHints: [String]? = nil
+    ) async throws -> String {
+        guard !audio.isEmpty else { return "" }
+
+        guard let apiKey = loadAPIKey() else {
+            throw TranscriberError.missingAPIKey(provider: provider)
+        }
+
+        let wavData = buildWAV(audio: audio, sampleRate: sampleRate)
+        let prompt = buildPrompt(vocabularyHints: vocabularyHints)
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var body = Data()
+
+        body.appendMultipart(name: "model", value: model, boundary: boundary)
+        body.appendMultipart(name: "response_format", value: "json", boundary: boundary)
+
+        if let prompt = prompt {
+            body.appendMultipart(name: "prompt", value: prompt, boundary: boundary)
+        }
+
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"speech.wav\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
+        body.append(wavData)
+        body.append("\r\n".data(using: .utf8)!)
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        var request = URLRequest(url: URL(string: provider.transcriptionEndpoint)!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        request.timeoutInterval = timeout
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+            let responseBody = String(data: data, encoding: .utf8) ?? ""
+            throw TranscriberError.apiError(statusCode: httpResponse.statusCode, body: responseBody)
+        }
+
+        if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let text = json["text"] as? String {
+            return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
     /// Validate an API key by calling the models endpoint (instance method).
     func validateKey(_ key: String) throws {
         try Transcriber.validateKey(key, modelsEndpoint: provider.modelsEndpoint, provider: provider)

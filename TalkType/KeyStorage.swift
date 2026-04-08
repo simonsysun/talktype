@@ -1,9 +1,98 @@
 import Foundation
 import CryptoKit
+#if canImport(Security)
+import Security
+#endif
 
-/// Local encrypted API key storage using ChaChaPoly, machine-bound.
-/// Compatible pattern with Python version but uses CryptoKit instead of Fernet.
+/// API key storage. macOS: ChaChaPoly file-based. iOS: Keychain Services.
 enum KeyStorage {
+
+    // MARK: - Public API
+
+    static func storeKey(provider: String, apiKey: String) -> Bool {
+        deleteKey(provider: provider)
+        #if os(iOS)
+        return storeKeychain(provider: provider, apiKey: apiKey)
+        #else
+        return storeEncrypted(provider: provider, apiKey: apiKey)
+        #endif
+    }
+
+    static func retrieveKey(provider: String) -> String? {
+        #if os(iOS)
+        return retrieveKeychain(provider: provider)
+        #else
+        if let value = retrieveEncrypted(provider: provider) {
+            return value
+        }
+        if let legacy = retrieveLegacyKeychain(provider: provider) {
+            if storeKey(provider: provider, apiKey: legacy) {
+                deleteLegacyKeychain(provider: provider)
+            }
+            return legacy
+        }
+        return nil
+        #endif
+    }
+
+    @discardableResult
+    static func deleteKey(provider: String) -> Bool {
+        #if os(iOS)
+        return deleteKeychain(provider: provider)
+        #else
+        let encDeleted = deleteEncrypted(provider: provider)
+        let legacyDeleted = deleteLegacyKeychain(provider: provider)
+        return encDeleted || legacyDeleted
+        #endif
+    }
+
+    // MARK: - iOS Keychain
+
+    #if os(iOS)
+    private static func storeKeychain(provider: String, apiKey: String) -> Bool {
+        guard let data = apiKey.data(using: .utf8) else { return false }
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: AppIdentity.keychainService,
+            kSecAttrAccount as String: provider,
+            kSecAttrAccessGroup as String: AppIdentity.appGroupID,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+        ]
+        let status = SecItemAdd(query as CFDictionary, nil)
+        return status == errSecSuccess
+    }
+
+    private static func retrieveKeychain(provider: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: AppIdentity.keychainService,
+            kSecAttrAccount as String: provider,
+            kSecAttrAccessGroup as String: AppIdentity.appGroupID,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        let value = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (value?.isEmpty == false) ? value : nil
+    }
+
+    private static func deleteKeychain(provider: String) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: AppIdentity.keychainService,
+            kSecAttrAccount as String: provider,
+            kSecAttrAccessGroup as String: AppIdentity.appGroupID,
+        ]
+        return SecItemDelete(query as CFDictionary) == errSecSuccess
+    }
+    #endif
+
+    // MARK: - macOS Encrypted File Storage
+
+    #if os(macOS)
     private static var keysDir: URL {
         AppIdentity.stateDir.appendingPathComponent("keys")
     }
@@ -17,11 +106,7 @@ enum KeyStorage {
         return keysDir.appendingPathComponent("\(safe).senc")
     }
 
-    // MARK: - Public API
-
-    static func storeKey(provider: String, apiKey: String) -> Bool {
-        deleteKey(provider: provider)
-
+    private static func storeEncrypted(provider: String, apiKey: String) -> Bool {
         guard let plaintext = apiKey.data(using: .utf8) else { return false }
         guard let key = symmetricKey() else { return false }
 
@@ -38,33 +123,6 @@ enum KeyStorage {
             return false
         }
     }
-
-    static func retrieveKey(provider: String) -> String? {
-        // Try Swift encrypted storage first
-        if let value = retrieveEncrypted(provider: provider) {
-            return value
-        }
-
-        // Try Python Fernet-encrypted storage (migration path)
-        // We can't decrypt Fernet, so try legacy keychain instead
-        if let legacy = retrieveLegacyKeychain(provider: provider) {
-            if storeKey(provider: provider, apiKey: legacy) {
-                deleteLegacyKeychain(provider: provider)
-            }
-            return legacy
-        }
-
-        return nil
-    }
-
-    @discardableResult
-    static func deleteKey(provider: String) -> Bool {
-        let encDeleted = deleteEncrypted(provider: provider)
-        let legacyDeleted = deleteLegacyKeychain(provider: provider)
-        return encDeleted || legacyDeleted
-    }
-
-    // MARK: - Encryption internals
 
     private static func ensureKeysDir() {
         let dir = keysDir
@@ -121,7 +179,7 @@ enum KeyStorage {
         guard let master = loadOrCreateMasterSecret() else { return nil }
         let binding = machineBinding()
         var combined = master
-        combined.append(0) // null separator
+        combined.append(0)
         combined.append(binding)
         let hash = SHA256.hash(data: combined)
         let key = SymmetricKey(data: hash)
@@ -156,7 +214,7 @@ enum KeyStorage {
         }
     }
 
-    // MARK: - Legacy Keychain
+    // MARK: - Legacy Keychain (macOS only)
 
     private static let securityPath = "/usr/bin/security"
 
@@ -207,4 +265,5 @@ enum KeyStorage {
         }
         return deleted
     }
+    #endif
 }

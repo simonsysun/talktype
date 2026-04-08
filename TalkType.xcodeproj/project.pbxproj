@@ -22,7 +22,49 @@
 		A10013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10015; };
 		A10014 /* HotkeySettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10016; };
 		A10015 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = PKG10002; };
+		A20001 /* TalkTypeiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20001; };
+		A20002 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20002; };
+		A20003 /* Transcriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10004; };
+		A20004 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10003; };
+		A20005 /* PostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10012; };
+		A20006 /* VocabularyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10008; };
+		A20007 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10010; };
+		A20008 /* KeyStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10007; };
+		A20009 /* AppIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10011; };
+		A20010 /* TalkTypeKeyboard.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C30001; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A30001 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30001; };
+		A30002 /* Transcriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10004; };
+		A30003 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10003; };
+		A30004 /* PostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10012; };
+		A30005 /* VocabularyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10008; };
+		A30006 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10010; };
+		A30007 /* KeyStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10007; };
+		A30008 /* AppIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10011; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		PROXY30001 = {
+			isa = PBXContainerItemProxy;
+			containerPortal = H10001;
+			proxyType = 1;
+			remoteGlobalIDString = F30001;
+			remoteInfo = TalkTypeKeyboard;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		EMBED20001 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A20010 /* TalkTypeKeyboard.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		B10001 /* TalkTypeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkTypeApp.swift; sourceTree = "<group>"; };
@@ -42,6 +84,15 @@
 		B10015 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C10001 /* TalkType.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkType.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10016 /* HotkeySettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeySettingsWindow.swift; sourceTree = "<group>"; };
+		B20001 /* TalkTypeiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkTypeiOSApp.swift; sourceTree = "<group>"; };
+		B20002 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B20003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B20004 /* TalkTypeiOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TalkTypeiOS.entitlements; sourceTree = "<group>"; };
+		C20001 /* TalkTypeiOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkTypeiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B30001 /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
+		B30002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B30003 /* TalkTypeKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TalkTypeKeyboard.entitlements; sourceTree = "<group>"; };
+		C30001 /* TalkTypeKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkTypeKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,6 +104,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D20001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D30001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -60,6 +125,8 @@
 			isa = PBXGroup;
 			children = (
 				E10002 /* TalkType */,
+				E20001 /* TalkTypeiOS */,
+				E30001 /* TalkTypeKeyboard */,
 				E10003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -91,8 +158,31 @@
 			isa = PBXGroup;
 			children = (
 				C10001 /* TalkType.app */,
+				C20001 /* TalkTypeiOS.app */,
+				C30001 /* TalkTypeKeyboard.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		E20001 /* TalkTypeiOS */ = {
+			isa = PBXGroup;
+			children = (
+				B20001 /* TalkTypeiOSApp.swift */,
+				B20002 /* SettingsView.swift */,
+				B20003 /* Info.plist */,
+				B20004 /* TalkTypeiOS.entitlements */,
+			);
+			path = TalkTypeiOS;
+			sourceTree = "<group>";
+		};
+		E30001 /* TalkTypeKeyboard */ = {
+			isa = PBXGroup;
+			children = (
+				B30001 /* KeyboardViewController.swift */,
+				B30002 /* Info.plist */,
+				B30003 /* TalkTypeKeyboard.entitlements */,
+			);
+			path = TalkTypeKeyboard;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -117,6 +207,42 @@
 			productName = TalkType;
 			productReference = C10001 /* TalkType.app */;
 			productType = "com.apple.product-type.application";
+		};
+		F20001 /* TalkTypeiOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = G20003;
+			buildPhases = (
+				F20002 /* Sources */,
+				D20001 /* Frameworks */,
+				F20003 /* Resources */,
+				EMBED20001 /* Embed App Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DEP30001 /* PBXTargetDependency */,
+			);
+			name = TalkTypeiOS;
+			productName = TalkTypeiOS;
+			productReference = C20001 /* TalkTypeiOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		F30001 /* TalkTypeKeyboard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = G30003;
+			buildPhases = (
+				F30002 /* Sources */,
+				D30001 /* Frameworks */,
+				F30003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TalkTypeKeyboard;
+			productName = TalkTypeKeyboard;
+			productReference = C30001 /* TalkTypeKeyboard.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -145,9 +271,19 @@
 			projectRoot = "";
 			targets = (
 				F10001 /* TalkType */,
+				F20001 /* TalkTypeiOS */,
+				F30001 /* TalkTypeKeyboard */,
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXTargetDependency section */
+		DEP30001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F30001 /* TalkTypeKeyboard */;
+			targetProxy = PROXY30001;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCRemoteSwiftPackageReference section */
 		PKG10001 /* KeyboardShortcuts */ = {
@@ -189,6 +325,37 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F20002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A20001 /* TalkTypeiOSApp.swift in Sources */,
+				A20002 /* SettingsView.swift in Sources */,
+				A20003 /* Transcriber.swift in Sources */,
+				A20004 /* AudioRecorder.swift in Sources */,
+				A20005 /* PostProcessor.swift in Sources */,
+				A20006 /* VocabularyStore.swift in Sources */,
+				A20007 /* Config.swift in Sources */,
+				A20008 /* KeyStorage.swift in Sources */,
+				A20009 /* AppIdentity.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F30002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A30001 /* KeyboardViewController.swift in Sources */,
+				A30002 /* Transcriber.swift in Sources */,
+				A30003 /* AudioRecorder.swift in Sources */,
+				A30004 /* PostProcessor.swift in Sources */,
+				A30005 /* VocabularyStore.swift in Sources */,
+				A30006 /* Config.swift in Sources */,
+				A30007 /* KeyStorage.swift in Sources */,
+				A30008 /* AppIdentity.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
@@ -197,6 +364,20 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10013 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F20003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F30003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -223,10 +404,10 @@
 				);
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				ONLY_ACTIVE_ARCH = YES;
-				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -246,8 +427,8 @@
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 			};
@@ -266,6 +447,7 @@
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.talktype.local;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -285,8 +467,91 @@
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.talktype.local;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		G20005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_ENTITLEMENTS = TalkTypeiOS/TalkTypeiOS.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TalkTypeiOS/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.talktype.ios;
+				PRODUCT_NAME = TalkType;
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		G20006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_ENTITLEMENTS = TalkTypeiOS/TalkTypeiOS.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TalkTypeiOS/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.talktype.ios;
+				PRODUCT_NAME = TalkType;
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		G30005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TalkTypeKeyboard/TalkTypeKeyboard.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TalkTypeKeyboard/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.talktype.ios.keyboard;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		G30006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TalkTypeKeyboard/TalkTypeKeyboard.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TalkTypeKeyboard/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.talktype.ios.keyboard;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -307,6 +572,24 @@
 			buildConfigurations = (
 				G10005 /* Debug */,
 				G10006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		G20003 /* Build configuration list for PBXNativeTarget "TalkTypeiOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				G20005 /* Debug */,
+				G20006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		G30003 /* Build configuration list for PBXNativeTarget "TalkTypeKeyboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				G30005 /* Debug */,
+				G30006 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
