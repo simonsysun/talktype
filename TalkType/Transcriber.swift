@@ -320,7 +320,11 @@ enum TranscriberError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey(let provider):
+            #if os(iOS)
+            return "\(provider.displayName) API key is missing. Open the TalkType app to set it up."
+            #else
             return "\(provider.displayName) API key is missing. Set it from TalkType tray menu."
+            #endif
         case .invalidAPIKey(let provider):
             return "\(provider.displayName) API key is invalid."
         case .emptyResponse:

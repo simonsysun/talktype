@@ -10,10 +10,17 @@ enum KeyStorage {
     // MARK: - Public API
 
     static func storeKey(provider: String, apiKey: String) -> Bool {
-        deleteKey(provider: provider)
         #if os(iOS)
-        return storeKeychain(provider: provider, apiKey: apiKey)
+        // Update atomically: try add first, update if duplicate exists
+        let result = storeKeychain(provider: provider, apiKey: apiKey)
+        if !result {
+            // Might already exist, delete then retry
+            deleteKey(provider: provider)
+            return storeKeychain(provider: provider, apiKey: apiKey)
+        }
+        return true
         #else
+        deleteKey(provider: provider)
         return storeEncrypted(provider: provider, apiKey: apiKey)
         #endif
     }

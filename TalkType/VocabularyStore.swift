@@ -126,9 +126,13 @@ final class VocabularyStore {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted]
             let data = try encoder.encode(container)
-            let tmp = path.appendingPathExtension("tmp")
-            try data.write(to: tmp)
-            _ = try FileManager.default.replaceItemAt(path, withItemAt: tmp)
+            if FileManager.default.fileExists(atPath: path.path) {
+                let tmp = path.appendingPathExtension("tmp")
+                try data.write(to: tmp)
+                _ = try FileManager.default.replaceItemAt(path, withItemAt: tmp)
+            } else {
+                try data.write(to: path, options: .atomic)
+            }
         } catch {
             print("[vocab] failed to save: \(error)")
         }

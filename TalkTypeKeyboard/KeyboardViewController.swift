@@ -22,6 +22,7 @@ class KeyboardViewController: UIInputViewController {
     private var transcriber: Transcriber?
     private var transcriptionTask: Task<Void, Never>?
     private var errorDismissTask: DispatchWorkItem?
+    private var autoStopTimer: DispatchWorkItem?
 
     // MARK: - UI
 
@@ -87,12 +88,15 @@ class KeyboardViewController: UIInputViewController {
         container.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(container)
 
+        let heightConstraint = container.heightAnchor.constraint(equalToConstant: keyboardHeight)
+        heightConstraint.priority = .defaultHigh
+
         NSLayoutConstraint.activate([
             container.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             container.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             container.topAnchor.constraint(equalTo: view.topAnchor),
             container.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            container.heightAnchor.constraint(equalToConstant: keyboardHeight),
+            heightConstraint,
         ])
 
         // Mic button
@@ -244,10 +248,13 @@ class KeyboardViewController: UIInputViewController {
                     self.state = .recording
 
                     // Auto-stop after max duration to prevent OOM in extension
-                    DispatchQueue.main.asyncAfter(deadline: .now() + self.maxRecordingSeconds) { [weak self] in
+                    self.autoStopTimer?.cancel()
+                    let timer = DispatchWorkItem { [weak self] in
                         guard let self, case .recording = self.state else { return }
                         self.stopAndTranscribe()
                     }
+                    self.autoStopTimer = timer
+                    DispatchQueue.main.asyncAfter(deadline: .now() + self.maxRecordingSeconds, execute: timer)
                 } catch {
                     self.state = .error("Could not start recording: \(error.localizedDescription)")
                 }

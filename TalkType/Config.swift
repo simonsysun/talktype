@@ -66,9 +66,13 @@ enum ConfigManager {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(config)
-            let tmp = url.appendingPathExtension("tmp")
-            try data.write(to: tmp, options: .atomic)
-            _ = try FileManager.default.replaceItemAt(url, withItemAt: tmp)
+            if FileManager.default.fileExists(atPath: url.path) {
+                let tmp = url.appendingPathExtension("tmp")
+                try data.write(to: tmp, options: .atomic)
+                _ = try FileManager.default.replaceItemAt(url, withItemAt: tmp)
+            } else {
+                try data.write(to: url, options: .atomic)
+            }
         } catch {
             print("[config] failed to save: \(error)")
         }
