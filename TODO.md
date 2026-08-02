@@ -7,32 +7,33 @@ Last reviewed: 2026-08-02
 
 **Current focus: macOS, local-only ASR.** iOS is parked by decision (2026-08-02).
 
-**Architecture decision (2026-08-02): local Qwen3-ASR only. All cloud providers are being
-removed.** One model, no API keys, no network. Rationale and measurements in "ASR decision" below.
-
 ---
 
 ## State of the project
 
-- **macOS app (`TalkType/`)** — v1.2.0, feature-complete and previously shipped. Never built on this
-  machine until now (fresh clone 2026-08-01).
-- **iOS keyboard (`TalkTypeKeyboard/`) + companion app (`TalkTypeiOS/`)** — written in 4 commits on
-  2026-04-07/08, then paused. **Never compiled, never run on a device.** Every item under
-  "Parked: iOS" is a hypothesis until the thing builds.
-- **Transcription** — STT only, no LLM. OpenAI `gpt-4o-mini-transcribe` (default) / `gpt-4o-transcribe`,
-  Groq `whisper-large-v3` / `-turbo`. Vocabulary rides on the API's `prompt` parameter;
-  `PostProcessor` is regex, not a model.
+- **macOS app (`TalkType/`)** — v2.0.1, shipped. Local Qwen3-ASR sidecar, optional Groq polish,
+  first-run setup window, GitHub release with a downloadable build.
+- **iOS keyboard (`TalkTypeKeyboard/`) + companion app (`TalkTypeiOS/`)** — written 2026-04-07/08,
+  then paused. **Never compiled, never run on a device.** Everything under "Parked: iOS" is a
+  hypothesis until the targets build.
 
 ---
 
-## Blocked — needs Simon
+## Now — macOS
 
-- [ ] **Accept the Xcode license**, required for any `xcodebuild` use including macOS:
-      `sudo xcodebuild -license accept && sudo xcodebuild -runFirstLaunch`
-      (Xcode 26.6 is installed and selected. macOS *and* iOS SDKs are both present —
-      `-downloadPlatform iOS` would only add simulator runtimes, not needed for device builds.)
-- [ ] **Push access.** `git push` fails: the SSH key authenticates as `simonsunxiphi`, the repo is
-      `simonsysun/talktype`. Two commits are sitting local.
+1. [ ] **Sign releases with a self-signed certificate.** Ad-hoc signing makes the designated
+       requirement a cdhash, so every update silently revokes the Accessibility grant while System
+       Settings still shows the app switched on. A self-signed certificate makes it
+       `identifier "..." and certificate leaf = H"..."`, which is stable across builds — verified
+       by signing two different versions with one certificate and diffing the requirement.
+       `scripts/make-signing-cert.sh` creates it; `scripts/build.sh` uses it when present and warns
+       when it is not. Gatekeeper still asks for right-click ▸ Open; that needs the paid programme.
+2. [ ] **Verify the grant actually survives an update** before relying on it: grant once, rebuild,
+       reinstall, and confirm the app does not log `[perm] accessibility NOT granted`.
+3. [ ] Deferred: overlay draggability. It is `ignoresMouseEvents = true` and fixed bottom-centre.
+       Simon asked for it to move to the bottom (done) but has not said whether he wants to drag it.
+4. [ ] Deferred: filler-word cleanup is now handled by the Groq polish and by
+       `PostProcessor.tidySpeech` as the offline floor. Revisit only if the local floor proves weak.
 
 ---
 
@@ -172,7 +173,22 @@ Nice-to-have once it runs at all:
 
 ## Done
 
-Shipped work is in `CHANGELOG.md` (macOS v1.0.0 → v1.2.0). iOS has shipped nothing yet.
+Shipped work is in `CHANGELOG.md` (macOS v1.0.0 → v2.0.1). iOS has shipped nothing yet.
+
+- 2026-08-02 — **Pasting instead of typing.** Dictation ended on the clipboard needing a manual
+  ⌘V, because the Accessibility grant had gone stale (ad-hoc cdhash changes every build) and
+  nothing in the app said so. Insertion is now a synthesized ⌘V, which also fixes long paragraphs
+  losing their tail in terminals and Electron apps; the transcript stays on the clipboard so a
+  manual paste is always a working fallback. Failure now offers a Fix button that clears the stale
+  TCC record and re-asks, because telling someone to enable an already-enabled switch is no help.
+- 2026-08-02 — Overlay reworked to be quiet: no idle animation (only speech moves it), plain fades
+  instead of springs, 67×22 with seven bars resting as a level row of dots. Its bars had been
+  added to `NSVisualEffectView`'s layer, which is not guaranteed to exist yet.
+- 2026-08-02 — **`swift test` could not build at all** — `AudioRecorder` references `AudioDevices`
+  and the package excluded it. 59 tests now run.
+- 2026-08-02 — README rewritten for people rather than engineers, and the GitHub repo given a
+  description and topics (both were empty, which is most of why nothing could find it).
+- 2026-08-02 — Released v2.0.0: local-only ASR, Groq polish, setup window, memory flat under load.
 
 - 2026-08-01 — Full project audit; this TODO created as the live tracker.
 - 2026-08-01 — **Fixed a crash in `AudioRecorder.resample`.** When the interpolation path produced

@@ -9,3 +9,4 @@ DerivedData/
 xcuserdata/
 *.xcuserstate
 __pycache__/
+dist/
