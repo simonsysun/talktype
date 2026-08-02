@@ -1,5 +1,40 @@
 # Changelog
 
+## v2.0.2 — 2026-08-02
+
+Dictation now reaches your cursor. It did not, before.
+
+### Fixed
+
+- **The transcript is pasted instead of typed.** Insertion was a stream of chunked unicode
+  key events, which several apps — terminals and Electron ones especially — dropped or
+  reordered the tail of. A synthesized ⌘V arrives whole and instantly, regardless of
+  length. The transcript is deliberately left on the clipboard so a manual paste is always
+  a working fallback.
+- **The Accessibility permission survives updates.** An ad-hoc signature's designated
+  requirement is a cdhash, so every new build silently revoked the grant while System
+  Settings went on showing TalkType switched on — which is why dictation ended on the
+  clipboard with no explanation. Releases are now signed with a self-signed certificate,
+  making the requirement a certificate match that is identical across builds. Verified by
+  granting one build and confirming a different binary kept the permission.
+  `scripts/make-signing-cert.sh` creates it; `scripts/build.sh` uses it. Gatekeeper still
+  asks for right-click ▸ Open on first launch — that needs the paid programme.
+- **When pasting does fail, the app says so** and offers to repair it, clearing the stale
+  permission record and asking macOS again. Telling someone to enable a switch that is
+  already enabled is no help.
+- **The overlay could come up empty.** Its bars were added to `NSVisualEffectView`'s layer,
+  which is not guaranteed to exist yet.
+- **`swift test` could not build at all** — `AudioRecorder` references `AudioDevices`, and
+  the test package excluded it. 59 tests now run.
+
+### Changed
+
+- **The overlay is quiet.** No idle animation — only speech moves it. Appearing and leaving
+  are plain fades rather than springs. Smaller: 67×22 with seven bars, resting as a level
+  row of dots.
+- **README rewritten** for people rather than engineers, with a Chinese translation, and the
+  GitHub repository given a description and topics.
+
 ## v2.0.0 — 2026-08-02
 
 Transcription moved onto the machine. This is a different product from v1.x: there are no

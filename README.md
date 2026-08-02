@@ -1,5 +1,7 @@
 # TalkType — free, offline dictation for Mac
 
+*[中文说明](README.zh-CN.md)*
+
 ![TalkType logo](docs/assets/talktype-logo.png)
 
 **Talk instead of typing.** Press a hotkey anywhere on your Mac, say what you mean, press it
@@ -76,6 +78,9 @@ macOS ties the "allow this app to paste" permission to the exact version it was 
 and TalkType isn't signed with a paid certificate, so a new version looks like a different
 app — even though System Settings still shows TalkType switched on. TalkType notices this
 and offers a **Fix This** button; click it, and switch TalkType on again when macOS asks.
+
+*(From v2.0.2 releases are signed with one certificate, so this should not recur on future
+updates.)*
 
 **Do I need to know anything technical?**
 No. Download, open, click Install, allow two permissions.
@@ -162,9 +167,8 @@ cd talktype
 ./asr/install.sh                 # Python env + Qwen3-ASR weights, into ~/.talktype/asr
                                  # ./asr/install.sh 0.6B for a smaller, less accurate model
 
-xcodebuild -scheme TalkType -configuration Release build
-cp -R ~/Library/Developer/Xcode/DerivedData/TalkType-*/Build/Products/Release/TalkType.app /Applications/
-open /Applications/TalkType.app
+./scripts/make-signing-cert.sh   # optional, once: keeps permissions valid across updates
+./scripts/build.sh install
 ```
 
 `swift test` runs the logic tests without Xcode. `TODO.md` tracks what is done and what
