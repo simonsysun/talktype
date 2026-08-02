@@ -13,6 +13,11 @@ struct AppConfig: Codable {
     var silenceAutoStopSeconds: Double = 20
     var silenceRmsThreshold: Double = 0.008
     var minTranscribeRms: Double = 0.012
+    /// Cloud refinement of the transcript. The only step that leaves the machine, so it
+    /// is opt-in-shaped: off means dictation still works, just less polished.
+    var refineEnabled: Bool = true
+    var refineModel: String = "qwen/qwen3.6-27b"
+    var refineTimeoutSeconds: Double = 2.5
 
     enum CodingKeys: String, CodingKey {
         case sampleRate = "sample_rate"
@@ -23,6 +28,30 @@ struct AppConfig: Codable {
         case silenceAutoStopSeconds = "silence_auto_stop_seconds"
         case silenceRmsThreshold = "silence_rms_threshold"
         case minTranscribeRms = "min_transcribe_rms"
+        case refineEnabled = "refine_enabled"
+        case refineModel = "refine_model"
+        case refineTimeoutSeconds = "refine_timeout_seconds"
+    }
+
+    init() {}
+
+    /// Every field is optional on the way in. Synthesised decoding treats a missing key
+    /// as a hard error, so adding one setting silently reset every other setting the
+    /// user had chosen.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = AppConfig()
+        sampleRate = try c.decodeIfPresent(Int.self, forKey: .sampleRate) ?? d.sampleRate
+        launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? d.launchAtLogin
+        asrPort = try c.decodeIfPresent(Int.self, forKey: .asrPort) ?? d.asrPort
+        asrTimeoutSeconds = try c.decodeIfPresent(Double.self, forKey: .asrTimeoutSeconds) ?? d.asrTimeoutSeconds
+        silenceAutoStopEnabled = try c.decodeIfPresent(Bool.self, forKey: .silenceAutoStopEnabled) ?? d.silenceAutoStopEnabled
+        silenceAutoStopSeconds = try c.decodeIfPresent(Double.self, forKey: .silenceAutoStopSeconds) ?? d.silenceAutoStopSeconds
+        silenceRmsThreshold = try c.decodeIfPresent(Double.self, forKey: .silenceRmsThreshold) ?? d.silenceRmsThreshold
+        minTranscribeRms = try c.decodeIfPresent(Double.self, forKey: .minTranscribeRms) ?? d.minTranscribeRms
+        refineEnabled = try c.decodeIfPresent(Bool.self, forKey: .refineEnabled) ?? d.refineEnabled
+        refineModel = try c.decodeIfPresent(String.self, forKey: .refineModel) ?? d.refineModel
+        refineTimeoutSeconds = try c.decodeIfPresent(Double.self, forKey: .refineTimeoutSeconds) ?? d.refineTimeoutSeconds
     }
 }
 

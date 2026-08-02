@@ -14,6 +14,7 @@ final class DictationManager {
     private var config: AppConfig
     private let recorder: AudioRecorder
     let transcriber: Transcriber
+    private var refiner: TextRefiner
     private let vocabularyStore: VocabularyStore
     private let overlay: OverlayWindow
     private weak var trayDelegate: TrayDelegate?
@@ -39,6 +40,11 @@ final class DictationManager {
         self.transcriber = Transcriber(
             port: config.asrPort,
             timeout: config.asrTimeoutSeconds
+        )
+
+        self.refiner = TextRefiner(
+            model: config.refineModel,
+            timeout: config.refineTimeoutSeconds
         )
 
         self.recorder = AudioRecorder(
@@ -90,8 +96,39 @@ final class DictationManager {
         config = newConfig
         transcriberLock.lock()
         transcriber.timeout = newConfig.asrTimeoutSeconds
+        refiner = TextRefiner(model: newConfig.refineModel, timeout: newConfig.refineTimeoutSeconds)
         transcriberLock.unlock()
     }
+
+    // MARK: - Refinement
+
+    /// Cloud refinement, with the local tidy as the floor. Whatever happens — refinement
+    /// disabled, no API key, offline, slow, or output that failed the plausibility
+    /// check — the caller still gets usable text.
+    private func refine(_ text: String) -> String {
+        let fallback = PostProcessor.tidySpeech(text)
+        guard config.refineEnabled else { return fallback }
+
+        transcriberLock.lock()
+        let refiner = self.refiner
+        transcriberLock.unlock()
+
+        let started = Date()
+        guard let refined = refiner.refine(text) else { return fallback }
+        print("[refine] \(String(format: "%.2f", Date().timeIntervalSince(started)))s")
+        return refined
+    }
+
+    /// Open the connection to the refiner ahead of first use.
+    func prewarmRefiner() {
+        guard config.refineEnabled else { return }
+        transcriberLock.lock()
+        let refiner = self.refiner
+        transcriberLock.unlock()
+        refiner.prewarm()
+    }
+
+    var refinerConfigured: Bool { refiner.isConfigured }
 
     // MARK: - Start dictation
 
@@ -231,13 +268,20 @@ final class DictationManager {
                 self.transcriberLock.unlock()
 
                 let vocabEntries = self.vocabularyStore.listEntries()
-                let processed = PostProcessor.postProcess(text: text, vocabEntries: vocabEntries)
 
-                if PostProcessor.isLikelyHallucination(processed, audioRMS: rms, vocabEntries: vocabEntries) {
-                    print("[asr] hallucination detected: \"\(processed)\" with rms=\(String(format: "%.5f", rms))")
+                // Check for hallucination on the raw transcript, before spending a network
+                // round trip refining something that is about to be thrown away.
+                if PostProcessor.isLikelyHallucination(text, audioRMS: rms, vocabEntries: vocabEntries) {
+                    print("[asr] hallucination detected: \"\(text)\" with rms=\(String(format: "%.5f", rms))")
                     self.trayDelegate?.notifyInfo("No speech detected (transcription discarded).")
                     return
                 }
+
+                // Cloud refinement if enabled and reachable; the local tidy otherwise.
+                // Vocabulary canonicalisation runs last so the spellings the user chose
+                // survive whatever the refiner did.
+                let refined = self.refine(text)
+                let processed = PostProcessor.postProcess(text: refined, vocabEntries: vocabEntries)
 
                 guard !processed.isEmpty else {
                     self.trayDelegate?.notifyInfo("No text recognized. Try speaking more clearly.")

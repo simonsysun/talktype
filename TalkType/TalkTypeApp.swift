@@ -19,6 +19,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     private var engineItem: NSMenuItem!
     private var vocabMenu: NSMenu!
     private var launchItem: NSMenuItem!
+    private var refineItem: NSMenuItem!
     private var hotkeyDisplayItem: NSMenuItem!
     private var hotkeySettingsWindow: HotkeySettingsWindow!
 
@@ -89,6 +90,10 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             self?.dictationManager.toggleDictation()
         }
 
+        // Open the refiner's connection now so the first dictation does not also pay
+        // for DNS and a TLS handshake.
+        dictationManager.prewarmRefiner()
+
         // Settings window
         hotkeySettingsWindow = HotkeySettingsWindow()
 
@@ -112,6 +117,9 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         print("  \(hotkeyDisplayString()) -> Dictation (speak -> type)")
         print("  Hotkey capture: \(mode)")
         print("  Speech engine: local, 127.0.0.1:\(config.asrPort)")
+        let polish = !dictationManager.refinerConfigured ? "no API key"
+            : (config.refineEnabled ? "on (\(config.refineModel))" : "off")
+        print("  Cloud polish:  \(polish)")
         if config.silenceAutoStopEnabled {
             print("  Silence auto-stop: \(config.silenceAutoStopSeconds)s")
         }
@@ -146,6 +154,11 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
         engineItem = NSMenuItem(title: "Speech engine: starting...", action: nil, keyEquivalent: "")
         menu.addItem(engineItem)
+
+        refineItem = NSMenuItem(title: "Polish with cloud AI", action: #selector(toggleRefine), keyEquivalent: "")
+        refineItem.target = self
+        menu.addItem(refineItem)
+        refreshRefineItem()
 
         let accessItem = NSMenuItem(title: "Accessibility Settings...", action: #selector(openAccessibility), keyEquivalent: "")
         accessItem.target = self
@@ -211,6 +224,34 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         button.toolTip = symbol.label
         // Fall back to text if the symbol is ever unavailable, rather than an empty item.
         button.title = image == nil ? "T" : ""
+    }
+
+    // MARK: - Cloud refinement
+
+    @objc private func toggleRefine() {
+        config.refineEnabled.toggle()
+        ConfigManager.save(config)
+        dictationManager.reloadConfig(config)
+        refreshRefineItem()
+        if config.refineEnabled {
+            dictationManager.prewarmRefiner()
+            notifyInfo("Transcripts will be polished by cloud AI before typing.")
+        } else {
+            notifyInfo("Polishing off. Everything stays on this machine.")
+        }
+    }
+
+    private func refreshRefineItem() {
+        guard let item = refineItem else { return }
+        let configured = dictationManager.refinerConfigured
+        item.state = (config.refineEnabled && configured) ? .on : .off
+        item.isEnabled = configured
+        item.title = configured
+            ? "Polish with cloud AI"
+            : "Polish with cloud AI (no API key)"
+        item.toolTip = configured
+            ? "Sends the transcript — not the audio — to Groq for cleanup. Off keeps everything local."
+            : "Store a Groq key in the login keychain under \"talktype-groq\" to enable."
     }
 
     // MARK: - Local speech engine

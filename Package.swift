@@ -23,6 +23,7 @@ let package = Package(
                 "Info.plist",
                 "OverlayWindow.swift",
                 "SidecarManager.swift",
+                "TextRefiner.swift",
                 "TalkType.entitlements",
                 "TalkTypeApp.swift",
                 "TextInserter.swift",

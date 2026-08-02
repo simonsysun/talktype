@@ -119,4 +119,65 @@ final class PostProcessorTests: XCTestCase {
             "hallucination detection must stay active above the transcribe cutoff"
         )
     }
+
+    // MARK: - tidySpeech
+
+    func testTidyRemovesHesitationParticles() {
+        XCTAssertEqual(PostProcessor.tidySpeech("我今天呃想去公园"), "我今天想去公园")
+        XCTAssertEqual(PostProcessor.tidySpeech("然后就是嗯我要用"), "然后就是我要用")
+    }
+
+    func testTidyCollapsesImmediateRepetition() {
+        XCTAssertEqual(
+            PostProcessor.tidySpeech("我们现在有用,我们现在有用这个"),
+            "我们现在有用这个")
+    }
+
+    func testTidyFixesStutteredPronouns() {
+        XCTAssertEqual(PostProcessor.tidySpeech("我我们现在开始"), "我们现在开始")
+    }
+
+    /// Mandarin reduplicates verbs meaningfully. An earlier general "AA -> A" rule
+    /// turned 先看看 into 先看, which changes what the speaker said.
+    func testTidyKeepsMeaningfulReduplication() {
+        XCTAssertEqual(PostProcessor.tidySpeech("我们先看看财报"), "我们先看看财报")
+        XCTAssertEqual(PostProcessor.tidySpeech("你想想这个问题"), "你想想这个问题")
+        XCTAssertEqual(PostProcessor.tidySpeech("出去走走吧"), "出去走走吧")
+    }
+
+    func testTidyConvertsPunctuationWidthAfterChinese() {
+        XCTAssertEqual(PostProcessor.tidySpeech("这样好吗?是的,没错!"), "这样好吗？是的，没错！")
+    }
+
+    func testTidyLeavesEnglishPunctuationAlone() {
+        let english = "Can you check whether the deployment finished?"
+        XCTAssertEqual(PostProcessor.tidySpeech(english), english)
+    }
+
+    func testTidySpacesBetweenScripts() {
+        XCTAssertEqual(PostProcessor.tidySpeech("把这个bug修一下"), "把这个 bug 修一下")
+        XCTAssertEqual(PostProcessor.tidySpeech("用Groq的模型"), "用 Groq 的模型")
+    }
+
+    func testTidyDoesNotSpaceBeforeChinesePunctuation() {
+        XCTAssertEqual(PostProcessor.tidySpeech("我用 browser ，然后"), "我用 browser，然后")
+    }
+
+    func testTidyIsIdempotent() {
+        let once = PostProcessor.tidySpeech("我们现在有用,我们现在有用这个呃是什么?")
+        XCTAssertEqual(PostProcessor.tidySpeech(once), once)
+    }
+
+    func testTidyHandlesEmptyAndBlank() {
+        XCTAssertEqual(PostProcessor.tidySpeech(""), "")
+        XCTAssertEqual(PostProcessor.tidySpeech("   "), "")
+    }
+
+    /// Deleting a particle used to leave the punctuation around it doubled:
+    /// "在于,嗯,就是说" became "在于,,就是说".
+    func testTidyCollapsesPunctuationLeftByRemovedFiller() {
+        XCTAssertEqual(
+            PostProcessor.tidySpeech("它的问题在于,嗯,就是说它太慢了"),
+            "它的问题在于，就是说它太慢了")
+    }
 }

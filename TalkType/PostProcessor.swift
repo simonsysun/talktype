@@ -1,6 +1,61 @@
 import Foundation
 
 enum PostProcessor {
+
+    // MARK: - Speech tidying
+
+    /// Hesitation sounds that carry no meaning in Mandarin. 啊, 那个 and 就是 are
+    /// deliberately absent: they are filler often enough to be tempting and meaningful
+    /// often enough that deleting them is a bet on the speaker's intent.
+    private static let fillerParticles = "呃嗯额诶欸"
+
+    /// ICU character-class body. ICU wants \uXXXX, not Swift's \u{XXXX}.
+    private static let cjk = "\\u4E00-\\u9FFF\\u3400-\\u4DBF"
+
+    /// Deterministic tidy-up of dictated text: hesitations, stutters, punctuation width,
+    /// and spacing between scripts. Runs in microseconds and can only delete or respace,
+    /// never reword — it is the fallback when cloud refinement is off or unreachable, and
+    /// the floor below which output never drops.
+    static func tidySpeech(_ text: String) -> String {
+        var s = text
+
+        s = replacing(s, "[\(fillerParticles)]+", with: "")
+
+        // Deleting a particle can leave the punctuation that surrounded it doubled up:
+        // "在于,嗯,就是说" becomes "在于,,就是说".
+        s = replacing(s, "([,，。！？、；：])[\\s]*[,，、]+", with: "$1")
+
+        // A phrase immediately repeated, optionally split by a comma: keep one copy.
+        // "我们现在有用,我们现在有用这个" -> "我们现在有用这个"
+        for _ in 0..<3 {
+            s = replacing(s, "([\(cjk)]{2,12})[,，]?\\1", with: "$1")
+        }
+
+        // Stuttered pronouns only. Mandarin reduplicates verbs meaningfully — 看看,
+        // 说说, 想想 are words, and a general AA rule turned 先看看 into 先看.
+        s = replacing(s, "([我你他她它])\\1(?=[\(cjk)])", with: "$1")
+
+        // Half-width punctuation that follows a Chinese character belongs full-width.
+        for (half, full) in [(",", "，"), ("?", "？"), ("!", "！"), (";", "；"), (":", "：")] {
+            s = replacing(s, "(?<=[\(cjk)])\\\(half)", with: full)
+        }
+        s = replacing(s, "(?<=[\(cjk)])\\.(?=\\s|$)", with: "。")
+
+        // One space between Chinese and Latin/digits, none before Chinese punctuation.
+        s = replacing(s, "([\(cjk)])([A-Za-z0-9])", with: "$1 $2")
+        s = replacing(s, "([A-Za-z0-9])([\(cjk)])", with: "$1 $2")
+        s = replacing(s, "[ \\t]{2,}", with: " ")
+        s = replacing(s, "\\s+([，。？！、；：])", with: "$1")
+
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func replacing(_ text: String, _ pattern: String, with template: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        return regex.stringByReplacingMatches(
+            in: text, range: NSRange(text.startIndex..., in: text), withTemplate: template)
+    }
+
     /// Normalize unicode and clean up whitespace.
     static func safeNormalize(_ text: String) -> String {
         var result = text.precomposedStringWithCompatibilityMapping // NFKC
