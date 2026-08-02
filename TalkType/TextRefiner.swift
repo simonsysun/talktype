@@ -56,6 +56,54 @@ final class TextRefiner {
 
     var isConfigured: Bool { Self.apiKey() != nil }
 
+    /// Store or replace the key. `SecItemAdd` fails on a duplicate rather than replacing,
+    /// so an existing item is removed first.
+    @discardableResult
+    static func storeAPIKey(_ key: String) -> Bool {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let data = trimmed.data(using: .utf8), !trimmed.isEmpty else { return false }
+        deleteAPIKey()
+        let attrs: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: NSUserName(),
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
+        ]
+        let status = SecItemAdd(attrs as CFDictionary, nil)
+        if status != errSecSuccess { print("[refine] keychain write failed: OSStatus \(status)") }
+        return status == errSecSuccess
+    }
+
+    @discardableResult
+    static func deleteAPIKey() -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+        ]
+        return SecItemDelete(query as CFDictionary) == errSecSuccess
+    }
+
+    /// Check a key against Groq before storing it, so a typo is caught at entry rather
+    /// than silently disabling polish until someone reads a log.
+    static func validate(_ key: String, timeout: TimeInterval = 8) -> Bool {
+        var request = URLRequest(url: URL(string: "https://api.groq.com/openai/v1/models")!)
+        request.setValue("Bearer \(key.trimmingCharacters(in: .whitespacesAndNewlines))",
+                         forHTTPHeaderField: "Authorization")
+        request.setValue("TalkType/1.0", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = timeout
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var ok = false
+        let task = URLSession.shared.dataTask(with: request) { _, response, _ in
+            ok = (response as? HTTPURLResponse)?.statusCode == 200
+            semaphore.signal()
+        }
+        task.resume()
+        if semaphore.wait(timeout: .now() + timeout + 1) != .success { task.cancel() }
+        return ok
+    }
+
     /// Open the connection ahead of first use so the initial dictation does not pay for
     /// DNS and the TLS handshake on top of everything else.
     func prewarm() {

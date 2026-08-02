@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Changed — local-only transcription
+
+- **Speech recognition moved on-device.** Qwen3-ASR runs locally through an MLX sidecar;
+  audio never leaves the machine. Chosen after benchmarking fourteen cloud services on
+  real recordings — the local model was faster than all of them.
+- **All cloud ASR providers removed**, along with `KeyStorage`, the provider and model
+  menus, and every API key path they needed. There is no cloud fallback by design.
+- **Optional cloud polishing**: the transcript — never the audio — can be sent to Groq to
+  remove filler words, fix punctuation and resolve self-corrections. Off by one menu
+  click, with a deterministic local tidy in its place.
+- **Microphone picker**, remembered by device UID so it survives reconnects.
+- **New icon and overlay**: one waveform mark across the app icon, the menu bar and the
+  dictation overlay.
+
 ### Bug Fixes
 
 - **Crash on short recordings at non-integer sample rates**: `AudioRecorder.resample` divided by zero

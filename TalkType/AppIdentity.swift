@@ -3,8 +3,6 @@ import Foundation
 enum AppIdentity {
     static let appName = "TalkType"
 
-    static let keychainService = "com.talktype.api-keys"
-
     #if os(iOS)
     static let bundleID = "dev.talktype.ios"
     static let appGroupID = "group.dev.talktype"

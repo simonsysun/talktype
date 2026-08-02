@@ -159,6 +159,10 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         refineItem = NSMenuItem(title: "Polish with cloud AI", action: #selector(toggleRefine), keyEquivalent: "")
         refineItem.target = self
         menu.addItem(refineItem)
+
+        let keyItem = NSMenuItem(title: "Groq API Key...", action: #selector(editGroqKey), keyEquivalent: "")
+        keyItem.target = self
+        menu.addItem(keyItem)
         refreshRefineItem()
 
         inputMenu = NSMenu()
@@ -289,6 +293,75 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     }
 
     // MARK: - Cloud refinement
+
+    @objc private func editGroqKey() {
+        let existing = TextRefiner.apiKey()
+
+        if let existing = existing {
+            let alert = NSAlert()
+            alert.messageText = "Groq API Key"
+            alert.informativeText = "Current key: \(Self.masked(existing))\n\n"
+                + "Only the transcript is sent to Groq, never the audio. "
+                + "Removing the key turns polishing off; dictation still works."
+            alert.addButton(withTitle: "Replace")
+            alert.addButton(withTitle: "Done")
+            alert.addButton(withTitle: "Remove")
+            switch alert.runModal() {
+            case .alertFirstButtonReturn: promptForGroqKey()
+            case .alertThirdButtonReturn:
+                TextRefiner.deleteAPIKey()
+                refreshRefineItem()
+                notifyInfo("Groq key removed. Polishing is off; everything stays on this machine.")
+            default: break
+            }
+        } else {
+            promptForGroqKey()
+        }
+    }
+
+    private func promptForGroqKey() {
+        let alert = NSAlert()
+        alert.messageText = "Groq API Key"
+        alert.informativeText = "Paste a key from console.groq.com/keys.\n\n"
+            + "It polishes the transcript — removing filler words, fixing punctuation. "
+            + "Only text is sent, never audio."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+
+        let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        field.placeholderString = "gsk_..."
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let key = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+
+        // Verify before storing, so a typo surfaces here rather than as silently
+        // missing polish later.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let valid = TextRefiner.validate(key)
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                guard valid else {
+                    self.notifyError("Groq rejected that key. Nothing was saved.")
+                    return
+                }
+                guard TextRefiner.storeAPIKey(key) else {
+                    self.notifyError("Could not write the key to the keychain.")
+                    return
+                }
+                self.refreshRefineItem()
+                self.dictationManager.prewarmRefiner()
+                self.notifyInfo("Groq key saved. Transcripts will be polished before typing.")
+            }
+        }
+    }
+
+    private static func masked(_ key: String) -> String {
+        guard key.count > 10 else { return "•••" }
+        return "\(key.prefix(6))…\(key.suffix(4))"
+    }
 
     @objc private func toggleRefine() {
         config.refineEnabled.toggle()
