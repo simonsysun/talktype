@@ -26,9 +26,9 @@ Last reviewed: 2026-08-02
        whether he wants to drag it.
 2. [ ] Deferred: filler-word cleanup is handled by the Groq polish, with
        `PostProcessor.tidySpeech` as the offline floor. Revisit only if the floor proves weak.
-3. [ ] The signing certificate is backed up to `~/Documents/TalkType-signing-backup/`, which
-       is not where a private key should live. Simon to move or delete it — losing it costs
-       one extra grant for everyone, once, and nothing else.
+3. The signing certificate's backup lives in `secrets/`, which `.gitignore` covers — verified
+   that `git add -A` cannot stage it. Do not move it anywhere `.gitignore` does not reach.
+   Losing it costs one extra grant for everyone, once, and nothing else.
 
 ---
 
