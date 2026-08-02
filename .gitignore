@@ -10,3 +10,6 @@ xcuserdata/
 *.xcuserstate
 __pycache__/
 dist/
+
+# Never publish: the code-signing private key lives here.
+secrets/
