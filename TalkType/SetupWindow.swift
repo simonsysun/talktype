@@ -66,7 +66,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
 
     private func build() {
         let w = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 470),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
             styleMask: [.titled, .closable], backing: .buffered, defer: false)
         w.title = "TalkType Setup"
         w.delegate = self
@@ -128,7 +128,9 @@ final class SetupWindow: NSObject, NSWindowDelegate {
             root.leadingAnchor.constraint(equalTo: w.contentView!.leadingAnchor),
             root.trailingAnchor.constraint(equalTo: w.contentView!.trailingAnchor),
             root.topAnchor.constraint(equalTo: w.contentView!.topAnchor),
+            root.bottomAnchor.constraint(equalTo: w.contentView!.bottomAnchor),
         ])
+        w.setContentSize(root.fittingSize)
         window = w
     }
 
@@ -150,26 +152,30 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         return stack
     }
 
+    /// Status on the left, action on the right, every row the same. Letting the button
+    /// sit wherever the label ended made the column of actions look accidental.
     private func row(status: NSTextField, button: NSButton, action: Selector) -> NSView {
         status.font = .systemFont(ofSize: 12)
         button.bezelStyle = .rounded
         button.target = self
         button.action = action
-        button.controlSize = .regular
 
-        let stack = NSStackView(views: [status, spinnerIfNeeded(button), button])
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+
+        var views: [NSView] = [status]
+        if button === engineButton { views.append(spinner) }
+        views.append(contentsOf: [spacer, button])
+
+        let stack = NSStackView(views: views)
         stack.orientation = .horizontal
         stack.spacing = 10
         stack.alignment = .centerY
-        status.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        status.setContentHuggingPriority(.required, for: .horizontal)
+        button.setContentHuggingPriority(.required, for: .horizontal)
         stack.translatesAutoresizingMaskIntoConstraints = false
         stack.widthAnchor.constraint(equalToConstant: 468).isActive = true
         return stack
-    }
-
-    /// The spinner belongs to the engine row only.
-    private func spinnerIfNeeded(_ button: NSButton) -> NSView {
-        button === engineButton ? spinner : NSView()
     }
 
     private func separator() -> NSView {
