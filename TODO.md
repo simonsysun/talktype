@@ -5,7 +5,10 @@ Design rationale → `PLAN.md`. Shipped history → `CHANGELOG.md`. Don't duplic
 
 Last reviewed: 2026-08-02
 
-**Current focus: macOS.** iOS is parked by decision (2026-08-02) — see "Parked: iOS" below.
+**Current focus: macOS, local-only ASR.** iOS is parked by decision (2026-08-02).
+
+**Architecture decision (2026-08-02): local Qwen3-ASR only. All cloud providers are being
+removed.** One model, no API keys, no network. Rationale and measurements in "ASR decision" below.
 
 ---
 
@@ -33,6 +36,45 @@ Last reviewed: 2026-08-02
 
 ---
 
+## ASR decision (2026-08-02)
+
+Benchmarked 14 cloud models plus local Qwen3-ASR on one real recording of Simon's voice
+(Chinese-primary with embedded English). Measurements, not vendor claims:
+
+| | latency | notes |
+|---|---|---|
+| **local Qwen3-ASR-1.7B (MLX)** | **0.30 s** short / **0.91 s** long | chosen |
+| Soniox stt-async-v5 | 2.9–4.6 s | most accurate cloud model; only one that heard "Claude" |
+| OpenAI gpt-4o-mini (old default) | 0.5–1.1 s | misheard 财报 as 采访 — a meaning error |
+| Grok STT | 0.6 s | translated half the clip to English; no punctuation |
+| Deepgram Nova-3, NVIDIA Parakeet, Google Chirp 3 | — | unusable on Chinese |
+
+Local wins on latency *and* privacy *and* offline, and matched or beat cloud Qwen on accuracy —
+the open 1.7B weights are not the downgrade they were assumed to be. Cost was never the deciding
+factor: the whole cloud field spanned $0.60–$14.40/month at 30 min/day.
+
+Things learned that constrain the implementation:
+
+- **Vocabulary must be a bare comma list.** A prose context string made the model complete the
+  prompt instead of transcribing: it translated a Chinese clip to English and invented a sentence
+  that was never spoken. Same failure mode `PostProcessor.isLikelyHallucination` was written to
+  catch on Whisper. `Transcriber.buildPrompt` already produces the safe form — keep it that way.
+- **Language stays auto-detected.** Pinning `zh` slightly improved Chinese punctuation but Simon
+  also dictates English-primary. Pinning does not corrupt the other language (a zh-pinned English
+  clip transcribed perfectly), it only nudges punctuation conventions.
+- **MLX's Metal stream is thread-local.** Inference must run on the thread that loaded the
+  weights, or it fails with "There is no Stream(gpu, 0) in current thread". The sidecar queues
+  jobs to a single worker.
+- **No model removes filler words** (呃/嗯/啊). Faithful transcription is ASR's job. Deferred:
+  decide after living with it whether a cleanup pass is worth the latency.
+- `cloud` vs `Claude` is unfixable by vocabulary (common English word, correctly rejected by
+  `isSafeForAutoReplace`). Accepted as an edge case.
+
+Runtime lives in `~/.talktype/asr/`: `venv/` (Python 3.13 + qwen3-asr-mlx), `hf/` (3.8 GB
+weights), `server.py`. Runs with `HF_HUB_OFFLINE=1`.
+
+---
+
 ## Now — macOS
 
 1. [ ] **Run `swift test`.** The suite in `Tests/TalkTypeCoreTests` is written but has never executed:
@@ -42,18 +84,20 @@ Last reviewed: 2026-08-02
        hotkey, and a real dictation round trip.
 3. [ ] **Share the macOS scheme** (`TalkType.xcodeproj/xcshareddata/xcschemes/`) so
        `xcodebuild -scheme TalkType` works from the CLI without opening the IDE.
-4. [ ] **ASR bake-off.** Compare providers on one real 中英混 clip — the current default
-       (`gpt-4o-mini-transcribe`) is neither the cheapest nor code-switching-optimised, and Whisper
-       is a known weak point for mixed-language speech. Script exists; needs an `OPENROUTER_API_KEY`
-       (13 of 18 candidates behind one key). Decide the macOS default from the result.
-       **Do not route the product through OpenRouter** — it documents `prompt` as "accepted but
-       ignored", which would silently disable the vocabulary feature.
-5. [ ] **Menu bar icon.** `statusItem.button?.title = "T"` is a literal letter while the project has
+4. [x] **ASR bake-off** — done, see "ASR decision" above. Local Qwen3-ASR chosen.
+5. [ ] **Cut over to the local sidecar.** Delete every cloud path (~580 lines):
+       `KeyStorage.swift` entirely, `ASRProvider`, the multipart/HTTPS body building in
+       `Transcriber`, and the Provider / Model / API Key menus in `TalkTypeApp`. `Transcriber`
+       becomes a POST of raw WAV bytes to `127.0.0.1:8756/transcribe` with an
+       `X-TalkType-Context` header. Keep `WAVEncoder`, `PostProcessor`, `VocabularyStore`.
+       **Removes the cloud fallback** — if the sidecar is down there is no dictation, by decision.
+6. [ ] **Sidecar lifecycle in Swift.** Spawn `~/.talktype/asr/venv/bin/python server.py` at launch
+       with `HF_HUB_OFFLINE=1`, poll `/health` until ready, terminate it on quit, and show a real
+       menu bar state when it is missing or still loading (weights take ~1 s cold).
+7. [ ] **Menu bar icon.** `statusItem.button?.title = "T"` is a literal letter while the project has
        real icon art (`docs/assets/talktype-logo.png`, `Assets.xcassets`). Use a template image.
-6. [ ] Decide on an LLM cleanup pass after transcription (spacing between CJK and Latin, full-width
-       vs half-width punctuation, filler removal, keeping English technical terms in English). This is
-       what Wispr Flow does and what `PostProcessor`'s regex cannot do. Costs ~300 tokens per
-       dictation; the real price is +300–800 ms of latency. Revisit once the bake-off is in.
+8. [ ] Deferred: filler-word cleanup (呃/嗯/啊). No ASR model removes them. Decide after living with
+       the raw output for a few days — do not build it speculatively.
 
 ---
 
