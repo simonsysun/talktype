@@ -24,6 +24,7 @@ let package = Package(
                 "OverlayWindow.swift",
                 "SidecarManager.swift",
                 "TextRefiner.swift",
+                "AudioDevices.swift",
                 "TalkType.entitlements",
                 "TalkTypeApp.swift",
                 "TextInserter.swift",

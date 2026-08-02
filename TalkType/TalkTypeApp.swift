@@ -20,6 +20,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     private var vocabMenu: NSMenu!
     private var launchItem: NSMenuItem!
     private var refineItem: NSMenuItem!
+    private var inputMenu: NSMenu!
     private var hotkeyDisplayItem: NSMenuItem!
     private var hotkeySettingsWindow: HotkeySettingsWindow!
 
@@ -160,6 +161,13 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         menu.addItem(refineItem)
         refreshRefineItem()
 
+        inputMenu = NSMenu()
+        inputMenu.delegate = self          // rebuilt on open; devices come and go
+        let inputItem = NSMenuItem(title: "Microphone", action: nil, keyEquivalent: "")
+        inputItem.submenu = inputMenu
+        menu.addItem(inputItem)
+        rebuildInputMenu()
+
         let accessItem = NSMenuItem(title: "Accessibility Settings...", action: #selector(openAccessibility), keyEquivalent: "")
         accessItem.target = self
         menu.addItem(accessItem)
@@ -224,6 +232,60 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         button.toolTip = symbol.label
         // Fall back to text if the symbol is ever unavailable, rather than an empty item.
         button.title = image == nil ? "T" : ""
+    }
+
+    // MARK: - Microphone selection
+
+    /// Rebuilt every time the submenu opens: AirPods connect and disconnect, and a list
+    /// captured at launch would be wrong most of the time.
+    private func rebuildInputMenu() {
+        guard let menu = inputMenu else { return }
+        menu.removeAllItems()
+
+        let systemName = AudioDevices.systemDefaultInput()?.name
+        let auto = NSMenuItem(title: systemName.map { "Automatic (\($0))" } ?? "Automatic",
+                              action: #selector(selectInputDevice(_:)), keyEquivalent: "")
+        auto.target = self
+        auto.representedObject = ""
+        auto.state = config.inputDeviceUID.isEmpty ? .on : .off
+        auto.toolTip = "Follow the system input device."
+        menu.addItem(auto)
+        menu.addItem(.separator())
+
+        let devices = AudioDevices.inputDevices()
+        if devices.isEmpty {
+            menu.addItem(NSMenuItem(title: "No input devices", action: nil, keyEquivalent: ""))
+            return
+        }
+        for device in devices {
+            let item = NSMenuItem(title: device.name, action: #selector(selectInputDevice(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = device.uid
+            item.state = config.inputDeviceUID == device.uid ? .on : .off
+            menu.addItem(item)
+        }
+
+        // A device chosen earlier and since unplugged: show it so the choice is visible
+        // rather than silently reverting to Automatic.
+        if !config.inputDeviceUID.isEmpty,
+           !devices.contains(where: { $0.uid == config.inputDeviceUID }) {
+            menu.addItem(.separator())
+            let missing = NSMenuItem(title: "Chosen device not connected", action: nil, keyEquivalent: "")
+            missing.state = .on
+            missing.toolTip = "Recording falls back to the system default until it returns."
+            menu.addItem(missing)
+        }
+    }
+
+    @objc private func selectInputDevice(_ sender: NSMenuItem) {
+        guard let uid = sender.representedObject as? String else { return }
+        guard uid != config.inputDeviceUID else { return }
+        config.inputDeviceUID = uid
+        ConfigManager.save(config)
+        dictationManager.reloadConfig(config)
+        rebuildInputMenu()
+        notifyInfo(uid.isEmpty ? "Microphone: following the system default."
+                               : "Microphone: \(sender.title).")
     }
 
     // MARK: - Cloud refinement
@@ -538,6 +600,14 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             print("[app] Another instance is already running. Exiting.")
             exit(0)
         }
+    }
+}
+
+// MARK: - NSMenuDelegate
+
+extension TalkTypeApp: NSMenuDelegate {
+    func menuWillOpen(_ menu: NSMenu) {
+        if menu === inputMenu { rebuildInputMenu() }
     }
 }
 

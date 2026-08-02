@@ -18,6 +18,8 @@ struct AppConfig: Codable {
     var refineEnabled: Bool = true
     var refineModel: String = "qwen/qwen3.6-27b"
     var refineTimeoutSeconds: Double = 2.5
+    /// UID of the microphone to record from. Empty means follow the system default.
+    var inputDeviceUID: String = ""
 
     enum CodingKeys: String, CodingKey {
         case sampleRate = "sample_rate"
@@ -31,6 +33,7 @@ struct AppConfig: Codable {
         case refineEnabled = "refine_enabled"
         case refineModel = "refine_model"
         case refineTimeoutSeconds = "refine_timeout_seconds"
+        case inputDeviceUID = "input_device_uid"
     }
 
     init() {}
@@ -52,6 +55,7 @@ struct AppConfig: Codable {
         refineEnabled = try c.decodeIfPresent(Bool.self, forKey: .refineEnabled) ?? d.refineEnabled
         refineModel = try c.decodeIfPresent(String.self, forKey: .refineModel) ?? d.refineModel
         refineTimeoutSeconds = try c.decodeIfPresent(Double.self, forKey: .refineTimeoutSeconds) ?? d.refineTimeoutSeconds
+        inputDeviceUID = try c.decodeIfPresent(String.self, forKey: .inputDeviceUID) ?? d.inputDeviceUID
     }
 }
 

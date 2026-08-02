@@ -51,6 +51,7 @@ final class DictationManager {
             sampleRate: config.sampleRate,
             onLevel: nil
         )
+        self.recorder.preferredDeviceUID = config.inputDeviceUID
         // Set level callback after init since it captures self
         self.recorder.onLevel = { [weak self] level in
             self?.onAudioLevel(level)
@@ -98,6 +99,7 @@ final class DictationManager {
         transcriber.timeout = newConfig.asrTimeoutSeconds
         refiner = TextRefiner(model: newConfig.refineModel, timeout: newConfig.refineTimeoutSeconds)
         transcriberLock.unlock()
+        recorder.preferredDeviceUID = newConfig.inputDeviceUID
     }
 
     // MARK: - Refinement

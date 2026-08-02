@@ -1,10 +1,22 @@
 import AVFoundation
 import Accelerate
+#if os(macOS)
+import CoreAudio
+#endif
 
 /// Records audio using AVAudioEngine. Engine created once, tap installed/removed per session.
 final class AudioRecorder {
     let targetSampleRate: Int
     var onLevel: ((Float) -> Void)?
+
+    #if os(macOS)
+    /// UID of the input device to capture from. nil or unknown means follow the system
+    /// default, which is also what happens when the chosen device is unplugged.
+    var preferredDeviceUID: String? {
+        didSet { if preferredDeviceUID != oldValue { appliedDeviceID = nil } }
+    }
+    private var appliedDeviceID: AudioDeviceID?
+    #endif
 
     private var engine: AVAudioEngine?
     private var hwSampleRate: Int = 48000
@@ -40,6 +52,28 @@ final class AudioRecorder {
         // is first accessed, which triggers the mic indicator and any Bluetooth
         // profile negotiation.
         let inputNode = engine.inputNode
+
+        #if os(macOS)
+        // Pin the capture device before the format is read. A pinned device that is no
+        // longer connected resolves to nil, and CoreAudio picks the system default —
+        // unplugging the chosen mic should not stop dictation working.
+        if let device = AudioDevices.device(forUID: preferredDeviceUID),
+           device.id != appliedDeviceID,
+           let unit = inputNode.audioUnit {
+            var deviceID = device.id
+            let status = AudioUnitSetProperty(
+                unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                &deviceID, UInt32(MemoryLayout<AudioDeviceID>.size))
+            if status == noErr {
+                appliedDeviceID = device.id
+                hwFormat = nil          // the new device may run at a different rate
+                print("[audio] input device: \(device.name)")
+            } else {
+                print("[audio] could not select \(device.name) (OSStatus \(status)) — using system default")
+            }
+        }
+        #endif
+
         if hwFormat == nil {
             let format = inputNode.outputFormat(forBus: 0)
             hwFormat = format
