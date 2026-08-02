@@ -86,7 +86,7 @@ final class TextRefiner {
         let body: [String: Any] = [
             "model": model,
             "temperature": 0,
-            "max_tokens": 800,
+            "max_tokens": 4000,
             "reasoning_effort": "none",      // Qwen3.6 otherwise spends the budget thinking
             "messages": [
                 ["role": "system", "content": Self.systemPrompt],
@@ -99,7 +99,7 @@ final class TextRefiner {
         let semaphore = DispatchSemaphore(value: 0)
         var refined: String?
 
-        session.dataTask(with: request) { data, response, error in
+        let task = session.dataTask(with: request) { data, response, error in
             defer { semaphore.signal() }
             if let error = error {
                 print("[refine] \(error.localizedDescription)")
@@ -117,10 +117,15 @@ final class TextRefiner {
                 return
             }
             refined = Self.stripReasoning(content).trimmingCharacters(in: .whitespacesAndNewlines)
-        }.resume()
+        }
+        task.resume()
 
-        guard semaphore.wait(timeout: .now() + timeout + 0.5) == .success else {
-            print("[refine] timed out")
+        // URLSession's own timeouts measure gaps between packets, not the whole call, so
+        // this wait is the real deadline; cancel explicitly so a slow request does not
+        // keep running after we have given up on it.
+        guard semaphore.wait(timeout: .now() + timeout) == .success else {
+            task.cancel()
+            print("[refine] timed out after \(timeout)s")
             return nil
         }
 
@@ -152,7 +157,13 @@ final class TextRefiner {
 
         let a = Double(original.count), b = Double(refined.count)
         guard a > 0 else { return false }
-        return b >= a * 0.45 && b <= a * 1.35                      // truncated or padded
+
+        // Deletions are budgeted in characters, not as a fraction. "周二…不对，周三"
+        // legitimately loses 38% of a 26-character sentence, while a 350-character
+        // dictation losing 30% means the model summarised instead of tidying — which is
+        // exactly what an earlier prompt caused it to do.
+        let allowedLoss = max(15.0, a * 0.25)
+        return b >= a - allowedLoss && b <= a * 1.2
     }
 
     private static func cjkRatio(_ text: String) -> Double {
@@ -167,16 +178,23 @@ final class TextRefiner {
     /// Written in Chinese and rule-first on purpose. An English prompt with the
     /// language rule buried mid-paragraph made small models translate the input.
     static let systemPrompt = """
-    你把口述的语音转写整理成通顺的文字。
+    你是听写文字的校对员。把口述转写整理干净，但必须保留说话人自己的用词和语气。
 
-    必须遵守：
-    - 输出和输入用同一种语言。中文进中文出，英文进英文出，中英混说保持中英混。绝不翻译。
-    - 只整理，不回答、不总结、不添加任何信息。保留说话人表达的每一个意思。
-    - 删除语气词、重复、结巴、说了一半又放弃的内容。
-    - 自我更正时只保留改正后的版本。
-    - 可以调整语序和断句，让它读起来像写出来的，而不是说出来的。
-    - 中文用全角标点，英文用半角标点，中文和英文/数字之间加一个空格。
+    绝对不能做的：
+    - 不能翻译。中文进中文出，英文进英文出，中英混说保持中英混。
+    - 不能改写。不要把口语改成书面语，不要把「我觉得」改成「本人认为」，不要把「很难受」改成「影响正常使用」。
+    - 不能压缩。不要概括，不要合并要点，不要删掉你觉得啰嗦的内容。说话人说了多少意思，就保留多少意思。
+    - 不能回答、补充或解释。
 
-    只输出整理后的文字，不要解释，不要引号。
+    要做的，只有这些：
+    1. 删掉语气词：呃、嗯、啊、额、那个（用作停顿时）
+    2. 删掉结巴和说了一半就重来的开头，保留说话人最终说完整的那一版
+    3. 说话人自我更正时（「周二…不对，周三」）只保留改正后的
+    4. 中文用全角标点，英文用半角标点，中文和英文/数字之间加一个空格
+    5. 按语义断句，该分句的分句
+
+    判断标准：整理后的文字，说话人自己读起来应该觉得「这就是我说的话」，而不是「这是别人帮我重写的」。
+
+    只输出整理后的文字。
     """
 }

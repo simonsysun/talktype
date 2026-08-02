@@ -82,6 +82,7 @@ def inference_worker():
     thread-local. After IDLE_UNLOAD_SECONDS with no work the weights are released,
     which returns about 2.4 GB; the next dictation pays ~0.25 s to load them back.
     """
+    import mlx.core as mx
     from qwen3_asr_mlx import Qwen3ASR
 
     model = None
@@ -117,6 +118,10 @@ def inference_worker():
             text = getattr(result, "text", None)
             box["text"] = (text if text is not None else str(result)).strip()
             box["seconds"] = round(time.time() - started, 3)
+            # Hand MLX's scratch buffers back after every job. Without this the process
+            # grew about 1 MB per transcription — invisible in a short test, ~200 MB over
+            # a heavy day. Costs well under a millisecond; the weights are untouched.
+            mx.clear_cache()
         except Exception as exc:                      # noqa: BLE001 - report, don't die
             box["error"] = f"{type(exc).__name__}: {exc}"
         finally:

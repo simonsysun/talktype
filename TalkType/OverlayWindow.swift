@@ -7,7 +7,7 @@ final class OverlayWindow {
     private var hideTimer: Timer?
     private var visible = false
     private var lastLevelSent: TimeInterval = 0
-    private static let popOutDuration: TimeInterval = 0.16
+    static let popOutDuration: TimeInterval = OverlayHostingView.popOutDuration
 
     var isVisible: Bool { visible }
 
@@ -78,11 +78,16 @@ final class OverlayWindow {
         }
     }
 
+    /// Sits low and centred, just clear of the Dock. High enough on screen and it lands in
+    /// the middle of whatever you are reading; this keeps it out of the way while still
+    /// being where the eye can find it.
+    private static let bottomInset: CGFloat = 38
+
     private func reposition() {
         guard let screen = NSScreen.main else { return }
         let area = screen.visibleFrame
         let x = area.origin.x + (area.size.width - panel.frame.width) / 2
-        let y = area.origin.y + 80
+        let y = area.origin.y + Self.bottomInset
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 
@@ -229,42 +234,70 @@ final class OverlayHostingView: NSView {
         }
     }
 
+    static let popOutDuration: TimeInterval = 0.16
+
+    /// Rises into place from just below, the direction it would come from given where it
+    /// sits. Scale alone read as a pop; a short slide reads as the panel arriving.
+    private static let riseDistance: CGFloat = 10
+
     func appear() {
+        layer?.removeAnimation(forKey: "disappear")
+
         NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.25
+            ctx.duration = 0.22
             ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.2, 1.0)
             self.animator().alphaValue = 1
         }
-        // Spring animation for natural pop-in
-        let spring = CASpringAnimation(keyPath: "transform.scale")
-        spring.fromValue = 0.7
-        spring.toValue = 1.0
-        spring.mass = 0.8
-        spring.stiffness = 260
-        spring.damping = 14
-        spring.initialVelocity = 6
-        spring.duration = spring.settlingDuration
-        spring.fillMode = .forwards
-        spring.isRemovedOnCompletion = false
-        layer?.add(spring, forKey: "appear")
+
+        let rise = CASpringAnimation(keyPath: "transform.translation.y")
+        rise.fromValue = -Self.riseDistance
+        rise.toValue = 0
+        rise.mass = 0.7
+        rise.stiffness = 300
+        rise.damping = 22          // barely any overshoot: this is a tool, not a toy
+        rise.duration = rise.settlingDuration
+
+        let grow = CASpringAnimation(keyPath: "transform.scale")
+        grow.fromValue = 0.86
+        grow.toValue = 1.0
+        grow.mass = 0.7
+        grow.stiffness = 300
+        grow.damping = 20
+        grow.duration = grow.settlingDuration
+
+        let group = CAAnimationGroup()
+        group.animations = [rise, grow]
+        group.duration = max(rise.duration, grow.duration)
+        layer?.add(group, forKey: "appear")
         layer?.transform = CATransform3DIdentity
     }
 
     func disappear() {
+        layer?.removeAnimation(forKey: "appear")
+
         NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.14
-            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.4, 0.0, 1.0, 0.3)
+            ctx.duration = Self.popOutDuration
+            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.4, 0.0, 1.0, 0.4)
             self.animator().alphaValue = 0
         }
-        let scaleAnim = CABasicAnimation(keyPath: "transform.scale")
-        scaleAnim.fromValue = 1.0
-        scaleAnim.toValue = 0.88
-        scaleAnim.duration = 0.14
-        scaleAnim.timingFunction = CAMediaTimingFunction(controlPoints: 0.4, 0.0, 1.0, 0.3)
-        scaleAnim.fillMode = .forwards
-        scaleAnim.isRemovedOnCompletion = false
-        layer?.add(scaleAnim, forKey: "disappear")
-        layer?.transform = CATransform3DMakeScale(0.88, 0.88, 1)
+
+        // Sinks back the way it came, and only slightly — leaving is meant to be
+        // unnoticeable, not a performance.
+        let sink = CABasicAnimation(keyPath: "transform.translation.y")
+        sink.fromValue = 0
+        sink.toValue = -Self.riseDistance * 0.6
+
+        let shrink = CABasicAnimation(keyPath: "transform.scale")
+        shrink.fromValue = 1.0
+        shrink.toValue = 0.92
+
+        let group = CAAnimationGroup()
+        group.animations = [sink, shrink]
+        group.duration = Self.popOutDuration
+        group.timingFunction = CAMediaTimingFunction(controlPoints: 0.4, 0.0, 1.0, 0.4)
+        group.fillMode = .forwards
+        group.isRemovedOnCompletion = false
+        layer?.add(group, forKey: "disappear")
     }
 
     func updateLevel(_ level: Float) {
