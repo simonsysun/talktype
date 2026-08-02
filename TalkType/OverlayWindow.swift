@@ -12,7 +12,7 @@ final class OverlayWindow {
     var isVisible: Bool { visible }
 
     init() {
-        let frame = NSRect(x: 0, y: 0, width: 140, height: 42)
+        let frame = NSRect(origin: .zero, size: OverlayHostingView.panelSize)
 
         let style: NSWindow.StyleMask = [.nonactivatingPanel, .titled, .fullSizeContentView]
         panel = NSPanel(contentRect: frame, styleMask: style, backing: .buffered, defer: false)
@@ -108,18 +108,27 @@ final class OverlayHostingView: NSView {
     private var dotLayers: [CALayer] = []
     private var state: OverlayState = .recording
 
-    // Bar layout
+    // Layout. The pill is sized from its contents plus `sidePadding`, rather than being
+    // a fixed box the bars float inside — the previous 140x42 left 36pt of dead space on
+    // each side of a 68pt waveform, which read as a large empty slab.
     private static let barCount = 9
-    private let barWidth: CGFloat = 4
-    private let barGap: CGFloat = 4
-    private let barHeight: CGFloat = 21
+    private static let barWidth: CGFloat = 3.5
+    private static let barGap: CGFloat = 3
+    private static let barHeight: CGFloat = 16
+    private static let sidePadding: CGFloat = 13
+
+    private static let contentWidth =
+        CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * barGap
+    static let panelSize = NSSize(width: contentWidth + sidePadding * 2, height: 30)
+
     private let barMultipliers: [CGFloat]
 
     /// Tallest a bar is allowed to grow, as a multiple of `barHeight`.
-    private static let maxBarScale: Float = 1.46
+    private static let maxBarScale: Float = 1.5
     /// Height at silence. Matches the top of the idle animation so the bars grow out of
-    /// their resting motion instead of jumping when speech starts.
-    private static let idleTopScale: Float = 0.36
+    /// their resting motion instead of jumping when speech starts. Tall enough that the
+    /// resting state still reads as a waveform rather than a row of dots.
+    private static let idleTopScale: Float = 0.46
 
     // Animation state
     private var surfaceLevel: Float = 0
@@ -129,7 +138,9 @@ final class OverlayHostingView: NSView {
         let mid = CGFloat(Self.barCount - 1) / 2.0
         barMultipliers = (0..<Self.barCount).map { i in
             let dist = abs(CGFloat(i) - mid) / mid
-            return 1.0 - dist * 0.50
+            // Shallow taper. A steeper one drew a perfect triangle whenever the audio
+            // was steady, which read as an icon rather than a level meter.
+            return 1.0 - dist * 0.28
         }
 
         blurView = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: frame.width, height: frame.height))
@@ -140,7 +151,7 @@ final class OverlayHostingView: NSView {
         blurView.layer?.cornerRadius = frame.height / 2
         blurView.layer?.masksToBounds = true
         blurView.layer?.borderWidth = 0.5
-        blurView.layer?.borderColor = NSColor(white: 1, alpha: 0.35).cgColor
+        blurView.layer?.borderColor = NSColor(white: 1, alpha: 0.16).cgColor
 
         super.init(frame: frame)
 
@@ -149,9 +160,9 @@ final class OverlayHostingView: NSView {
 
         // Subtle shadow matching macOS floating panels
         layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.12
-        layer?.shadowOffset = CGSize(width: 0, height: -4)
-        layer?.shadowRadius = 12
+        layer?.shadowOpacity = 0.18
+        layer?.shadowOffset = CGSize(width: 0, height: -3)
+        layer?.shadowRadius = 9
 
         addSubview(blurView)
         setupBars()
@@ -165,14 +176,14 @@ final class OverlayHostingView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     private func setupBars() {
-        let totalWidth = CGFloat(Self.barCount) * barWidth + CGFloat(Self.barCount - 1) * barGap
-        let startX = (bounds.width - totalWidth) / 2
+        let startX = (bounds.width - Self.contentWidth) / 2
 
         for i in 0..<Self.barCount {
             let bar = CALayer()
-            let x = startX + CGFloat(i) * (barWidth + barGap)
-            bar.frame = CGRect(x: x, y: (bounds.height - barHeight) / 2, width: barWidth, height: barHeight)
-            bar.cornerRadius = barWidth / 2
+            let x = startX + CGFloat(i) * (Self.barWidth + Self.barGap)
+            bar.frame = CGRect(x: x, y: (bounds.height - Self.barHeight) / 2,
+                               width: Self.barWidth, height: Self.barHeight)
+            bar.cornerRadius = Self.barWidth / 2
             bar.backgroundColor = NSColor(white: 1, alpha: 0.82).cgColor
             bar.opacity = 0.72
             bar.anchorPoint = CGPoint(x: 0.5, y: 0.5)
@@ -183,8 +194,8 @@ final class OverlayHostingView: NSView {
     }
 
     private func setupDots() {
-        let dotSize: CGFloat = 4
-        let dotGap: CGFloat = 6
+        let dotSize: CGFloat = 3.5
+        let dotGap: CGFloat = 5
         let totalWidth = 3 * dotSize + 2 * dotGap
         let startX = (bounds.width - totalWidth) / 2
 
@@ -283,7 +294,7 @@ final class OverlayHostingView: NSView {
         }
 
         // Update border brightness with level
-        let border = 0.42 + surfaceLevel * 0.12
+        let border = 0.16 + surfaceLevel * 0.10
         blurView.layer?.borderColor = NSColor(white: 1, alpha: CGFloat(border)).cgColor
 
         CATransaction.commit()

@@ -133,7 +133,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "T"
+        setStatusSymbol(.idle)
 
         let menu = NSMenu()
 
@@ -173,6 +173,44 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         menu.addItem(quitItem)
 
         statusItem.menu = menu
+    }
+
+    // MARK: - Status item
+
+    private enum StatusSymbol {
+        case idle, recording, processing
+
+        /// Template SF Symbols, so the menu bar tints them for light and dark itself.
+        /// The waveform matches the overlay, and a plain letter "T" sat badly among the
+        /// icon-based items around it.
+        var symbolName: String {
+            switch self {
+            case .idle: return "waveform"
+            case .recording: return "waveform.circle.fill"
+            case .processing: return "ellipsis.circle"
+            }
+        }
+
+        var label: String {
+            switch self {
+            case .idle: return "TalkType"
+            case .recording: return "TalkType — recording"
+            case .processing: return "TalkType — transcribing"
+            }
+        }
+    }
+
+    private func setStatusSymbol(_ symbol: StatusSymbol) {
+        guard let button = statusItem?.button else { return }
+        let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .regular)
+        let image = NSImage(systemSymbolName: symbol.symbolName, accessibilityDescription: symbol.label)?
+            .withSymbolConfiguration(config)
+        image?.isTemplate = true
+        button.image = image
+        button.imagePosition = .imageOnly
+        button.toolTip = symbol.label
+        // Fall back to text if the symbol is ever unavailable, rather than an empty item.
+        button.title = image == nil ? "T" : ""
     }
 
     // MARK: - Local speech engine
@@ -467,13 +505,13 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 extension TalkTypeApp: TrayDelegate {
     func setRecording(_ active: Bool) {
         DispatchQueue.main.async {
-            self.statusItem?.button?.title = active ? "T·" : "T"
+            self.setStatusSymbol(active ? .recording : .idle)
         }
     }
 
     func setProcessing(_ active: Bool) {
         DispatchQueue.main.async {
-            self.statusItem?.button?.title = active ? "T…" : "T"
+            self.setStatusSymbol(active ? .processing : .idle)
         }
     }
 
