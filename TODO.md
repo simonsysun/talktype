@@ -3,58 +3,85 @@
 Single source of truth for what we're doing and what's done.
 Design rationale → `PLAN.md`. Shipped history → `CHANGELOG.md`. Don't duplicate them here.
 
-Last reviewed: 2026-08-01
+Last reviewed: 2026-08-02
+
+**Current focus: macOS.** iOS is parked by decision (2026-08-02) — see "Parked: iOS" below.
 
 ---
 
 ## State of the project
 
-- **macOS app (`TalkType/`)** — v1.2.0, feature-complete and previously shipped. Not built on this
-  machine (fresh clone, no Xcode).
+- **macOS app (`TalkType/`)** — v1.2.0, feature-complete and previously shipped. Never built on this
+  machine until now (fresh clone 2026-08-01).
 - **iOS keyboard (`TalkTypeKeyboard/`) + companion app (`TalkTypeiOS/`)** — written in 4 commits on
   2026-04-07/08, then paused. **Never compiled, never run on a device.** Every item under
-  "iOS: make it actually work" below is a hypothesis until the thing builds.
+  "Parked: iOS" is a hypothesis until the thing builds.
+- **Transcription** — STT only, no LLM. OpenAI `gpt-4o-mini-transcribe` (default) / `gpt-4o-transcribe`,
+  Groq `whisper-large-v3` / `-turbo`. Vocabulary rides on the API's `prompt` parameter;
+  `PostProcessor` is regex, not a model.
 
 ---
 
 ## Blocked — needs Simon
 
-- [ ] **Install Xcode.** Nothing on the iOS side can be verified without it. `xcode-select` currently
-      points at `/Library/Developer/CommandLineTools`. After install:
-      `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`
-- [ ] **Apple Developer Program membership + register IDs.** Needed for App Groups, keychain sharing,
-      and TestFlight. Register: `dev.talktype.ios`, `dev.talktype.ios.keyboard`,
-      App Group `group.dev.talktype`. Free personal team works for device testing but *not* TestFlight
-      and *not* App Groups reliably.
-- [ ] Decide: keep TestFlight-only, or just sideload to own device (7-day resign with free team).
-      Changes how much of the icon/version/metadata work below matters.
+- [ ] **Accept the Xcode license**, required for any `xcodebuild` use including macOS:
+      `sudo xcodebuild -license accept && sudo xcodebuild -runFirstLaunch`
+      (Xcode 26.6 is installed and selected. macOS *and* iOS SDKs are both present —
+      `-downloadPlatform iOS` would only add simulator runtimes, not needed for device builds.)
+- [ ] **Push access.** `git push` fails: the SSH key authenticates as `simonsunxiphi`, the repo is
+      `simonsysun/talktype`. Two commits are sitting local.
 
 ---
 
-## Now — get iOS to build
+## Now — macOS
 
-0. [ ] **Run `swift test` once Xcode is installed.** The suite in `Tests/TalkTypeCoreTests` is
-       written but has never executed: XCTest ships with Xcode, not with Command Line Tools. The
-       same 85 assertions were verified today through a throwaway harness, so this is a format
-       check, not a logic check.
-1. [ ] Open `TalkType.xcodeproj` in Xcode, build all 3 targets, fix whatever falls out.
-       Expect real compile errors: the shared files are compiled into iOS targets by membership only,
-       never type-checked against the iOS SDK.
+1. [ ] **Run `swift test`.** The suite in `Tests/TalkTypeCoreTests` is written but has never executed:
+       XCTest ships with Xcode, not with Command Line Tools. The same 94 assertions were verified
+       through a throwaway harness, so this is a format check, not a logic check.
+2. [ ] **Build and run the macOS app** — first build on this machine. Confirm the menu bar item,
+       hotkey, and a real dictation round trip.
+3. [ ] **Share the macOS scheme** (`TalkType.xcodeproj/xcshareddata/xcschemes/`) so
+       `xcodebuild -scheme TalkType` works from the CLI without opening the IDE.
+4. [ ] **ASR bake-off.** Compare providers on one real 中英混 clip — the current default
+       (`gpt-4o-mini-transcribe`) is neither the cheapest nor code-switching-optimised, and Whisper
+       is a known weak point for mixed-language speech. Script exists; needs an `OPENROUTER_API_KEY`
+       (13 of 18 candidates behind one key). Decide the macOS default from the result.
+       **Do not route the product through OpenRouter** — it documents `prompt` as "accepted but
+       ignored", which would silently disable the vocabulary feature.
+5. [ ] **Menu bar icon.** `statusItem.button?.title = "T"` is a literal letter while the project has
+       real icon art (`docs/assets/talktype-logo.png`, `Assets.xcassets`). Use a template image.
+6. [ ] Decide on an LLM cleanup pass after transcription (spacing between CJK and Latin, full-width
+       vs half-width punctuation, filler removal, keeping English technical terms in English). This is
+       what Wispr Flow does and what `PostProcessor`'s regex cannot do. Costs ~300 tokens per
+       dictation; the real price is +300–800 ms of latency. Revisit once the bake-off is in.
+
+---
+
+## Parked: iOS
+
+Resume when the phone becomes the priority. Nothing here is verified — the targets have never
+compiled.
+
+**Gates before any of it matters:**
+
+- [ ] **Apple Developer Program membership + register IDs** for App Groups, keychain sharing, and
+      TestFlight: `dev.talktype.ios`, `dev.talktype.ios.keyboard`, App Group `group.dev.talktype`.
+      A free personal team works for device testing but not TestFlight and not App Groups reliably.
+- [ ] Decide TestFlight vs. sideload-to-own-device. Changes how much of the icon/version/metadata
+      work below matters.
+
+**Then:**
+
+1. [ ] Build all 3 targets and fix whatever falls out. Expect real compile errors — the shared files
+       are compiled into the iOS targets by membership only, never type-checked against the iOS SDK.
 2. [ ] **Add `Assets.xcassets` to the iOS app target.** `TalkTypeiOS` has
        `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon` but an empty Resources build phase and no asset
        catalog → no app icon. TestFlight rejects builds without a 1024×1024 icon + `CFBundleIconName`.
        Source art: `docs/assets/talktype-logo.png`.
-3. [ ] **Share the schemes** (`TalkType.xcodeproj/xcshareddata/xcschemes/`) so `xcodebuild -scheme`
-       works from CLI and agents can verify builds without opening the IDE.
-4. [ ] Commit `project.json` (currently untracked).
 
----
+Ordered by "will it break on first use", highest first:
 
-## Next — iOS: make it actually work
-
-Ordered by "will it break on first use", highest first.
-
-5. [ ] **Cap recording length / cut peak memory.** `KeyboardViewController.maxRecordingSeconds = 120`
+3. [ ] **Cap recording length / cut peak memory.** `KeyboardViewController.maxRecordingSeconds = 120`
        is dangerous. Keyboard extensions get a small memory budget (commonly cited ~30–60 MB). At a
        48 kHz hardware rate, 120 s of `Float` mono is ~23 MB in `AudioRecorder.buffer`, and
        `stop()` does `chunks.flatMap` → another ~23 MB live at the same instant, before WAV encoding
@@ -86,9 +113,7 @@ Ordered by "will it break on first use", highest first.
        `config.asrProvider` — so the config knob exists but nothing can set it. Either expose the
        picker (Groq's free tier is genuinely attractive on mobile) or remove the dead knob.
 
----
-
-## Later
+Nice-to-have once it runs at all:
 
 - [ ] Undo affordance on the keyboard — a mis-transcription currently requires switching keyboards to
       fix. A delete key, or "undo last insert".
@@ -120,3 +145,10 @@ Shipped work is in `CHANGELOG.md` (macOS v1.0.0 → v1.2.0). iOS has shipped not
 - 2026-08-01 — Hygiene: dropped the dead `dictation_hotkey` config field (the hotkey lives in
   KeyboardShortcuts' UserDefaults), macOS `MARKETING_VERSION` 1.0.0 → 1.2.0 to match the CHANGELOG,
   `.gitignore` cleared of Python-era entries.
+- 2026-08-02 — **Decision: macOS first, iOS parked.** This TODO was ordered iOS-first from the
+  original audit; reordered to match. Xcode 26.6 installed — both macOS and iOS SDKs shipped with it,
+  so no platform download is needed either now or for iOS device builds later.
+- 2026-08-02 — ASR provider research. 13 transcription models are reachable through a single
+  OpenRouter key; ElevenLabs Scribe and Soniox are not on it. Whole price range is
+  $0.04–$0.96/hour, i.e. $0.60–$14.40/month at 30 min/day — small enough that accuracy and latency
+  should decide, not cost. Bake-off script written (18 candidates, one clip); unrun, no keys yet.
