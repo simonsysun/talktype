@@ -19,23 +19,36 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "==> Installing TalkType ASR runtime to $DEST"
 echo "    model: $MODEL"
 
-# qwen3-asr-mlx requires Python >=3.10,<3.14. A 3.14 system Python will not work.
-if ! command -v uv >/dev/null 2>&1; then
-  echo "error: uv is required (brew install uv)" >&2
-  exit 1
+# uv supplies the Python runtime. qwen3-asr-mlx needs >=3.10,<3.14, and macOS ships
+# nothing suitable — asking people to sort that out themselves is where an install stops
+# being one step. uv's own installer needs no Homebrew and no admin rights.
+UV=""
+for candidate in uv "$HOME/.local/bin/uv" /opt/homebrew/bin/uv /usr/local/bin/uv; do
+  if command -v "$candidate" >/dev/null 2>&1; then UV="$candidate"; break; fi
+done
+
+if [ -z "$UV" ]; then
+  echo "==> Installing uv (Python environment manager)"
+  curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1 || {
+    echo "error: could not install uv. Install it manually: https://docs.astral.sh/uv/" >&2
+    exit 1
+  }
+  UV="$HOME/.local/bin/uv"
+  [ -x "$UV" ] || { echo "error: uv installed but not found at $UV" >&2; exit 1; }
 fi
+echo "    uv: $UV"
 
 mkdir -p "$DEST"
 
 if [ ! -x "$DEST/venv/bin/python" ]; then
   echo "==> Creating Python 3.13 venv"
-  uv venv --python 3.13 "$DEST/venv"
+  "$UV" venv --python 3.13 "$DEST/venv"
 else
   echo "==> venv already present"
 fi
 
 echo "==> Installing qwen3-asr-mlx"
-uv pip install --quiet --python "$DEST/venv/bin/python" qwen3-asr-mlx
+"$UV" pip install --quiet --python "$DEST/venv/bin/python" qwen3-asr-mlx
 
 echo "==> Downloading weights (skipped if already cached)"
 HF_HOME="$DEST/hf" "$DEST/venv/bin/hf" download "$MODEL"

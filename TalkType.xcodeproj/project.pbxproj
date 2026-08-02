@@ -23,6 +23,9 @@
 		A10016 /* SidecarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10017; };
 		A10017 /* TextRefiner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10018; };
 		A10018 /* AudioDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10019; };
+		A10019 /* SetupWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10020; };
+		A10020 /* install.sh in Resources */ = {isa = PBXBuildFile; fileRef = B10021; };
+		A10021 /* server.py in Resources */ = {isa = PBXBuildFile; fileRef = B10022; };
 		A10015 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = PKG10002; };
 		A20001 /* TalkTypeiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20001; };
 		A20002 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20002; };
@@ -86,6 +89,9 @@
 		B10017 /* SidecarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidecarManager.swift; sourceTree = "<group>"; };
 		B10018 /* TextRefiner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextRefiner.swift; sourceTree = "<group>"; };
 		B10019 /* AudioDevices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDevices.swift; sourceTree = "<group>"; };
+		B10020 /* SetupWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupWindow.swift; sourceTree = "<group>"; };
+		B10021 /* install.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; name = install.sh; path = ../asr/install.sh; sourceTree = "<group>"; };
+		B10022 /* server.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = server.py; path = ../asr/server.py; sourceTree = "<group>"; };
 		B20001 /* TalkTypeiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkTypeiOSApp.swift; sourceTree = "<group>"; };
 		B20002 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B20003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -151,6 +157,9 @@
 				B10017 /* SidecarManager.swift */,
 				B10018 /* TextRefiner.swift */,
 				B10019 /* AudioDevices.swift */,
+				B10020 /* SetupWindow.swift */,
+				B10021 /* install.sh */,
+				B10022 /* server.py */,
 				B10013 /* Info.plist */,
 				B10014 /* TalkType.entitlements */,
 				B10015 /* Assets.xcassets */,
@@ -328,6 +337,7 @@
 				A10016 /* SidecarManager.swift in Sources */,
 				A10017 /* TextRefiner.swift in Sources */,
 				A10018 /* AudioDevices.swift in Sources */,
+				A10019 /* SetupWindow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -368,6 +378,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10013 /* Assets.xcassets in Resources */,
+				A10020 /* install.sh in Resources */,
+				A10021 /* server.py in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

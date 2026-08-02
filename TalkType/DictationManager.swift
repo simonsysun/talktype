@@ -293,6 +293,7 @@ final class DictationManager {
                 DispatchQueue.main.async {
                     // Stale check — must read sessionID on main thread
                     guard self.sessionID == session else {
+                        print("[insert] stale session (\(session) != \(self.sessionID)) — clipboard only")
                         self.originApp = nil
                         TextInserter.copyToClipboard(processed)
                         return
@@ -314,6 +315,7 @@ final class DictationManager {
                     let insertBlock = { [weak self] in
                         guard let self = self else { return }
                         let hasAccessibility = TextInserter.accessibilityGranted(prompt: false)
+                        print("[insert] accessibility=\(hasAccessibility) chars=\(processed.count) target=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?")")
                         if hasAccessibility {
                             TextInserter.typeText(processed)
                         } else {

@@ -23,6 +23,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     private var inputMenu: NSMenu!
     private var hotkeyDisplayItem: NSMenuItem!
     private var hotkeySettingsWindow: HotkeySettingsWindow!
+    private let setupWindow = SetupWindow()
 
     static func main() {
         setbuf(stdout, nil)
@@ -129,6 +130,13 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         if hotkeyManager.captureMode == .monitor {
             notifyError("Hotkey cannot override macOS until Accessibility is enabled. Open Accessibility Settings from the tray.")
         }
+
+        // Nothing works until the engine is on disk, so lead with setup rather than
+        // leaving a menu bar icon that quietly does nothing.
+        configureSetupWindow()
+        if SidecarManager.installState() != .ready {
+            setupWindow.show()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -163,6 +171,10 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         let keyItem = NSMenuItem(title: "Groq API Key...", action: #selector(editGroqKey), keyEquivalent: "")
         keyItem.target = self
         menu.addItem(keyItem)
+
+        let setupItem = NSMenuItem(title: "Setup...", action: #selector(openSetup), keyEquivalent: "")
+        setupItem.target = self
+        menu.addItem(setupItem)
         refreshRefineItem()
 
         inputMenu = NSMenu()
@@ -290,6 +302,19 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         rebuildInputMenu()
         notifyInfo(uid.isEmpty ? "Microphone: following the system default."
                                : "Microphone: \(sender.title).")
+    }
+
+    // MARK: - Setup
+
+    @objc private func openSetup() { setupWindow.show() }
+
+    private func configureSetupWindow() {
+        setupWindow.onEditKey = { [weak self] in self?.promptForGroqKey() }
+        setupWindow.onEngineInstalled = { [weak self] in
+            guard let self = self else { return }
+            self.startSidecar()
+            self.notifyInfo("Speech engine installed. Press \(self.hotkeyDisplayString()) to dictate.")
+        }
     }
 
     // MARK: - Cloud refinement
@@ -440,7 +465,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
                 case .loading:
                     self.engineItem?.title = "Speech engine: loading model..."
                 case .unreachable:
-                    let problem = self.sidecar.installState().problem
+                    let problem = SidecarManager.installState().problem
                     self.engineItem?.title = problem == nil
                         ? "Speech engine: not running"
                         : "Speech engine: not installed"

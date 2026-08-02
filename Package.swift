@@ -25,6 +25,7 @@ let package = Package(
                 "SidecarManager.swift",
                 "TextRefiner.swift",
                 "AudioDevices.swift",
+                "SetupWindow.swift",
                 "TalkType.entitlements",
                 "TalkTypeApp.swift",
                 "TextInserter.swift",

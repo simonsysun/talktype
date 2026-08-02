@@ -35,7 +35,7 @@ final class SidecarManager {
 
     // MARK: - Install check
 
-    func installState() -> InstallState {
+    static func installState() -> InstallState {
         let fm = FileManager.default
         for (path, label) in [
             (Self.pythonPath, "Python environment (venv)"),
@@ -65,7 +65,7 @@ final class SidecarManager {
         }
         if isRunning { return .ready }
 
-        let state = installState()
+        let state = Self.installState()
         guard state == .ready else {
             print("[sidecar] not installed: \(state.problem ?? "unknown")")
             return state
