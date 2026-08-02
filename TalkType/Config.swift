@@ -4,9 +4,11 @@ struct AppConfig: Codable {
     // The hotkey itself is owned by the KeyboardShortcuts library (UserDefaults), not this file.
     var sampleRate: Int = 16000
     var launchAtLogin: Bool = false
-    var asrProvider: String = "openai"
-    var asrModel: String = "gpt-4o-mini-transcribe"
-    var asrTimeoutSeconds: Double = 30.0
+    /// Loopback port of the local ASR sidecar.
+    var asrPort: Int = SidecarDefaults.port
+    /// Generous by design: inference is local, so a slow response means a long recording,
+    /// not a flaky network.
+    var asrTimeoutSeconds: Double = 60.0
     var silenceAutoStopEnabled: Bool = true
     var silenceAutoStopSeconds: Double = 20
     var silenceRmsThreshold: Double = 0.008
@@ -15,8 +17,7 @@ struct AppConfig: Codable {
     enum CodingKeys: String, CodingKey {
         case sampleRate = "sample_rate"
         case launchAtLogin = "launch_at_login"
-        case asrProvider = "asr_provider"
-        case asrModel = "asr_model"
+        case asrPort = "asr_port"
         case asrTimeoutSeconds = "asr_timeout_seconds"
         case silenceAutoStopEnabled = "silence_auto_stop_enabled"
         case silenceAutoStopSeconds = "silence_auto_stop_seconds"
@@ -92,11 +93,6 @@ enum ConfigManager {
             let value = parts[1].trimmingCharacters(in: .whitespaces)
 
             switch key {
-            case "asr_model":
-                let cleaned = value.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-                if cleaned == "gpt-4o-transcribe" || cleaned == "gpt-4o-mini-transcribe" {
-                    config.asrModel = cleaned
-                }
             case "silence_auto_stop_seconds":
                 if let val = Double(value) { config.silenceAutoStopSeconds = val }
             case "launch_at_login":

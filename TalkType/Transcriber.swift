@@ -1,86 +1,20 @@
 import Foundation
 
-// MARK: - Provider definitions
-
-enum ASRProvider: String, Codable {
-    case openai
-    case groq
-
-    var displayName: String {
-        switch self {
-        case .openai: return "OpenAI"
-        case .groq: return "Groq"
-        }
-    }
-
-    var transcriptionEndpoint: String {
-        switch self {
-        case .openai: return "https://api.openai.com/v1/audio/transcriptions"
-        case .groq: return "https://api.groq.com/openai/v1/audio/transcriptions"
-        }
-    }
-
-    var modelsEndpoint: String {
-        switch self {
-        case .openai: return "https://api.openai.com/v1/models"
-        case .groq: return "https://api.groq.com/openai/v1/models"
-        }
-    }
-
-    var defaultModel: String {
-        switch self {
-        case .openai: return defaultOpenAIASRModel
-        case .groq: return defaultGroqASRModel
-        }
-    }
-
-    var models: [(id: String, label: String)] {
-        switch self {
-        case .openai: return [
-            (defaultOpenAIASRModel, "GPT-4o mini Transcribe"),
-            (premiumOpenAIASRModel, "GPT-4o Transcribe"),
-        ]
-        case .groq: return [
-            (defaultGroqASRModel, "Whisper Large v3"),
-            (turboGroqASRModel, "Whisper Large v3 Turbo"),
-        ]
-        }
-    }
-
-    var keyAccount: String {
-        switch self {
-        case .openai: return openAIASRAccount
-        case .groq: return groqASRAccount
-        }
-    }
-
-    var envVar: String {
-        switch self {
-        case .openai: return "TALKTYPE_API_KEY"
-        case .groq: return "TALKTYPE_GROQ_API_KEY"
-        }
-    }
-}
-
-let defaultOpenAIASRModel = "gpt-4o-mini-transcribe"
-let premiumOpenAIASRModel = "gpt-4o-transcribe"
-let openAIASRAccount = "OpenAI-ASR"
-
-let defaultGroqASRModel = "whisper-large-v3"
-let turboGroqASRModel = "whisper-large-v3-turbo"
-let groqASRAccount = "Groq-ASR"
-
-/// Speech-to-text via OpenAI-compatible transcription API. Supports OpenAI and Groq providers.
+/// Speech-to-text via the local Qwen3-ASR sidecar on 127.0.0.1.
+///
+/// There is no cloud path and no API key. The sidecar (`~/.talktype/asr/server.py`)
+/// holds the model in memory, so a dictation is one loopback POST of raw WAV bytes —
+/// ~0.3 s for a short phrase, ~0.9 s for 18 s of speech, and nothing leaves the machine.
 final class Transcriber {
-    var model: String
     var timeout: TimeInterval
-    var provider: ASRProvider
+    let baseURL: URL
 
-    init(provider: ASRProvider = .openai, model: String = defaultOpenAIASRModel, timeout: TimeInterval = 30.0) {
-        self.provider = provider
-        self.model = model
+    init(port: Int = SidecarDefaults.port, timeout: TimeInterval = 60.0) {
+        self.baseURL = URL(string: "http://127.0.0.1:\(port)")!
         self.timeout = timeout
     }
+
+    // MARK: - Transcription
 
     func transcribe(
         audio: [Float],
@@ -88,25 +22,22 @@ final class Transcriber {
         vocabularyHints: [String]? = nil
     ) throws -> String {
         guard !audio.isEmpty else { return "" }
-        let request = try buildRequest(audio: audio, sampleRate: sampleRate, vocabularyHints: vocabularyHints)
+        let request = buildRequest(audio: audio, sampleRate: sampleRate, vocabularyHints: vocabularyHints)
 
         let semaphore = DispatchSemaphore(value: 0)
-        var result: String = ""
+        var result = ""
         var requestError: Error?
 
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
             defer { semaphore.signal() }
-
             if let error = error {
-                requestError = error
+                requestError = TranscriberError.sidecarUnreachable(underlying: error.localizedDescription)
                 return
             }
-
             guard let data = data else {
                 requestError = TranscriberError.emptyResponse
                 return
             }
-
             do {
                 result = try Transcriber.parseResponse(data: data, response: response)
             } catch {
@@ -116,136 +47,146 @@ final class Transcriber {
         task.resume()
         semaphore.wait()
 
-        if let error = requestError {
-            throw error
-        }
+        if let error = requestError { throw error }
         return result
     }
 
-    /// Async transcription for iOS keyboard extension (non-blocking).
+    /// Async variant, for callers that must not block a thread.
     func transcribeAsync(
         audio: [Float],
         sampleRate: Int = 16000,
         vocabularyHints: [String]? = nil
     ) async throws -> String {
         guard !audio.isEmpty else { return "" }
-        let request = try buildRequest(audio: audio, sampleRate: sampleRate, vocabularyHints: vocabularyHints)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        return try Transcriber.parseResponse(data: data, response: response)
+        let request = buildRequest(audio: audio, sampleRate: sampleRate, vocabularyHints: vocabularyHints)
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            return try Transcriber.parseResponse(data: data, response: response)
+        } catch let error as TranscriberError {
+            throw error
+        } catch {
+            throw TranscriberError.sidecarUnreachable(underlying: error.localizedDescription)
+        }
     }
 
-    /// Validate an API key by calling the models endpoint (instance method).
-    func validateKey(_ key: String) throws {
-        try Transcriber.validateKey(key, modelsEndpoint: provider.modelsEndpoint, provider: provider)
-    }
+    // MARK: - Health
 
-    /// Validate an API key against a specific models endpoint (thread-safe, no instance state).
-    static func validateKey(_ key: String, modelsEndpoint: String, provider: ASRProvider = .openai) throws {
-        var request = URLRequest(url: URL(string: modelsEndpoint)!)
-        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 10.0
+    /// Sidecar state, for the menu bar. Never throws — an unreachable sidecar is a state, not an error.
+    func health() -> SidecarHealth {
+        var request = URLRequest(url: baseURL.appendingPathComponent("health"))
+        request.httpMethod = "GET"
+        request.timeoutInterval = 3.0
 
         let semaphore = DispatchSemaphore(value: 0)
-        var requestError: Error?
+        var health = SidecarHealth.unreachable
 
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        let task = URLSession.shared.dataTask(with: request) { data, response, _ in
             defer { semaphore.signal() }
-            if let error = error {
-                requestError = error
-                return
-            }
-            if let http = response as? HTTPURLResponse, http.statusCode == 401 {
-                requestError = TranscriberError.invalidAPIKey(provider: provider)
-                return
+            guard let http = response as? HTTPURLResponse else { return }
+            switch http.statusCode {
+            case 200:
+                let model = (try? JSONSerialization.jsonObject(with: data ?? Data()) as? [String: Any])?
+                    .flatMap { $0["model"] as? String }
+                health = .ready(model: model ?? "unknown")
+            case 503:
+                health = .loading
+            default:
+                health = .unreachable
             }
         }
         task.resume()
         semaphore.wait()
-
-        if let error = requestError { throw error }
-    }
-
-    // MARK: - Request / response
-
-    /// Build the multipart transcription request. Shared by the sync and async paths
-    /// so the body format can never drift between platforms.
-    private func buildRequest(
-        audio: [Float],
-        sampleRate: Int,
-        vocabularyHints: [String]?
-    ) throws -> URLRequest {
-        guard let apiKey = loadAPIKey() else {
-            throw TranscriberError.missingAPIKey(provider: provider)
-        }
-
-        let wavData = WAVEncoder.encode(samples: audio, sampleRate: sampleRate)
-        let prompt = buildPrompt(vocabularyHints: vocabularyHints)
-        let boundary = "Boundary-\(UUID().uuidString)"
-
-        var body = Data()
-        body.reserveCapacity(wavData.count + 512)
-
-        body.appendMultipart(name: "model", value: model, boundary: boundary)
-        // Explicit response format — don't rely on provider defaults.
-        body.appendMultipart(name: "response_format", value: "json", boundary: boundary)
-        if let prompt = prompt {
-            body.appendMultipart(name: "prompt", value: prompt, boundary: boundary)
-        }
-
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"speech.wav\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
-        body.append(wavData)
-        body.append("\r\n".data(using: .utf8)!)
-        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
-
-        var request = URLRequest(url: URL(string: provider.transcriptionEndpoint)!)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.httpBody = body
-        request.timeoutInterval = timeout
-        return request
-    }
-
-    /// Extract the transcript, or throw on an API error.
-    /// A body that isn't JSON is treated as a plain-text transcript; JSON without a
-    /// `text` field yields "" rather than dumping raw JSON into the user's document.
-    static func parseResponse(data: Data, response: URLResponse?) throws -> String {
-        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            throw TranscriberError.apiError(statusCode: httpResponse.statusCode, body: body)
-        }
-
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            let text = json["text"] as? String ?? ""
-            return text.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return health
     }
 
     // MARK: - Private
 
-    private func loadAPIKey() -> String? {
-        if let key = ProcessInfo.processInfo.environment[provider.envVar], !key.isEmpty {
-            return key
+    private func buildRequest(
+        audio: [Float],
+        sampleRate: Int,
+        vocabularyHints: [String]?
+    ) -> URLRequest {
+        var request = URLRequest(url: baseURL.appendingPathComponent("transcribe"))
+        request.httpMethod = "POST"
+        request.setValue("audio/wav", forHTTPHeaderField: "Content-Type")
+        request.httpBody = WAVEncoder.encode(samples: audio, sampleRate: sampleRate)
+        request.timeoutInterval = timeout
+
+        // Bare comma list only. A prose context makes the model complete the prompt
+        // instead of transcribing — it has been observed translating a Chinese clip to
+        // English and inventing a sentence that was never spoken.
+        if let prompt = Self.buildPrompt(vocabularyHints: vocabularyHints) {
+            request.setValue(prompt, forHTTPHeaderField: "X-TalkType-Context")
         }
-        let key = KeyStorage.retrieveKey(provider: provider.keyAccount)
-        // Legacy fallback for OpenAI only
-        if key == nil && provider == .openai {
-            return KeyStorage.retrieveKey(provider: "OpenAI")
-        }
-        return key
+        return request
     }
 
-    private func buildPrompt(vocabularyHints: [String]?) -> String? {
-        let hints = (vocabularyHints ?? []).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    static func buildPrompt(vocabularyHints: [String]?) -> String? {
+        let hints = (vocabularyHints ?? [])
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            // Header values must stay single-line ASCII-safe control-free text.
+            .map { $0.replacingOccurrences(of: "[\r\n]", with: " ", options: .regularExpression) }
+            .filter { !$0.isEmpty }
         guard !hints.isEmpty else { return nil }
         return hints.joined(separator: ", ")
     }
 
+    static func parseResponse(data: Data, response: URLResponse?) throws -> String {
+        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+            let detail = json?["error"] as? String ?? String(data: data, encoding: .utf8) ?? ""
+            if http.statusCode == 503 { throw TranscriberError.sidecarLoading }
+            throw TranscriberError.sidecarError(statusCode: http.statusCode, body: detail)
+        }
+
+        guard let text = json?["text"] as? String else {
+            throw TranscriberError.emptyResponse
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+// MARK: - Sidecar
+
+enum SidecarDefaults {
+    static let port = 8756
+}
+
+enum SidecarHealth: Equatable {
+    case ready(model: String)
+    case loading
+    case unreachable
+}
+
+enum TranscriberError: LocalizedError, Equatable {
+    case sidecarUnreachable(underlying: String)
+    case sidecarLoading
+    case emptyResponse
+    case sidecarError(statusCode: Int, body: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .sidecarUnreachable:
+            return "Local speech engine is not running. Check the TalkType menu."
+        case .sidecarLoading:
+            return "Local speech engine is still loading. Try again in a moment."
+        case .emptyResponse:
+            return "Local speech engine returned no text."
+        case .sidecarError(let code, let body):
+            return "Local speech engine error (\(code)): \(body)"
+        }
+    }
+
+    static func == (lhs: TranscriberError, rhs: TranscriberError) -> Bool {
+        switch (lhs, rhs) {
+        case (.sidecarUnreachable, .sidecarUnreachable): return true
+        case (.sidecarLoading, .sidecarLoading): return true
+        case (.emptyResponse, .emptyResponse): return true
+        case (.sidecarError(let a, _), .sidecarError(let b, _)): return a == b
+        default: return false
+        }
+    }
 }
 
 // MARK: - WAV encoding
@@ -254,8 +195,8 @@ final class Transcriber {
 ///
 /// The PCM block is converted once and appended in a single bulk copy rather than one
 /// `Data.append` per sample. Measured on Apple silicon this is ~20x faster but saves only
-/// ~10 ms on a 30 s recording — negligible next to the API round trip. It lives here as a
-/// separate type mainly so both request paths share one encoder and it can be tested.
+/// ~10 ms on a 30 s recording — negligible next to inference. It lives here as a separate
+/// type so it can be tested directly.
 enum WAVEncoder {
     static let headerSize = 44
 
@@ -296,41 +237,11 @@ enum WAVEncoder {
     }
 }
 
-enum TranscriberError: LocalizedError {
-    case missingAPIKey(provider: ASRProvider)
-    case invalidAPIKey(provider: ASRProvider)
-    case emptyResponse
-    case apiError(statusCode: Int, body: String)
-
-    var errorDescription: String? {
-        switch self {
-        case .missingAPIKey(let provider):
-            #if os(iOS)
-            return "\(provider.displayName) API key is missing. Open the TalkType app to set it up."
-            #else
-            return "\(provider.displayName) API key is missing. Set it from TalkType tray menu."
-            #endif
-        case .invalidAPIKey(let provider):
-            return "\(provider.displayName) API key is invalid."
-        case .emptyResponse:
-            return "Empty response from transcription API."
-        case .apiError(let code, let body):
-            return "API error (\(code)): \(body)"
-        }
-    }
-}
-
 // MARK: - Data helpers
 
 private extension Data {
     mutating func appendLittleEndian<T: FixedWidthInteger>(_ value: T) {
         var le = value.littleEndian
         Swift.withUnsafeBytes(of: &le) { append(contentsOf: $0) }
-    }
-
-    mutating func appendMultipart(name: String, value: String, boundary: String) {
-        append("--\(boundary)\r\n".data(using: .utf8)!)
-        append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
-        append("\(value)\r\n".data(using: .utf8)!)
     }
 }

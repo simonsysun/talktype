@@ -36,10 +36,8 @@ final class DictationManager {
         self.vocabularyStore = vocabularyStore
         self.overlay = overlay
 
-        let provider = ASRProvider(rawValue: config.asrProvider) ?? .openai
         self.transcriber = Transcriber(
-            provider: provider,
-            model: config.asrModel,
+            port: config.asrPort,
             timeout: config.asrTimeoutSeconds
         )
 
@@ -86,20 +84,11 @@ final class DictationManager {
         }
     }
 
-    // MARK: - Model change
-
-    func updateModel(_ model: String) {
-        transcriberLock.lock()
-        transcriber.model = model
-        transcriberLock.unlock()
-        print("[asr] model switched to \(model)")
-    }
+    // MARK: - Config
 
     func reloadConfig(_ newConfig: AppConfig) {
         config = newConfig
         transcriberLock.lock()
-        transcriber.provider = ASRProvider(rawValue: newConfig.asrProvider) ?? .openai
-        transcriber.model = newConfig.asrModel
         transcriber.timeout = newConfig.asrTimeoutSeconds
         transcriberLock.unlock()
     }
