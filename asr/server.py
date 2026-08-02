@@ -30,6 +30,7 @@ it only nudges punctuation conventions. --language stays available as an overrid
 """
 
 import argparse
+import gc
 import json
 import os
 import queue
@@ -44,6 +45,7 @@ DEFAULT_PORT = 8756
 MAX_BODY = 64 * 1024 * 1024          # 64 MB — ~30 min of 16 kHz mono
 MAX_CONTEXT = 800                    # matches VocabularyStore's prompt budget
 JOB_TIMEOUT = 300                    # seconds a handler will wait for inference
+IDLE_UNLOAD_SECONDS = 300            # release ~2.4 GB after this long with no work
 
 _ready = threading.Event()
 _jobs: "queue.Queue" = queue.Queue()
@@ -74,22 +76,44 @@ def watch_parent():
 
 
 def inference_worker():
-    """Owns the model for the process lifetime. Never let this thread die."""
+    """Owns the model for the process lifetime. Never let this thread die.
+
+    Loading, inference and unloading all happen here because MLX's Metal stream is
+    thread-local. After IDLE_UNLOAD_SECONDS with no work the weights are released,
+    which returns about 2.4 GB; the next dictation pays ~0.25 s to load them back.
+    """
     from qwen3_asr_mlx import Qwen3ASR
 
-    t = time.time()
-    model = Qwen3ASR.from_pretrained(MODEL_ID)
-    log(f"model loaded in {time.time() - t:.2f}s: {MODEL_ID}")
-    _ready.set()
+    model = None
+
+    def ensure_loaded():
+        nonlocal model
+        if model is None:
+            t = time.time()
+            model = Qwen3ASR.from_pretrained(MODEL_ID)
+            log(f"model loaded in {time.time() - t:.2f}s: {MODEL_ID}")
+        return model
+
+    ensure_loaded()
+    _ready.set()                                       # ready stays set across unloads
 
     while True:
-        job = _jobs.get()
+        try:
+            # Block forever when already unloaded; there is nothing left to reclaim.
+            job = _jobs.get(timeout=IDLE_UNLOAD_SECONDS) if model else _jobs.get()
+        except queue.Empty:
+            model.close()
+            model = None
+            gc.collect()
+            log(f"idle {IDLE_UNLOAD_SECONDS}s — released model weights")
+            continue
+
         if job is None:
             return
         path, context, box, done = job
         try:
             started = time.time()
-            result = model.transcribe(path, language=LANGUAGE, context=context)
+            result = ensure_loaded().transcribe(path, language=LANGUAGE, context=context)
             text = getattr(result, "text", None)
             box["text"] = (text if text is not None else str(result)).strip()
             box["seconds"] = round(time.time() - started, 3)
@@ -168,19 +192,22 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global MODEL_ID, LANGUAGE, TMP_DIR
+    global MODEL_ID, LANGUAGE, TMP_DIR, IDLE_UNLOAD_SECONDS
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default=os.environ.get("TALKTYPE_ASR_MODEL", DEFAULT_MODEL))
     ap.add_argument("--port", type=int,
                     default=int(os.environ.get("TALKTYPE_ASR_PORT", DEFAULT_PORT)))
     ap.add_argument("--language", default=os.environ.get("TALKTYPE_ASR_LANGUAGE") or None,
                     help="ISO code to pin (e.g. zh, en). Omit to auto-detect.")
+    ap.add_argument("--idle-unload", type=float, default=IDLE_UNLOAD_SECONDS,
+                    help="seconds of inactivity before releasing weights; 0 disables")
     ap.add_argument("--tmp-dir", default=os.environ.get("TMPDIR", tempfile.gettempdir()))
     args = ap.parse_args()
 
     MODEL_ID = args.model
     LANGUAGE = args.language
     TMP_DIR = args.tmp_dir
+    IDLE_UNLOAD_SECONDS = args.idle_unload or None
     os.makedirs(TMP_DIR, exist_ok=True)
 
     # Bind before loading weights so the app can connect immediately and poll

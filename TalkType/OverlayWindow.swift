@@ -103,27 +103,31 @@ enum OverlayState {
 // MARK: - Native overlay view using Core Animation
 
 final class OverlayHostingView: NSView {
-    private let pillLayer = CALayer()
     private let blurView: NSVisualEffectView
     private var barLayers: [CALayer] = []
     private var dotLayers: [CALayer] = []
     private var state: OverlayState = .recording
 
     // Bar layout
-    private let barCount = 9
+    private static let barCount = 9
     private let barWidth: CGFloat = 4
     private let barGap: CGFloat = 4
     private let barHeight: CGFloat = 21
     private let barMultipliers: [CGFloat]
 
+    /// Tallest a bar is allowed to grow, as a multiple of `barHeight`.
+    private static let maxBarScale: Float = 1.46
+    /// Height at silence. Matches the top of the idle animation so the bars grow out of
+    /// their resting motion instead of jumping when speech starts.
+    private static let idleTopScale: Float = 0.36
+
     // Animation state
-    private var smoothedLevel: Float = 0
     private var surfaceLevel: Float = 0
-    private var idleAnimationTimers: [Timer] = []
+    private var idleAnimating = false
 
     override init(frame: NSRect) {
-        let mid = CGFloat(8) / 2.0 // (barCount - 1) / 2
-        barMultipliers = (0..<9).map { i in
+        let mid = CGFloat(Self.barCount - 1) / 2.0
+        barMultipliers = (0..<Self.barCount).map { i in
             let dist = abs(CGFloat(i) - mid) / mid
             return 1.0 - dist * 0.50
         }
@@ -161,10 +165,10 @@ final class OverlayHostingView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     private func setupBars() {
-        let totalWidth = CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * barGap
+        let totalWidth = CGFloat(Self.barCount) * barWidth + CGFloat(Self.barCount - 1) * barGap
         let startX = (bounds.width - totalWidth) / 2
 
-        for i in 0..<barCount {
+        for i in 0..<Self.barCount {
             let bar = CALayer()
             let x = startX + CGFloat(i) * (barWidth + barGap)
             bar.frame = CGRect(x: x, y: (bounds.height - barHeight) / 2, width: barWidth, height: barHeight)
@@ -172,7 +176,7 @@ final class OverlayHostingView: NSView {
             bar.backgroundColor = NSColor(white: 1, alpha: 0.82).cgColor
             bar.opacity = 0.72
             bar.anchorPoint = CGPoint(x: 0.5, y: 0.5)
-            bar.transform = CATransform3DMakeScale(1, 0.16, 1)
+            bar.transform = CATransform3DMakeScale(1, CGFloat(Self.idleTopScale), 1)
             blurView.layer?.addSublayer(bar)
             barLayers.append(bar)
         }
@@ -199,7 +203,6 @@ final class OverlayHostingView: NSView {
     func setState(_ newState: OverlayState) {
         state = newState
         stopIdleAnimations()
-        smoothedLevel = 0
         surfaceLevel = 0
 
         switch newState {
@@ -258,7 +261,6 @@ final class OverlayHostingView: NSView {
 
         stopIdleAnimations()
         let boosted = powf(level, 0.62)
-        smoothedLevel = smoothedLevel * 0.52 + level * 0.48
         surfaceLevel = surfaceLevel * 0.72 + boosted * 0.28
 
         // Use short implicit animation for fluid bar movement
@@ -267,10 +269,13 @@ final class OverlayHostingView: NSView {
         CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .linear))
 
         for (i, bar) in barLayers.enumerated() {
+            // Each bar spans its whole range across the whole input range. The previous
+            // curve summed a floor and a peak term and then clamped, which pinned the
+            // centre bars at maximum from level 0.45 upward — the loudest 55% of speech
+            // drew an identical, flat-topped picture.
             let profile = Float(barMultipliers[i])
-            let floor: Float = 0.18 + profile * 0.06
-            let peak: Float = 0.42 + boosted * (0.92 + profile * 0.42)
-            let scale = max(0.12, min(1.46, floor + peak * profile))
+            let rest = Self.idleTopScale * profile
+            let scale = rest + (Self.maxBarScale - rest) * profile * boosted
             let opacity = max(0.68, min(0.98, 0.72 + boosted * 0.2 + profile * 0.04))
 
             bar.transform = CATransform3DMakeScale(1, CGFloat(scale), 1)
@@ -286,32 +291,33 @@ final class OverlayHostingView: NSView {
 
     // MARK: - Idle animations
 
+    /// Staggering via `beginTime` rather than a Timer per bar. The Timer version
+    /// allocated and invalidated nine timers on every level update, at up to 45 Hz,
+    /// and matched neither `startDotAnimations` nor Core Animation's own clock.
     private func startIdleAnimations() {
+        guard !idleAnimating else { return }
+        idleAnimating = true
+
         let delays: [TimeInterval] = [0, 0.06, 0.14, 0.03, 0.10, 0.08, 0.16, 0.05, 0.12]
         let durations: [TimeInterval] = [0.78, 0.68, 0.84, 0.72, 0.90, 0.74, 0.82, 0.70, 0.76]
+        let now = CACurrentMediaTime()
 
         for (i, bar) in barLayers.enumerated() {
-            let delay = i < delays.count ? delays[i] : 0
-            let dur = i < durations.count ? durations[i] : 0.75
-            let timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-                guard self != nil else { return }
-
-                let anim = CABasicAnimation(keyPath: "transform.scale.y")
-                anim.fromValue = 0.14
-                anim.toValue = 0.36
-                anim.duration = dur
-                anim.autoreverses = true
-                anim.repeatCount = .infinity
-                anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                bar.add(anim, forKey: "idle")
-            }
-            idleAnimationTimers.append(timer)
+            let anim = CABasicAnimation(keyPath: "transform.scale.y")
+            anim.fromValue = 0.14
+            anim.toValue = Self.idleTopScale
+            anim.duration = i < durations.count ? durations[i] : 0.75
+            anim.beginTime = now + (i < delays.count ? delays[i] : 0)
+            anim.autoreverses = true
+            anim.repeatCount = .infinity
+            anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            bar.add(anim, forKey: "idle")
         }
     }
 
     private func stopIdleAnimations() {
-        idleAnimationTimers.forEach { $0.invalidate() }
-        idleAnimationTimers.removeAll()
+        guard idleAnimating else { return }
+        idleAnimating = false
         barLayers.forEach { $0.removeAnimation(forKey: "idle") }
     }
 
