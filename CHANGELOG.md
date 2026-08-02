@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## v2.0.0 — 2026-08-02
+
+Transcription moved onto the machine. This is a different product from v1.x: there are no
+cloud speech providers, no API keys for transcription, and no network involved in hearing
+what you said.
 
 ### Changed — local-only transcription
 
@@ -12,15 +16,30 @@
 - **Optional cloud polishing**: the transcript — never the audio — can be sent to Groq to
   remove filler words, fix punctuation and resolve self-corrections. Off by one menu
   click, with a deterministic local tidy in its place.
-- **Microphone picker**, remembered by device UID so it survives reconnects.
 - **New icon and overlay**: one waveform mark across the app icon, the menu bar and the
   dictation overlay.
+- **First-run setup window** installs the speech engine, takes a Groq key, and shows the
+  state of the two system permissions. The installer ships inside the app bundle and
+  fetches `uv` and Python itself, so nothing has to be prepared by hand.
+- **Microphone picker**, remembered by device UID so it survives reconnects.
+- Key events are written to `~/.talktype/talktype.log`, since an app launched from Finder
+  has nowhere to print.
 
 ### Bug Fixes
 
 - **Crash on short recordings at non-integer sample rates**: `AudioRecorder.resample` divided by zero
   when the linear-interpolation path produced exactly one output sample, then trapped converting
   infinity to `Int`. Triggered by 44.1 kHz input hardware plus a very short capture.
+- **The sidecar exited the moment it started when run by hand.** Its parent-watchdog reads
+  stdin and exits on EOF; backgrounded from a shell, stdin closes immediately, which is
+  indistinguishable from the app dying. The watchdog is now opt-in and only the app asks
+  for it — the debugging command in the README could not have worked.
+- **Long dictations came back shorter than they went in.** The refinement prompt licensed
+  the model to reorder for readability, and it took that as permission to rewrite casual
+  speech into formal prose, losing about 30% of the content. The plausibility gate missed
+  it because its floor was a fixed fraction; deletions are now budgeted in characters.
+- **Settings were silently reset by any new config key.** `AppConfig` used synthesised
+  decoding, so a `config.json` written before a key existed failed to decode entirely.
 
 ### Code Quality
 

@@ -65,7 +65,11 @@ def watch_parent():
     The app hands us a pipe as stdin and holds the write end open. Any way the parent
     dies — clean quit, SIGTERM, SIGKILL, crash — the pipe closes and the read returns
     EOF. Relying on the app to terminate us instead would leak a multi-GB process every
-    time it did not exit cleanly. Harmless when stdin is a terminal (read just blocks).
+    time it did not exit cleanly.
+
+    Only the app asks for this, via --watch-parent. Run by hand and backgrounded, stdin
+    is closed immediately, which the watchdog cannot tell apart from the app dying — the
+    server would exit the moment it started.
     """
     try:
         sys.stdin.read()
@@ -206,6 +210,8 @@ def main():
                     help="ISO code to pin (e.g. zh, en). Omit to auto-detect.")
     ap.add_argument("--idle-unload", type=float, default=IDLE_UNLOAD_SECONDS,
                     help="seconds of inactivity before releasing weights; 0 disables")
+    ap.add_argument("--watch-parent", action="store_true",
+                    help="exit when stdin closes; the app passes this so we die with it")
     ap.add_argument("--tmp-dir", default=os.environ.get("TMPDIR", tempfile.gettempdir()))
     args = ap.parse_args()
 
@@ -222,7 +228,8 @@ def main():
     log(f"listening on 127.0.0.1:{args.port}  language={LANGUAGE or 'auto'}")
 
     threading.Thread(target=inference_worker, daemon=True).start()
-    threading.Thread(target=watch_parent, daemon=True).start()
+    if args.watch_parent:
+        threading.Thread(target=watch_parent, daemon=True).start()
 
     try:
         server.serve_forever()

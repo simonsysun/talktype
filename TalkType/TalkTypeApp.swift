@@ -78,7 +78,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         // Request accessibility
         let accessibilityGranted = TextInserter.accessibilityGranted(prompt: true)
         if !accessibilityGranted {
-            print("Accessibility permission not granted.")
+            Log.write("[perm] accessibility NOT granted")
             print("  Direct typing will not work until granted.")
             notifyInfo("Accessibility not granted. Transcription will copy to clipboard only.")
         }

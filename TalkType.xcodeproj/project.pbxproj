@@ -24,6 +24,7 @@
 		A10017 /* TextRefiner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10018; };
 		A10018 /* AudioDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10019; };
 		A10019 /* SetupWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10020; };
+		A10022 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10023; };
 		A10020 /* install.sh in Resources */ = {isa = PBXBuildFile; fileRef = B10021; };
 		A10021 /* server.py in Resources */ = {isa = PBXBuildFile; fileRef = B10022; };
 		A10015 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = PKG10002; };
@@ -90,6 +91,7 @@
 		B10018 /* TextRefiner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextRefiner.swift; sourceTree = "<group>"; };
 		B10019 /* AudioDevices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDevices.swift; sourceTree = "<group>"; };
 		B10020 /* SetupWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupWindow.swift; sourceTree = "<group>"; };
+		B10023 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		B10021 /* install.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; name = install.sh; path = ../asr/install.sh; sourceTree = "<group>"; };
 		B10022 /* server.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = server.py; path = ../asr/server.py; sourceTree = "<group>"; };
 		B20001 /* TalkTypeiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkTypeiOSApp.swift; sourceTree = "<group>"; };
@@ -158,6 +160,7 @@
 				B10018 /* TextRefiner.swift */,
 				B10019 /* AudioDevices.swift */,
 				B10020 /* SetupWindow.swift */,
+				B10023 /* Log.swift */,
 				B10021 /* install.sh */,
 				B10022 /* server.py */,
 				B10013 /* Info.plist */,
@@ -338,6 +341,7 @@
 				A10017 /* TextRefiner.swift in Sources */,
 				A10018 /* AudioDevices.swift in Sources */,
 				A10019 /* SetupWindow.swift in Sources */,
+				A10022 /* Log.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -460,7 +464,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TalkType/Info.plist;
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.talktype.local;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -480,7 +484,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TalkType/Info.plist;
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.talktype.local;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;

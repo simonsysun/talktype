@@ -293,7 +293,7 @@ final class DictationManager {
                 DispatchQueue.main.async {
                     // Stale check — must read sessionID on main thread
                     guard self.sessionID == session else {
-                        print("[insert] stale session (\(session) != \(self.sessionID)) — clipboard only")
+                        Log.write("[insert] stale session (\(session) != \(self.sessionID)) — clipboard only")
                         self.originApp = nil
                         TextInserter.copyToClipboard(processed)
                         return
@@ -312,10 +312,11 @@ final class DictationManager {
                     self.originApp = nil
 
                     // Insert text (with short delay if restoring focus)
+                    let restored = needsRestore
                     let insertBlock = { [weak self] in
                         guard let self = self else { return }
                         let hasAccessibility = TextInserter.accessibilityGranted(prompt: false)
-                        print("[insert] accessibility=\(hasAccessibility) chars=\(processed.count) target=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?")")
+                        Log.write("[insert] accessibility=\(hasAccessibility) chars=\(processed.count) target=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?") restored=\(restored)")
                         if hasAccessibility {
                             TextInserter.typeText(processed)
                         } else {
@@ -324,7 +325,7 @@ final class DictationManager {
                                 self.trayDelegate?.notifyInfo("Text copied to clipboard. Grant Accessibility for direct typing.")
                                 self.clipboardHintShown = true
                             }
-                            print("[clipboard] \(processed)")
+                            Log.write("[insert] clipboard fallback used")
                         }
                     }
 

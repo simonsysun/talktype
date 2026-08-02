@@ -26,6 +26,7 @@ let package = Package(
                 "TextRefiner.swift",
                 "AudioDevices.swift",
                 "SetupWindow.swift",
+                "Log.swift",
                 "TalkType.entitlements",
                 "TalkTypeApp.swift",
                 "TextInserter.swift",

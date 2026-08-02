@@ -73,7 +73,7 @@ final class SidecarManager {
 
         let proc = Process()
         proc.executableURL = Self.pythonPath
-        proc.arguments = [Self.serverPath.path, "--port", String(port)]
+        proc.arguments = [Self.serverPath.path, "--port", String(port), "--watch-parent"]
         proc.currentDirectoryURL = Self.asrDir
 
         var env = ProcessInfo.processInfo.environment
