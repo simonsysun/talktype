@@ -21,19 +21,14 @@ Last reviewed: 2026-08-02
 
 ## Now — macOS
 
-1. [ ] **Sign releases with a self-signed certificate.** Ad-hoc signing makes the designated
-       requirement a cdhash, so every update silently revokes the Accessibility grant while System
-       Settings still shows the app switched on. A self-signed certificate makes it
-       `identifier "..." and certificate leaf = H"..."`, which is stable across builds — verified
-       by signing two different versions with one certificate and diffing the requirement.
-       `scripts/make-signing-cert.sh` creates it; `scripts/build.sh` uses it when present and warns
-       when it is not. Gatekeeper still asks for right-click ▸ Open; that needs the paid programme.
-2. [ ] **Verify the grant actually survives an update** before relying on it: grant once, rebuild,
-       reinstall, and confirm the app does not log `[perm] accessibility NOT granted`.
-3. [ ] Deferred: overlay draggability. It is `ignoresMouseEvents = true` and fixed bottom-centre.
-       Simon asked for it to move to the bottom (done) but has not said whether he wants to drag it.
-4. [ ] Deferred: filler-word cleanup is now handled by the Groq polish and by
-       `PostProcessor.tidySpeech` as the offline floor. Revisit only if the local floor proves weak.
+1. [ ] Deferred: overlay draggability. It is `ignoresMouseEvents = true` and fixed
+       bottom-centre. Simon asked for it to move to the bottom (done) but has not said
+       whether he wants to drag it.
+2. [ ] Deferred: filler-word cleanup is handled by the Groq polish, with
+       `PostProcessor.tidySpeech` as the offline floor. Revisit only if the floor proves weak.
+3. [ ] The signing certificate is backed up to `~/Documents/TalkType-signing-backup/`, which
+       is not where a private key should live. Simon to move or delete it — losing it costs
+       one extra grant for everyone, once, and nothing else.
 
 ---
 
@@ -174,6 +169,15 @@ Nice-to-have once it runs at all:
 ## Done
 
 Shipped work is in `CHANGELOG.md` (macOS v1.0.0 → v2.0.1). iOS has shipped nothing yet.
+
+- 2026-08-02 — **Released v2.0.2, signed with a self-signed certificate.** Ad-hoc signing
+  makes the designated requirement a cdhash, so every update silently revoked the
+  Accessibility grant while System Settings still showed the app switched on. A certificate
+  makes it `identifier "..." and certificate root = H"..."`, identical across builds.
+  Verified end to end: granted build 202, installed build 203 (different cdhash, no new
+  grant), and the app launched without logging a missing permission. `scripts/build.sh`
+  signs when the certificate is present and warns when it is not, so a plain clone still
+  builds.
 
 - 2026-08-02 — **Pasting instead of typing.** Dictation ended on the clipboard needing a manual
   ⌘V, because the Accessibility grant had gone stale (ad-hoc cdhash changes every build) and
