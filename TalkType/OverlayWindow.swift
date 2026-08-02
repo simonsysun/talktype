@@ -119,12 +119,12 @@ final class OverlayHostingView: NSView {
     private static let barCount = 9
     private static let barWidth: CGFloat = 3.5
     private static let barGap: CGFloat = 3
-    private static let barHeight: CGFloat = 16
+    private static let barHeight: CGFloat = 14
     private static let sidePadding: CGFloat = 13
 
     private static let contentWidth =
         CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * barGap
-    static let panelSize = NSSize(width: contentWidth + sidePadding * 2, height: 30)
+    static let panelSize = NSSize(width: contentWidth + sidePadding * 2, height: 26)
 
     private let barMultipliers: [CGFloat]
 
@@ -139,14 +139,13 @@ final class OverlayHostingView: NSView {
     private var surfaceLevel: Float = 0
     private var idleAnimating = false
 
+    /// The same waveform the app icon draws. A symmetric taper made a tidy triangle out
+    /// of any steady sound, which looked drawn rather than heard; an uneven profile reads
+    /// as a voice even when it is barely moving.
+    private static let profile: [CGFloat] = [0.34, 0.52, 0.78, 1.00, 0.66, 0.90, 0.72, 0.46, 0.30]
+
     override init(frame: NSRect) {
-        let mid = CGFloat(Self.barCount - 1) / 2.0
-        barMultipliers = (0..<Self.barCount).map { i in
-            let dist = abs(CGFloat(i) - mid) / mid
-            // Shallow taper. A steeper one drew a perfect triangle whenever the audio
-            // was steady, which read as an icon rather than a level meter.
-            return 1.0 - dist * 0.28
-        }
+        barMultipliers = Self.profile
 
         blurView = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: frame.width, height: frame.height))
         blurView.material = .hudWindow
@@ -156,7 +155,7 @@ final class OverlayHostingView: NSView {
         blurView.layer?.cornerRadius = frame.height / 2
         blurView.layer?.masksToBounds = true
         blurView.layer?.borderWidth = 0.5
-        blurView.layer?.borderColor = NSColor(white: 1, alpha: 0.16).cgColor
+        blurView.layer?.borderColor = NSColor(white: 1, alpha: 0.10).cgColor
 
         super.init(frame: frame)
 
@@ -165,9 +164,9 @@ final class OverlayHostingView: NSView {
 
         // Subtle shadow matching macOS floating panels
         layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.18
+        layer?.shadowOpacity = 0.14
         layer?.shadowOffset = CGSize(width: 0, height: -3)
-        layer?.shadowRadius = 9
+        layer?.shadowRadius = 7
 
         addSubview(blurView)
         setupBars()
@@ -192,7 +191,7 @@ final class OverlayHostingView: NSView {
             bar.backgroundColor = NSColor(white: 1, alpha: 0.82).cgColor
             bar.opacity = 0.72
             bar.anchorPoint = CGPoint(x: 0.5, y: 0.5)
-            bar.transform = CATransform3DMakeScale(1, CGFloat(Self.idleTopScale), 1)
+            bar.transform = CATransform3DMakeScale(1, CGFloat(Self.idleTopScale) * barMultipliers[i], 1)
             blurView.layer?.addSublayer(bar)
             barLayers.append(bar)
         }
@@ -327,7 +326,7 @@ final class OverlayHostingView: NSView {
         }
 
         // Update border brightness with level
-        let border = 0.16 + surfaceLevel * 0.10
+        let border = 0.10 + surfaceLevel * 0.08
         blurView.layer?.borderColor = NSColor(white: 1, alpha: CGFloat(border)).cgColor
 
         CATransaction.commit()
@@ -347,9 +346,12 @@ final class OverlayHostingView: NSView {
         let now = CACurrentMediaTime()
 
         for (i, bar) in barLayers.enumerated() {
+            // Each bar breathes across its own share of the range. A single shared
+            // amplitude made the resting state a row of identical teeth.
+            let share = Float(barMultipliers[i])
             let anim = CABasicAnimation(keyPath: "transform.scale.y")
-            anim.fromValue = 0.14
-            anim.toValue = Self.idleTopScale
+            anim.fromValue = Self.idleTopScale * share * 0.34
+            anim.toValue = Self.idleTopScale * share
             anim.duration = i < durations.count ? durations[i] : 0.75
             anim.beginTime = now + (i < delays.count ? delays[i] : 0)
             anim.autoreverses = true
