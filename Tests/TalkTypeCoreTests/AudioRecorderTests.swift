@@ -47,12 +47,12 @@ final class AudioRecorderTests: XCTestCase {
         XCTAssertEqual(AudioRecorder.resample(audio, from: 48000, to: 16000), [0, 3, 6])
     }
 
-    func testNonIntegerRatioInterpolates() {
+    func testNonIntegerRatioInterpolates() throws {
         let audio = (0..<441).map { Float($0) }
         let out = AudioRecorder.resample(audio, from: 44100, to: 16000)
         XCTAssertEqual(out.count, 160)
         XCTAssertEqual(out.first, 0)
-        XCTAssertEqual(out.last, 440, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(out.last), 440, accuracy: 0.001)
     }
 
     /// Regression: a single output sample made the interpolation ratio divide by zero,
