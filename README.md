@@ -1,47 +1,159 @@
-# TalkType
+# TalkType — free, offline dictation for Mac
 
 ![TalkType logo](docs/assets/talktype-logo.png)
 
-macOS menu bar dictation. Press a hotkey, speak, and the text is typed into whatever app
-you were in. Your voice never leaves the machine.
+**Talk instead of typing.** Press a hotkey anywhere on your Mac, say what you mean, press it
+again — the words appear where your cursor is. In Slack, in Notes, in your email, in a
+terminal. Anywhere you can type, you can talk.
 
-## How it works
+Everything happens **on your own Mac**. Your voice is never uploaded, never stored, and
+never used to train anything. There is no account, no subscription, and no monthly fee.
+TalkType is free and open source.
+
+It was built by someone who thinks in two languages at once, so **mixing Chinese and
+English in one sentence just works** — 你不用切换语言，说到哪算哪。
 
 ```
-speak ──► local Qwen3-ASR ──► optional cloud polish ──► typed into the focused app
+press hotkey  ──►  talk  ──►  press again  ──►  text appears at your cursor
+                                                 about a second later
+```
+
+---
+
+## Download
+
+**[⬇ Download the latest version](https://github.com/simonsysun/talktype/releases/latest)** —
+unzip it, drag `TalkType.app` to your Applications folder, and open it.
+
+You'll need a **Mac with Apple silicon** (M1 or newer) running **macOS 13 or later**.
+
+The first time you open it, macOS will refuse, because TalkType is not signed with a paid
+Apple developer certificate. This is normal for free open-source apps. Right-click the app
+▸ **Open** ▸ **Open**, and macOS will remember.
+
+Then the setup window walks you through three things:
+
+1. **Speech engine** — click Install. It downloads about 4 GB once, then never again. This
+   is the part that turns your voice into words, and it lives on your Mac.
+2. **Permissions** — macOS asks for the microphone, and for permission to paste on your
+   behalf. Both are required; TalkType cannot grant them for you.
+3. **Cloud polish** *(optional, skip it if you like)* — see below.
+
+That's it. Press **⌘⇧Space** and start talking.
+
+---
+
+## Common questions
+
+**Is it really free?**
+Yes. No account, no subscription, no trial. The code is here and the licence is MIT.
+
+**Does my voice get sent anywhere?**
+No. Speech recognition runs on your Mac. With the optional polish turned off, TalkType makes
+no network requests at all — you can use it on a plane.
+
+**What is "cloud polish", then?**
+An optional extra that tidies the *text* — removing "um" and "uh", fixing punctuation, and
+cleaning up when you correct yourself mid-sentence. It sends the transcript, never the
+audio, to [Groq](https://console.groq.com/keys). It's off unless you add a key, and there's
+a local rule-based tidy that does a decent job without it.
+
+**Does it handle Chinese? Mixed Chinese and English?**
+Yes, and that was the point. It detects the language itself — you never tell it which you're
+about to speak, and you can switch mid-sentence.
+
+**How fast is it?**
+Roughly 0.3–0.9 seconds after you stop talking. Because nothing is uploaded, it beat all
+fourteen cloud transcription services measured against it on the same recordings.
+
+**Will it slow my Mac down?**
+The speech model uses about 4 GB of memory while it's loaded, and TalkType releases it after
+five minutes of not being used. Coming back takes a quarter of a second. Neither the app nor
+the engine grows with use.
+
+**It stopped pasting after I updated. What happened?**
+macOS ties the "allow this app to paste" permission to the exact version it was granted to,
+and TalkType isn't signed with a paid certificate, so a new version looks like a different
+app — even though System Settings still shows TalkType switched on. TalkType notices this
+and offers a **Fix This** button; click it, and switch TalkType on again when macOS asks.
+
+**Do I need to know anything technical?**
+No. Download, open, click Install, allow two permissions.
+
+---
+
+## How it compares
+
+| | TalkType | Apple Dictation | Wispr Flow / Superwhisper |
+|---|---|---|---|
+| Price | Free | Free | Subscription |
+| Runs offline | Yes | Partly | Usually cloud |
+| Voice leaves your Mac | Never | Sometimes | Usually |
+| Mixed Chinese + English | Yes | Poorly | Varies |
+| Removes filler words | Yes | No | Yes |
+| Custom vocabulary | Yes | Limited | Yes |
+| Open source | Yes | No | No |
+
+If you want something polished, supported, and with a company behind it, buy one of the paid
+apps — they're good. TalkType exists for people who want the same thing without a
+subscription, and without their voice going to a server.
+
+---
+
+## What it can do
+
+- Dictate anywhere with **⌘⇧Space** — change it to whatever you like
+- Pastes straight into whatever app you were in, and returns you there if you wandered off
+- Understands mixed Chinese and English without being told which is coming
+- **Custom vocabulary** for names, acronyms and product terms it keeps mishearing
+- Choose a specific microphone, or follow whatever the system is using
+- Stops on its own after a stretch of silence
+- Lives in the menu bar; no Dock icon, no window in your way
+
+---
+
+## Under the hood
+
+Speech recognition is [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR), running through
+[MLX](https://github.com/ml-explore/mlx) on your Mac's GPU. TalkType keeps it resident in a
+small Python helper process so that dictating doesn't wait for a model to load; the helper
+binds to loopback only, runs with `HF_HUB_OFFLINE=1`, and exits when TalkType does.
+
+```
+speak ──► local Qwen3-ASR ──► optional cloud polish ──► pasted into the focused app
           0.3–0.9 s            0.2 s
           on-device            transcript only, never audio
 ```
 
-Transcription runs entirely on your Mac through a small Python sidecar that keeps
-[Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR) resident in memory via MLX. Measured
-against fourteen cloud transcription services on real recordings, the local model was
-faster than all of them — there is no audio upload to wait for.
+**Privacy, precisely:**
 
-Polishing is optional and off-machine: the *transcript* — not the audio — goes to Groq,
-which removes filler words, fixes punctuation, and resolves self-corrections. Turn it off
-in the menu bar and everything stays local, with a deterministic rule-based tidy taking
-its place.
+| | Leaves your Mac? |
+|---|---|
+| Audio | Never |
+| Transcript | Only if you turned polish on, and only to Groq |
+| Custom vocabulary | Goes to the local model; never to Groq |
 
-## What it does
+**Vocabulary has limits.** Terms you add bias the model's spelling and are used for
+conservative correction afterwards — only distinctive terms (`API`, `GPT-4o`, `TalkType`)
+are auto-corrected, never ordinary words. `TestFlight` is recoverable from "test flight";
+`xAI` is not recoverable from "what's a ship", because those sound nearly identical and no
+amount of biasing fixes that.
 
-- Dictate with `Cmd+Shift+Space`, customisable
-- Types directly into the focused app; falls back to the clipboard without Accessibility
-- Returns focus to the app you started in, if you switched away mid-recording
-- Handles mixed Chinese and English without being told which is which
-- Custom vocabulary for names, acronyms and product terms
-- Pick a specific microphone, or follow the system default
-- Stops on its own after a stretch of silence
+**Menu bar:**
 
-## Requirements
+| Item | What it does |
+|---|---|
+| Speech engine | Whether the local model is loaded, still loading, or missing |
+| Polish with cloud AI | Toggles cloud polishing; off keeps everything on this machine |
+| Groq API Key… | Add, replace or remove the key (stored in your login keychain) |
+| Microphone | A specific input device, or Automatic |
+| Vocabulary | Words to bias transcription towards |
+| Change Hotkey… | Conflicts with system shortcuts are detected |
+| Setup… | The first-run window again, any time |
 
-- macOS 13+ on Apple silicon — MLX is Metal-only
-- Xcode, to build
-- [`uv`](https://github.com/astral-sh/uv) for the Python environment: `brew install uv`
-- ~4 GB of disk for the speech model
-- Optional: a [Groq API key](https://console.groq.com/keys) for polishing
+---
 
-## Install
+## Building from source
 
 ```bash
 git clone git@github.com:simonsysun/talktype.git
@@ -55,63 +167,12 @@ cp -R ~/Library/Developer/Xcode/DerivedData/TalkType-*/Build/Products/Release/Ta
 open /Applications/TalkType.app
 ```
 
-Then grant two permissions:
+`swift test` runs the logic tests without Xcode. `TODO.md` tracks what is done and what
+isn't.
 
-- **Microphone** — prompted on the first dictation
-- **Accessibility** — System Settings ▸ Privacy & Security ▸ Accessibility ▸ add
-  `/Applications/TalkType.app`. Without it, transcripts go to the clipboard instead of
-  being typed.
+An iOS keyboard extension exists in the repository but has never been compiled, and is
+parked.
 
-To enable polishing, use `Groq API Key...` in the menu bar. The key is validated against
-Groq before it is saved, and stored in your login keychain.
+## Licence
 
-## Menu bar
-
-| Item | What it does |
-|---|---|
-| Speech engine | Whether the local model is loaded, still loading, or missing |
-| Polish with cloud AI | Toggles cloud polishing; off keeps everything on this machine |
-| Groq API Key… | Add, replace or remove the key |
-| Microphone | A specific input device, or Automatic |
-| Vocabulary | Words to bias transcription towards |
-| Change Hotkey… | Conflicts with system shortcuts are detected |
-
-## Memory
-
-The speech model is about 4 GB while loaded and is released after five minutes of
-inactivity, dropping the sidecar to ~110 MB; the next dictation reloads it in ~0.25 s. The
-app itself sits at ~60 MB. Neither grows with use.
-
-## Vocabulary
-
-Terms you add are sent to the model as a spelling bias, and are also used for conservative
-post-processing — only distinctive terms (`API`, `GPT-4o`, `TalkType`) are auto-corrected,
-never ordinary words. There is no fuzzy matching and no automatic learning.
-
-Biasing has limits. `TestFlight` is recovered from "test flight"; `xAI` is not recovered
-from "what's a ship", because the two are acoustically near-identical and no amount of
-bias overcomes that.
-
-## Privacy
-
-| | Leaves the machine? |
-|---|---|
-| Audio | Never |
-| Transcript | Only if polishing is on, and only to Groq |
-| Vocabulary | Sent to the local model; not sent to Groq |
-
-The sidecar runs with `HF_HUB_OFFLINE=1` and binds to loopback only. With polishing off,
-TalkType makes no network requests at all.
-
-## Status
-
-A personal tool, built for one user, used daily. It is not signed or notarised, so on
-another Mac Gatekeeper will require right-click ▸ Open the first time. There is no
-installer and no release download — the steps above are the install.
-
-An iOS keyboard extension exists in the repository but has never been compiled. See
-`TODO.md` for what is done and what is not.
-
-## License
-
-MIT
+MIT — do what you like with it.

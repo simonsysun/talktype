@@ -79,8 +79,8 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         let accessibilityGranted = TextInserter.accessibilityGranted(prompt: true)
         if !accessibilityGranted {
             Log.write("[perm] accessibility NOT granted")
-            print("  Direct typing will not work until granted.")
-            notifyInfo("Accessibility not granted. Transcription will copy to clipboard only.")
+            print("  Pasting will not work until granted.")
+            notifyInfo("Accessibility not granted. Dictation will only copy to the clipboard.")
         }
 
         // Prepare audio engine
@@ -310,6 +310,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
     private func configureSetupWindow() {
         setupWindow.onEditKey = { [weak self] in self?.promptForGroqKey() }
+        setupWindow.onRepairAccessibility = { [weak self] in self?.promptAccessibilityRepair() }
         setupWindow.onEngineInstalled = { [weak self] in
             guard let self = self else { return }
             self.startSidecar()
@@ -678,7 +679,36 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     // MARK: - Menu actions
 
     @objc private func openAccessibility() {
-        TextInserter.openAccessibilitySettings()
+        if TextInserter.accessibilityGranted(prompt: false) {
+            TextInserter.openAccessibilitySettings()
+        } else {
+            promptAccessibilityRepair()
+        }
+    }
+
+    /// Shown when a paste has just failed, or from the menu when the grant is missing.
+    ///
+    /// Worth a modal rather than a notification: until this is fixed, every dictation ends
+    /// with the user pressing ⌘V themselves, and the cause is invisible — System Settings
+    /// keeps showing TalkType switched on.
+    func promptAccessibilityRepair() {
+        NSApp.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.messageText = "TalkType cannot paste yet"
+        alert.informativeText =
+            "Your text is on the clipboard, but macOS has not given TalkType permission to "
+            + "paste it for you.\n\n"
+            + "TalkType is not signed with a paid Apple certificate, so each new version "
+            + "arrives as a new app as far as macOS is concerned — even if System Settings "
+            + "still shows TalkType switched on.\n\n"
+            + "\"Fix This\" clears the stale entry and asks again. Then switch TalkType on "
+            + "under Privacy & Security → Accessibility."
+        alert.addButton(withTitle: "Fix This")
+        alert.addButton(withTitle: "Later")
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        TextInserter.repairAccessibilityGrant()
     }
 
     @objc private func quitApp() {
@@ -730,6 +760,10 @@ extension TalkTypeApp: TrayDelegate {
 
     func notifyInfo(_ message: String) {
         sendNotification(title: "TalkType", subtitle: "", body: message)
+    }
+
+    func accessibilityMissing() {
+        DispatchQueue.main.async { self.promptAccessibilityRepair() }
     }
 
     private func sendNotification(title: String, subtitle: String, body: String) {

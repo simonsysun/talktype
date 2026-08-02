@@ -1,32 +1,41 @@
 import Cocoa
 import ApplicationServices
 
-/// Types text into the focused app via CGEvent or copies to clipboard as fallback.
+/// Puts the transcript where the cursor is.
+///
+/// Insertion is a synthesized ⌘V rather than character-by-character key events. Unicode
+/// injection had to be chunked, and several apps — terminals and Electron ones especially —
+/// dropped or reordered the tail of a long paragraph. A paste is one event, arrives whole,
+/// and is instant regardless of length.
+///
+/// The transcript is deliberately left on the clipboard afterwards. Restoring the previous
+/// contents races the app that is receiving the paste, and if anything goes wrong the user
+/// is left with nothing; leaving it there means ⌘V always works as a manual fallback.
 enum TextInserter {
-    private static let chunkSize = 64
 
-    /// Type text into the focused application using CGEvent unicode injection.
-    /// Requires Accessibility permission.
-    static func typeText(_ text: String) {
-        guard !text.isEmpty else { return }
+    /// Paste `text` into the focused app. Returns false when Accessibility is not granted,
+    /// in which case the text is on the clipboard and the caller should say so.
+    @discardableResult
+    static func insert(_ text: String) -> Bool {
+        guard !text.isEmpty else { return false }
+        copyToClipboard(text)
 
-        // Split into chunks of up to chunkSize Characters (not UTF-16 units)
-        // to avoid breaking surrogate pairs at chunk boundaries.
-        for chunk in text.characterChunks(maxSize: chunkSize) {
-            let utf16 = Array(chunk.utf16)
+        guard accessibilityGranted(prompt: false) else { return false }
 
-            utf16.withUnsafeBufferPointer { buffer in
-                guard let baseAddress = buffer.baseAddress else { return }
-                let down = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true)
-                let up = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false)
-                down?.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: baseAddress)
-                up?.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: baseAddress)
-                down?.post(tap: .cghidEventTap)
-                up?.post(tap: .cghidEventTap)
-            }
+        // A private source so the user's real modifier state cannot bleed into the event —
+        // the dictation hotkey itself carries ⌘⇧, and a stray Shift turns ⌘V into ⌘⇧V.
+        let source = CGEventSource(stateID: .privateState)
+        let vKey: CGKeyCode = 9   // ANSI "v"; ⌘V is bound to the physical key on every layout
 
-            Thread.sleep(forTimeInterval: 0.002)
+        guard let down = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true),
+              let up = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false) else {
+            return false
         }
+        down.flags = .maskCommand
+        up.flags = .maskCommand
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
+        return true
     }
 
     /// Copy text to the system clipboard.
@@ -42,25 +51,31 @@ enum TextInserter {
         return AXIsProcessTrustedWithOptions(options)
     }
 
+    /// Forget any existing Accessibility decision for TalkType, then ask again.
+    ///
+    /// This exists because TalkType is not signed with a paid Developer ID. macOS ties the
+    /// grant to the exact signature of the build it was given to, so installing a new
+    /// version silently invalidates it — while still showing TalkType switched on in
+    /// System Settings. Telling someone to enable a switch that is already enabled is no
+    /// help, so clear the stale record and let macOS ask cleanly.
+    static func repairAccessibilityGrant() {
+        let bundleID = Bundle.main.bundleIdentifier ?? AppIdentity.bundleID
+        let reset = Process()
+        reset.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        reset.arguments = ["reset", "Accessibility", bundleID]
+        try? reset.run()
+        reset.waitUntilExit()
+        Log.write("[perm] accessibility record reset (exit \(reset.terminationStatus))")
+
+        // Re-ask. macOS shows its own dialog, and the app reappears in the list unchecked.
+        _ = accessibilityGranted(prompt: true)
+        openAccessibilitySettings()
+    }
+
     /// Open the Accessibility section of System Settings.
     static func openAccessibilitySettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
-    }
-}
-
-private extension String {
-    /// Split into substrings of at most `maxSize` Characters.
-    /// Never breaks surrogate pairs since it advances by Character.
-    func characterChunks(maxSize: Int) -> [Substring] {
-        var chunks: [Substring] = []
-        var start = startIndex
-        while start < endIndex {
-            let end = index(start, offsetBy: maxSize, limitedBy: endIndex) ?? endIndex
-            chunks.append(self[start..<end])
-            start = end
-        }
-        return chunks
     }
 }

@@ -24,7 +24,6 @@ let package = Package(
                 "OverlayWindow.swift",
                 "SidecarManager.swift",
                 "TextRefiner.swift",
-                "AudioDevices.swift",
                 "SetupWindow.swift",
                 "Log.swift",
                 "TalkType.entitlements",
@@ -33,6 +32,7 @@ let package = Package(
             ],
             sources: [
                 "AppIdentity.swift",
+                "AudioDevices.swift",
                 "AudioRecorder.swift",
                 "Config.swift",
                 "PostProcessor.swift",

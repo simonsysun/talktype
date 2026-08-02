@@ -33,6 +33,8 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     var onEngineInstalled: (() -> Void)?
     /// Called when the user asks to enter a Groq key; the app owns that dialog already.
     var onEditKey: (() -> Void)?
+    /// Called to clear a stale Accessibility grant and ask again; the app owns that dialog.
+    var onRepairAccessibility: (() -> Void)?
 
     // MARK: - Presentation
 
@@ -221,9 +223,11 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         micButton.isHidden = mic
 
         let ax = TextInserter.accessibilityGranted(prompt: false)
-        axStatus.stringValue = ax ? "Accessibility: granted" : "Accessibility: not granted"
+        axStatus.stringValue = ax
+            ? "Accessibility: granted"
+            : "Accessibility: not granted — TalkType can only copy, not paste"
         axStatus.textColor = ax ? .systemGreen : .systemOrange
-        axButton.title = "Open Settings"
+        axButton.title = "Fix"
         axButton.isHidden = ax
     }
 
@@ -233,9 +237,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     @objc private func openMicSettings() {
         open("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
     }
-    @objc private func openAXSettings() {
-        open("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
-    }
+    @objc private func openAXSettings() { onRepairAccessibility?() }
     private func open(_ urlString: String) {
         if let url = URL(string: urlString) { NSWorkspace.shared.open(url) }
     }

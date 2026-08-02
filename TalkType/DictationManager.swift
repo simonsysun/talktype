@@ -315,17 +315,17 @@ final class DictationManager {
                     let restored = needsRestore
                     let insertBlock = { [weak self] in
                         guard let self = self else { return }
-                        let hasAccessibility = TextInserter.accessibilityGranted(prompt: false)
-                        Log.write("[insert] accessibility=\(hasAccessibility) chars=\(processed.count) target=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?") restored=\(restored)")
-                        if hasAccessibility {
-                            TextInserter.typeText(processed)
-                        } else {
-                            TextInserter.copyToClipboard(processed)
-                            if !self.clipboardHintShown {
-                                self.trayDelegate?.notifyInfo("Text copied to clipboard. Grant Accessibility for direct typing.")
-                                self.clipboardHintShown = true
-                            }
-                            Log.write("[insert] clipboard fallback used")
+                        let pasted = TextInserter.insert(processed)
+                        Log.write("[insert] pasted=\(pasted) chars=\(processed.count) target=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?") restored=\(restored)")
+                        guard !pasted else { return }
+
+                        // The only reason a paste fails is a missing Accessibility grant,
+                        // and it is worth interrupting for: without it every dictation
+                        // silently ends in a manual ⌘V.
+                        Log.write("[insert] clipboard only — accessibility not granted")
+                        if !self.clipboardHintShown {
+                            self.clipboardHintShown = true
+                            self.trayDelegate?.accessibilityMissing()
                         }
                     }
 
@@ -411,4 +411,6 @@ protocol TrayDelegate: AnyObject {
     func setProcessing(_ active: Bool)
     func notifyError(_ message: String)
     func notifyInfo(_ message: String)
+    /// Pasting failed for want of an Accessibility grant; the transcript is on the clipboard.
+    func accessibilityMissing()
 }
