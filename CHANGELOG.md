@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- **Crash on short recordings at non-integer sample rates**: `AudioRecorder.resample` divided by zero
+  when the linear-interpolation path produced exactly one output sample, then trapped converting
+  infinity to `Int`. Triggered by 44.1 kHz input hardware plus a very short capture.
+
+### Code Quality
+
+- `Transcriber.transcribe` and `transcribeAsync` no longer duplicate multipart body construction —
+  both go through one `buildRequest` and one `parseResponse`, so the sync (macOS) and async (iOS)
+  paths can't drift apart. A JSON response without a `text` field now yields an empty string instead
+  of dumping raw JSON into the document.
+- WAV encoding extracted to `WAVEncoder` with a single bulk PCM copy. Output is byte-identical.
+- Added a `swift test` suite covering WAV encoding, post-processing, vocabulary storage, RMS,
+  resampling, and response parsing.
+- Removed the unused `dictation_hotkey` config field; the hotkey is owned by KeyboardShortcuts.
+
 ## v1.2.0 — 2026-04-07
 
 ### New Features

@@ -1,7 +1,7 @@
 import Foundation
 
 struct AppConfig: Codable {
-    var dictationHotkey: String = "cmd+shift+space"
+    // The hotkey itself is owned by the KeyboardShortcuts library (UserDefaults), not this file.
     var sampleRate: Int = 16000
     var launchAtLogin: Bool = false
     var asrProvider: String = "openai"
@@ -13,7 +13,6 @@ struct AppConfig: Codable {
     var minTranscribeRms: Double = 0.012
 
     enum CodingKeys: String, CodingKey {
-        case dictationHotkey = "dictation_hotkey"
         case sampleRate = "sample_rate"
         case launchAtLogin = "launch_at_login"
         case asrProvider = "asr_provider"

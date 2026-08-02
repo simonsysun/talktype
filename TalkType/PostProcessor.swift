@@ -36,7 +36,9 @@ enum PostProcessor {
     }
 
     /// RMS threshold below which hallucination detection is active.
-    /// Must be higher than Config's minTranscribeRms (0.008) to cover the gap.
+    /// Must stay above `AppConfig.minTranscribeRms` — below that cutoff the audio is
+    /// discarded before transcription, so this check only earns its keep in the band
+    /// between the two. Asserted in PostProcessorTests.
     static let hallucinationRmsThreshold: Float = 0.015
 
     /// Check if transcription is likely a hallucination of vocabulary words on near-silent audio.

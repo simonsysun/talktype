@@ -98,7 +98,7 @@ final class AudioRecorder {
         }
 
         let audio = chunks.flatMap { $0 }
-        return resample(audio)
+        return Self.resample(audio, from: hwSampleRate, to: targetSampleRate)
     }
 
     func shutdown() {
@@ -143,7 +143,7 @@ final class AudioRecorder {
         return sqrtf(sumSquares / Float(samples.count))
     }
 
-    private func resample(_ audio: [Float]) -> [Float] {
+    static func resample(_ audio: [Float], from hwSampleRate: Int, to targetSampleRate: Int) -> [Float] {
         guard !audio.isEmpty, hwSampleRate != targetSampleRate else { return audio }
 
         if hwSampleRate % targetSampleRate == 0 {
@@ -155,6 +155,10 @@ final class AudioRecorder {
         // Linear interpolation for non-integer ratios
         let targetCount = Int(Double(audio.count) * Double(targetSampleRate) / Double(hwSampleRate))
         guard targetCount > 0 else { return [] }
+        // A single output sample would make the ratio below divide by zero, producing
+        // infinity and then trapping in Int(srcIdx). Reachable with a 44.1 kHz input
+        // and a few captured samples.
+        guard targetCount > 1 else { return [audio[0]] }
         var result = [Float](repeating: 0, count: targetCount)
         let ratio = Double(audio.count - 1) / Double(targetCount - 1)
         for i in 0..<targetCount {

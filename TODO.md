@@ -33,6 +33,10 @@ Last reviewed: 2026-08-01
 
 ## Now — get iOS to build
 
+0. [ ] **Run `swift test` once Xcode is installed.** The suite in `Tests/TalkTypeCoreTests` is
+       written but has never executed: XCTest ships with Xcode, not with Command Line Tools. The
+       same 85 assertions were verified today through a throwaway harness, so this is a format
+       check, not a logic check.
 1. [ ] Open `TalkType.xcodeproj` in Xcode, build all 3 targets, fix whatever falls out.
        Expect real compile errors: the shared files are compiled into iOS targets by membership only,
        never type-checked against the iOS SDK.
@@ -71,17 +75,14 @@ Ordered by "will it break on first use", highest first.
 9. [ ] **Silence auto-stop on iOS.** `AppConfig` carries `silenceAutoStopEnabled/Seconds/RmsThreshold`
        and `PLAN.md` said reuse it; the keyboard only has the hard 120 s timer. macOS logic lives in
        `DictationManager`.
-10. [ ] **Speed up `buildWAV`.** `Transcriber.buildWAV` appends sample-by-sample
-       (`Transcriber.swift:306`) — ~1.9M two-byte appends for a long recording. Bulk-copy the Int16
-       buffer in one shot. Helps macOS too.
-11. [ ] **Make `validateKey` async.** It blocks on `DispatchSemaphore` and `SettingsView.saveAPIKey`
+10. [ ] **Make `validateKey` async.** It blocks on `DispatchSemaphore` and `SettingsView.saveAPIKey`
        calls it from `Task.detached` — that still occupies a cooperative-pool thread, and the comment
        at `SettingsView.swift:158` claiming otherwise is wrong. `transcribeAsync` already shows the
        right shape.
-12. [ ] **Surface keychain failures.** `KeyStorage.storeKey` swallows the `OSStatus`; the UI only says
+11. [ ] **Surface keychain failures.** `KeyStorage.storeKey` swallows the `OSStatus`; the UI only says
        "Failed to save API key to keychain", which is useless when the real cause is a missing
        entitlement. Return/log the status.
-13. [ ] Decide Groq on iOS. `SettingsView` hardcodes `provider = .openai` while the keyboard reads
+12. [ ] Decide Groq on iOS. `SettingsView` hardcodes `provider = .openai` while the keyboard reads
        `config.asrProvider` — so the config knob exists but nothing can set it. Either expose the
        picker (Groq's free tier is genuinely attractive on mobile) or remove the dead knob.
 
@@ -89,10 +90,6 @@ Ordered by "will it break on first use", highest first.
 
 ## Later
 
-- [ ] **Tests.** There are none. `PostProcessor` (hallucination detection, the CJK-concatenation walk)
-      and `AudioRecorder.resample` are pure functions with real edge cases. A test target makes them
-      verifiable without a device — and `swiftc -typecheck` on the shared files already passes today,
-      so a SwiftPM test package is cheap.
 - [ ] Undo affordance on the keyboard — a mis-transcription currently requires switching keyboards to
       fix. A delete key, or "undo last insert".
 - [ ] Don't lose text when the keyboard is dismissed mid-transcription
@@ -100,12 +97,7 @@ Ordered by "will it break on first use", highest first.
 - [ ] Deprecation cleanup once the deployment target allows: `AVAudioSession.requestRecordPermission`
       → `AVAudioApplication` (iOS 17), `traitCollectionDidChange` → trait registration (iOS 17).
       Current override is also a no-op — it sets `shadowColor` to black in both light and dark.
-- [ ] Version hygiene: all targets say `MARKETING_VERSION = 1.0.0` while `CHANGELOG.md` is at v1.2.0.
-- [ ] `.gitignore` still ignores `swift/` from the Python-era layout; add `DerivedData/`,
-      `*.xcuserstate`.
 - [ ] README covers macOS only — add the iOS keyboard once it works.
-- [ ] `PostProcessor.swift:39` comment says `minTranscribeRms` is 0.008; it's 0.012 in `Config.swift`.
-      The invariant still holds (0.015 > 0.012), only the comment is stale.
 
 ---
 
@@ -114,3 +106,17 @@ Ordered by "will it break on first use", highest first.
 Shipped work is in `CHANGELOG.md` (macOS v1.0.0 → v1.2.0). iOS has shipped nothing yet.
 
 - 2026-08-01 — Full project audit; this TODO created as the live tracker.
+- 2026-08-01 — **Fixed a crash in `AudioRecorder.resample`.** When the interpolation path produced
+  exactly one output sample, the ratio divided by zero and `Int(infinity)` trapped — a hard crash,
+  not an exception. Needs a non-integer rate (44.1 kHz hardware → 16 kHz) plus a very short capture.
+  Rare, but it would kill the menu bar app outright and make the iOS keyboard vanish mid-use.
+- 2026-08-01 — Added `Package.swift` + `Tests/TalkTypeCoreTests` (94 assertions over WAV encoding,
+  post-processing, vocabulary storage, RMS, resampling, response parsing). Verification only —
+  the shipping products still build from `TalkType.xcodeproj`.
+- 2026-08-01 — Deduplicated `Transcriber`: `transcribe` and `transcribeAsync` shared ~40 copy-pasted
+  lines of multipart body construction. Now one `buildRequest` and one `parseResponse`; WAV encoding
+  moved to a testable `WAVEncoder` (byte-identical output, ~20x faster but that's only ~10 ms on a
+  30 s clip — the win here is that the two paths can no longer drift).
+- 2026-08-01 — Hygiene: dropped the dead `dictation_hotkey` config field (the hotkey lives in
+  KeyboardShortcuts' UserDefaults), macOS `MARKETING_VERSION` 1.0.0 → 1.2.0 to match the CHANGELOG,
+  `.gitignore` cleared of Python-era entries.
