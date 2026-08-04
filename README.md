@@ -4,15 +4,15 @@
 
 ![TalkType logo](docs/assets/talktype-logo.png)
 
-**Talk instead of typing.** Press a hotkey anywhere on your Mac, say what you mean, release —
-the words land where your cursor is. Slack, Notes, email, terminal… anywhere you can type,
-you can talk.
+**Talk instead of typing.** Press a hotkey anywhere on your Mac and start talking; press it
+again (or pause) — the words land where your cursor is. Slack, Notes, email, terminal…
+anywhere you can type, you can talk.
 
 Built by someone who thinks in two languages at once, so **mixing Chinese and English in one
 sentence just works** — 你不用切换语言，说到哪算哪.
 
 ```
-press hotkey → talk → release → text appears at your cursor
+press hotkey → talk → press again / pause → text appears at your cursor
 ```
 
 ---
@@ -35,7 +35,7 @@ plainly instead of failing silently.
 
 | What | Leaves your Mac? |
 |---|---|
-| Audio, cloud engine | Yes — to OpenRouter. Not stored, not used for training |
+| Audio, cloud engine | Yes — to OpenRouter, subject to its data policy |
 | Audio, local engine | No |
 | Transcript → polish (optional) | Text only, to Groq — never audio |
 
@@ -81,6 +81,8 @@ Press **⌘⇧Space** and start talking.
 - **Local engine** — install or reinstall it from Setup; the red "Delete local engine…" button
   frees the ~4 GB when you no longer need offline dictation.
 - **Keys** — Setup lets you add, replace, or remove them; they live in your login Keychain.
+- **Clipboard** — every transcript is also left on your clipboard, so ⌘V always works as a
+  manual fallback.
 - **Offline** — TalkType switches to the local engine on its own and notifies you at the switch.
   With no local engine and no network, it tells you to install the local engine or get online.
 

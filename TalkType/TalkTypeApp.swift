@@ -322,7 +322,12 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
     // MARK: - Setup
 
-    @objc private func openSetup() { setupWindow.show() }
+    @objc private func openSetup() {
+        // Refresh what the window shows before opening — the engine/key/mic can have
+        // changed from the menu since the window was last configured.
+        setupWindow.config = config
+        setupWindow.show()
+    }
 
     private func configureSetupWindow() {
         setupWindow.config = config
@@ -357,6 +362,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
                 self.refreshEngineStatus()
                 return
             }
+            self.dictationManager.clearFallbackState()
             // Deleting the local engine while it is the chosen engine leaves dictation
             // with no working path — move to cloud, the default.
             if self.config.asrEngine == .local {

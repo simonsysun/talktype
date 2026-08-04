@@ -45,7 +45,10 @@ final class Transcriber {
             }
         }
         task.resume()
-        semaphore.wait()
+        if semaphore.wait(timeout: .now() + timeout + 1) != .success {
+            task.cancel()
+            throw TranscriberError.timedOut
+        }
 
         if let error = requestError { throw error }
         return result
@@ -164,6 +167,7 @@ enum TranscriberError: LocalizedError, Equatable {
     case sidecarLoading
     case emptyResponse
     case sidecarError(statusCode: Int, body: String)
+    case timedOut
 
     var errorDescription: String? {
         switch self {
@@ -175,6 +179,8 @@ enum TranscriberError: LocalizedError, Equatable {
             return "Local speech engine returned no text."
         case .sidecarError(let code, let body):
             return "Local speech engine error (\(code)): \(body)"
+        case .timedOut:
+            return "Local speech engine timed out."
         }
     }
 
@@ -184,6 +190,7 @@ enum TranscriberError: LocalizedError, Equatable {
         case (.sidecarLoading, .sidecarLoading): return true
         case (.emptyResponse, .emptyResponse): return true
         case (.sidecarError(let a, _), .sidecarError(let b, _)): return a == b
+        case (.timedOut, .timedOut): return true
         default: return false
         }
     }

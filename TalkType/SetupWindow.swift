@@ -128,6 +128,10 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         engineStatus.setContentHuggingPriority(.required, for: .horizontal)
         root.addArrangedSubview(engineRow)
 
+        engineButton.bezelStyle = .rounded
+        engineButton.target = self
+        engineButton.action = #selector(installEngine)
+
         // Delete lives on its own row so the engine row never crowds on narrow screens.
         deleteEngineButton.title = "Delete local engine…"
         deleteEngineButton.bezelStyle = .rounded
@@ -479,7 +483,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
                 self.keyButton.isEnabled = true
                 self.keyButton.title = "Save"
                 guard valid else {
-                    self.cloudStatus.stringValue = "That key was rejected by \(self.config.cloudProvider.profile.name)."
+                    self.cloudStatus.stringValue = "Could not verify the key — check the key and your network."
                     self.cloudStatus.textColor = .systemOrange
                     return
                 }

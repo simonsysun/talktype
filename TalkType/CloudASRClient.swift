@@ -299,6 +299,7 @@ enum CloudASRError: LocalizedError {
         case .badStatus(let code, _):
             switch code {
             case 401, 403: return .invalidKey
+            case 402: return .limitOrRate
             case 408: return .timeout
             case 429: return .limitOrRate
             default: return .serviceError

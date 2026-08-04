@@ -126,15 +126,26 @@ final class DictationManager {
     // MARK: - Config
 
     func reloadConfig(_ newConfig: AppConfig) {
+        // Fallback state only dies when the engine choice itself changes. A microphone or
+        // refine tweak mid-fallback must not orphan a running sidecar — the menu would
+        // say Cloud while the ~4 GB process kept running.
+        if newConfig.asrEngine != config.asrEngine {
+            effectiveEngine = nil
+            fallbackInProgress = false
+        }
         config = newConfig
-        effectiveEngine = nil
-        fallbackInProgress = false
         transcriberLock.lock()
         transcriber.timeout = newConfig.asrTimeoutSeconds
         cloudASR = Self.makeCloudClient(newConfig)
         refiner = TextRefiner(model: newConfig.refineModel, timeout: newConfig.refineTimeoutSeconds)
         transcriberLock.unlock()
         applyInputSelection()
+    }
+
+    /// Called after the local engine is deleted: the fallback can no longer use it.
+    func clearFallbackState() {
+        effectiveEngine = nil
+        fallbackInProgress = false
     }
 
     private static func makeCloudClient(_ config: AppConfig) -> CloudASRClient? {
@@ -164,15 +175,17 @@ final class DictationManager {
     /// Cloud-first with automatic local fallback. Any cloud failure — no key, offline,
     /// invalid key, quota, timeout, service error — falls back to the local engine when
     /// it is installed, so a dictation only fails when neither path can work.
-    private func transcribeWithFallback(audio: [Float], hints: [String]?) throws -> String {
+    private func transcribeWithFallback(audio: [Float], hints: [String]?, config: AppConfig,
+                                        cloud: CloudASRClient?, local: Transcriber) throws -> String {
         let policy = FallbackPolicy(localInstalled: Self.localEngineInstalled)
 
         // No cloud client means no API key stored. With the local engine installed the
         // dictation still works; otherwise the user gets the exact fix to make.
-        guard let cloud = cloudASR else {
+        guard let cloud = cloud else {
             if Self.localEngineInstalled {
                 return try transcribeLocally(audio: audio, hints: hints,
-                                             reason: "没有云端 key，已用本地。去设置添加 key。")
+                                             reason: "没有云端 key，已用本地。去设置添加 key。",
+                                             config: config, local: local)
             }
             throw UserFacingError(message: "云端语音引擎没有 API key。去设置里添加 OpenRouter key。")
         }
@@ -194,20 +207,24 @@ final class DictationManager {
                 } else {
                     failure = .unknown
                 }
-                return try handleCloudFailure(failure, policy: policy, audio: audio, hints: hints)
+                return try handleCloudFailure(failure, policy: policy, audio: audio, hints: hints,
+                                              config: config, local: local)
             }
         case .local(let reason):
-            return try transcribeLocally(audio: audio, hints: hints, reason: reason)
+            return try transcribeLocally(audio: audio, hints: hints, reason: reason,
+                                         config: config, local: local)
         case .blocked(let message):
             throw UserFacingError(message: message)
         }
     }
 
     private func handleCloudFailure(_ failure: CloudFailure, policy: FallbackPolicy,
-                                    audio: [Float], hints: [String]?) throws -> String {
+                                    audio: [Float], hints: [String]?, config: AppConfig,
+                                    local: Transcriber) throws -> String {
         switch policy.fallbackPlan(failure: failure) {
         case .local(let reason):
-            return try transcribeLocally(audio: audio, hints: hints, reason: reason)
+            return try transcribeLocally(audio: audio, hints: hints, reason: reason,
+                                         config: config, local: local)
         case .blocked(let message):
             throw UserFacingError(message: message)
         case .cloud:
@@ -217,10 +234,11 @@ final class DictationManager {
 
     /// Run the local engine, starting the sidecar on demand. The sidecar stays alive
     /// while the fallback is in effect; `markCloudRecovered` stops it again.
-    private func transcribeLocally(audio: [Float], hints: [String]?, reason: String) throws -> String {
-        try ensureLocalSidecar()
-        let text = try transcriber.transcribe(audio: audio, sampleRate: config.sampleRate,
-                                              vocabularyHints: hints)
+    private func transcribeLocally(audio: [Float], hints: [String]?, reason: String,
+                                   config: AppConfig, local: Transcriber) throws -> String {
+        try ensureLocalSidecar(port: config.asrPort, timeout: config.asrTimeoutSeconds)
+        let text = try local.transcribe(audio: audio, sampleRate: config.sampleRate,
+                                        vocabularyHints: hints)
         if effectiveEngine != .local {
             effectiveEngine = .local
             fallbackInProgress = true
@@ -230,14 +248,28 @@ final class DictationManager {
         return text
     }
 
-    private func ensureLocalSidecar() throws {
-        guard !sidecar.isRunning else { return }
-        let probe = Transcriber(port: config.asrPort)
-        let alreadyServing = probe.health() != .unreachable
-        let state = sidecar.start(port: config.asrPort, alreadyServing: alreadyServing)
-        if case .missing(let what) = state {
-            throw UserFacingError(message: "本地引擎不可用：\(what)。联网，或在设置里安装本地引擎。")
+    /// Start the sidecar if needed, then wait for /health to report ready. A cold start
+    /// binds the socket before loading the ~4 GB of weights, so an immediate /transcribe
+    /// would hit a 503 and the dictation would be dropped — the audio is already in
+    /// memory, so waiting here is free.
+    private func ensureLocalSidecar(port: Int, timeout: TimeInterval) throws {
+        if !sidecar.isRunning {
+            let probe = Transcriber(port: port)
+            let alreadyServing = probe.health() != .unreachable
+            let state = sidecar.start(port: port, alreadyServing: alreadyServing)
+            if case .missing(let what) = state {
+                throw UserFacingError(message: "本地引擎不可用：\(what)。联网，或在设置里安装本地引擎。")
+            }
         }
+        let probe = Transcriber(port: port)
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            // `== .ready` would be ambiguous — SidecarHealth.ready and
+            // SidecarManager.InstallState.ready share the case name.
+            if case .ready = probe.health() { return }
+            usleep(250_000)
+        }
+        throw UserFacingError(message: "本地引擎启动超时。稍后再试，或到设置里查看状态。")
     }
 
     /// A cloud dictation succeeded — if the local fallback was active, free the ~4 GB
@@ -417,24 +449,23 @@ final class DictationManager {
                 } else {
                     hints = self.vocabularyStore.getActiveVocabulary()
                 }
+                // Snapshot the pipeline under the lock, then transcribe outside it: a long
+                // cloud request (up to 60 s without local) must not freeze menu actions
+                // that reload the config.
                 self.transcriberLock.lock()
-                let text: String
-                if self.config.asrEngine == .cloud {
-                    do {
-                        text = try self.transcribeWithFallback(audio: audio, hints: hints)
-                    } catch {
-                        self.transcriberLock.unlock()
-                        throw error
-                    }
-                } else {
-                    do {
-                        text = try self.transcriber.transcribe(audio: audio, sampleRate: self.config.sampleRate, vocabularyHints: hints)
-                    } catch {
-                        self.transcriberLock.unlock()
-                        throw error
-                    }
-                }
+                let cfg = self.config
+                let localTranscriber = self.transcriber
+                let cloud = self.cloudASR
                 self.transcriberLock.unlock()
+
+                let text: String
+                if cfg.asrEngine == .cloud {
+                    text = try self.transcribeWithFallback(
+                        audio: audio, hints: hints, config: cfg, cloud: cloud, local: localTranscriber)
+                } else {
+                    text = try localTranscriber.transcribe(
+                        audio: audio, sampleRate: cfg.sampleRate, vocabularyHints: hints)
+                }
 
                 let vocabEntries = self.vocabularyStore.listEntries()
 

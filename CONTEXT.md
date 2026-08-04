@@ -6,7 +6,7 @@ your cursor. Chinese and English can be mixed inside one sentence.
 ## Language
 
 **Dictation**:
-One full cycle: press hotkey, speak, release, and text lands at the cursor.
+One full cycle: press hotkey to start, speak, press again (or pause), and text lands at the cursor.
 _Avoid_: session, recording (recording is only the capture phase)
 
 **Speech Engine**:

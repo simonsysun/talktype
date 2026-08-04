@@ -134,6 +134,7 @@ final class CloudASRClientTests: XCTestCase {
     }
 
     func testClassificationQuotaOrRateLimit() {
+        XCTAssertEqual(CloudASRError.badStatus(statusCode: 402, body: "").classification, .limitOrRate)
         XCTAssertEqual(CloudASRError.badStatus(statusCode: 429, body: "").classification, .limitOrRate)
     }
 

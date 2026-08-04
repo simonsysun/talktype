@@ -63,10 +63,19 @@ final class SidecarManager {
             print("[sidecar] an ASR server is already serving on \(port) — using it")
             return .ready
         }
-        if isRunning { return .ready }
+
+        // Check-and-launch under one lock acquisition so two threads (the fallback path
+        // and a menu engine switch) cannot both pass the running check and spawn twice.
+        lock.lock()
+        let alreadyRunning = process?.isRunning ?? false
+        guard !alreadyRunning else {
+            lock.unlock()
+            return .ready
+        }
 
         let state = Self.installState()
         guard state == .ready else {
+            lock.unlock()
             print("[sidecar] not installed: \(state.problem ?? "unknown")")
             return state
         }
@@ -103,13 +112,13 @@ final class SidecarManager {
 
         do {
             try proc.run()
-            lock.lock()
             process = proc
             lifelinePipe = lifeline
             lock.unlock()
             print("[sidecar] started pid \(proc.processIdentifier) on port \(port)")
             return .ready
         } catch {
+            lock.unlock()
             print("[sidecar] failed to start: \(error)")
             return .missing("could not launch: \(error.localizedDescription)")
         }
