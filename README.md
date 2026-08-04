@@ -37,10 +37,9 @@ plainly instead of failing silently.
 |---|---|
 | Audio, cloud engine | Yes — to OpenRouter, subject to its data policy |
 | Audio, local engine | No |
-| Transcript → polish (optional) | Text only, to Groq — never audio |
 
-No account, no telemetry, no subscription. The only credentials are your own API keys, stored
-in the macOS Keychain.
+No account, no telemetry, no subscription. The only credential is your OpenRouter API key,
+stored in the macOS Keychain.
 
 ---
 
@@ -53,15 +52,11 @@ in the macOS Keychain.
    signed with a paid certificate. Right-click the app ▸ **Open** ▸ **Open**, and macOS remembers.
 2. **Allow two permissions.** The microphone, and "paste on your behalf". Both are required;
    TalkType can't grant them for you.
-3. **Add your OpenRouter key.** Setup ▸ Cloud engine ▸ paste the key (get one at
+3. **Add your OpenRouter key.** Setup ▸ paste the key (get one at
    [openrouter.ai/keys](https://openrouter.ai/keys); a few dollars lasts a couple of months of
    normal use). Cloud dictation works immediately.
 4. **Optional: install the local engine.** Setup ▸ Local engine ▸ **Install** — downloads ~4 GB
    once. You only need it if you dictate offline, or want the audio to stay on the machine.
-5. **Optional but recommended: add a Groq key for polish.** Setup ▸ Cloud polish ▸ **Add Groq key**
-   (free at [console.groq.com/keys](https://console.groq.com/keys)). Polish removes 呃/嗯, fixes
-   punctuation, and tidies self-corrections — the transcript only, never the audio. Without a
-   key, a local rule-based tidy steps in.
 
 Press **⌘⇧Space** and start talking.
 
@@ -104,7 +99,7 @@ Press **⌘⇧Space** and start talking.
 | Offline | Yes, with local engine | Partly | Usually cloud |
 | Voice leaves your Mac | Only on the cloud engine | Sometimes | Usually |
 | Mixed Chinese + English | Yes | Poorly | Varies |
-| Removes filler words | Yes (optional polish) | No | Yes |
+| Removes filler words | Yes (automatic local tidy) | No | Yes |
 | Custom vocabulary | Yes | Limited | Yes |
 | Open source | Yes (MIT) | No | No |
 
@@ -114,8 +109,8 @@ Press **⌘⇧Space** and start talking.
   engine — ~2 s, ≈ $0.002/min, audio leaves the machine.
 - **Local:** Qwen3-ASR via [MLX](https://github.com/ml-explore/mlx) in a small loopback-only Python
   helper that exits with the app. ~4 GB resident only while running.
-- **Polish:** qwen3.6-27b on [Groq](https://groq.com) — ~0.3 s, transcript only, with strict guards
-  against rewriting or translating what you said.
+- **Tidy:** deterministic local rules (呃/嗯, stutters, punctuation width) run on the machine —
+  what the engine heard is what you get, minus the filler.
 
 ## Building from source
 

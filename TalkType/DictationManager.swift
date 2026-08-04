@@ -17,7 +17,6 @@ final class DictationManager {
     let transcriber: Transcriber
     private let sidecar: SidecarManager
     private var cloudASR: CloudASRClient?
-    private var refiner: TextRefiner
     private let vocabularyStore: VocabularyStore
     private let overlay: OverlayWindow
     private weak var trayDelegate: TrayDelegate?
@@ -61,11 +60,6 @@ final class DictationManager {
             timeout: config.asrTimeoutSeconds
         )
         self.cloudASR = Self.makeCloudClient(config)
-
-        self.refiner = TextRefiner(
-            model: config.refineModel,
-            timeout: config.refineTimeoutSeconds
-        )
 
         self.recorder = AudioRecorder(
             sampleRate: config.sampleRate,
@@ -126,9 +120,9 @@ final class DictationManager {
     // MARK: - Config
 
     func reloadConfig(_ newConfig: AppConfig) {
-        // Fallback state only dies when the engine choice itself changes. A microphone or
-        // refine tweak mid-fallback must not orphan a running sidecar — the menu would
-        // say Cloud while the ~4 GB process kept running.
+        // Fallback state only dies when the engine choice itself changes. A microphone
+        // tweak mid-fallback must not orphan a running sidecar — the menu would say
+        // Cloud while the ~4 GB process kept running.
         if newConfig.asrEngine != config.asrEngine {
             setEngineState(nil, fallback: false, notify: nil)
         }
@@ -136,7 +130,6 @@ final class DictationManager {
         config = newConfig
         transcriber.timeout = newConfig.asrTimeoutSeconds
         cloudASR = Self.makeCloudClient(newConfig)
-        refiner = TextRefiner(model: newConfig.refineModel, timeout: newConfig.refineTimeoutSeconds)
         transcriberLock.unlock()
         applyInputSelection()
     }
@@ -147,14 +140,8 @@ final class DictationManager {
     }
 
     private static func makeCloudClient(_ config: AppConfig) -> CloudASRClient? {
-        guard let key = CloudKeyStore.apiKey(for: config.cloudProvider) else { return nil }
-        return CloudASRClient(
-            baseURL: config.cloudBaseURL,
-            apiKey: key,
-            model: config.cloudModel,
-            shape: config.cloudProvider.profile.requestShape,
-            timeout: config.asrTimeoutSeconds
-        )
+        guard let key = CloudKeyStore.apiKey() else { return nil }
+        return CloudASRClient(apiKey: key, timeout: config.asrTimeoutSeconds)
     }
 
     // MARK: - Engine selection (cloud-first, automatic local fallback)
@@ -175,8 +162,7 @@ final class DictationManager {
     /// it is installed, so a dictation only fails when neither path can work.
     private func transcribeWithFallback(audio: [Float], hints: [String]?, config: AppConfig,
                                         cloud: CloudASRClient?, local: Transcriber) throws -> String {
-        let policy = FallbackPolicy(localInstalled: Self.localEngineInstalled,
-                                    providerName: config.cloudProvider.profile.name)
+        let policy = FallbackPolicy(localInstalled: Self.localEngineInstalled)
 
         // No cloud client means no API key stored. With the local engine installed the
         // dictation still works; otherwise the user gets the exact fix to make.
@@ -186,7 +172,7 @@ final class DictationManager {
                                              reason: "没有云端 key，已用本地。去设置添加 key。",
                                              config: config, local: local)
             }
-            throw UserFacingError(message: "云端语音引擎没有 API key。去设置里添加 \(config.cloudProvider.profile.name) key。")
+            throw UserFacingError(message: "云端语音引擎没有 API key。去设置里添加 OpenRouter key。")
         }
 
         switch policy.plan(offline: isOffline) {
@@ -326,36 +312,6 @@ final class DictationManager {
             DispatchQueue.main.async(execute: apply)
         }
     }
-
-    // MARK: - Refinement
-
-    /// Cloud refinement, with the local tidy as the floor. Whatever happens — refinement
-    /// disabled, no API key, offline, slow, or output that failed the plausibility
-    /// check — the caller still gets usable text.
-    private func refine(_ text: String) -> String {
-        let fallback = PostProcessor.tidySpeech(text)
-        guard config.refineEnabled else { return fallback }
-
-        transcriberLock.lock()
-        let refiner = self.refiner
-        transcriberLock.unlock()
-
-        let started = Date()
-        guard let refined = refiner.refine(text) else { return fallback }
-        print("[refine] \(String(format: "%.2f", Date().timeIntervalSince(started)))s")
-        return refined
-    }
-
-    /// Open the connection to the refiner ahead of first use.
-    func prewarmRefiner() {
-        guard config.refineEnabled else { return }
-        transcriberLock.lock()
-        let refiner = self.refiner
-        transcriberLock.unlock()
-        refiner.prewarm()
-    }
-
-    var refinerConfigured: Bool { refiner.isConfigured }
 
     // MARK: - Start dictation
 
@@ -512,11 +468,11 @@ final class DictationManager {
                     return
                 }
 
-                // Cloud refinement if enabled and reachable; the local tidy otherwise.
-                // Vocabulary canonicalisation runs last so the spellings the user chose
-                // survive whatever the refiner did.
-                let refined = self.refine(text)
-                let processed = PostProcessor.postProcess(text: refined, vocabEntries: vocabEntries)
+                // Text comes out exactly as the engine heard it, tidied deterministically
+                // on the machine. Vocabulary canonicalisation runs last so the spellings
+                // the user chose survive the tidy.
+                let tidied = PostProcessor.tidySpeech(text)
+                let processed = PostProcessor.postProcess(text: tidied, vocabEntries: vocabEntries)
 
                 guard !processed.isEmpty else {
                     self.trayDelegate?.notifyInfo("No text recognized. Try speaking more clearly.")

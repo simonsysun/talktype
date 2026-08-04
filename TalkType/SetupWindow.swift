@@ -31,20 +31,10 @@ final class SetupWindow: NSObject, NSWindowDelegate {
 
     // Cloud engine
     private let cloudStatus = NSTextField(labelWithString: "")
-    private let providerPopup = NSPopUpButton()
-    private let baseURLField = NSTextField()
-    private let modelField = NSTextField()
     private let keyField = SecretField()
     private let keyButton = NSButton()
     private let keyRemoveButton = NSButton()
-    private let detectLabel = NSTextField(labelWithString: "")
     private var cloudRows: [NSView] = []
-
-    // Polish
-    private let polishStatus = NSTextField(labelWithString: "")
-    private let polishKeyField = SecretField()
-    private let polishKeyButton = NSButton()
-    private let polishRemoveButton = NSButton()
 
     // Permissions
     private let micStatus = NSTextField(labelWithString: "")
@@ -60,7 +50,6 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     /// Weights are removed after the installer has actually exited, never underneath it.
     private var deleteWeightsAfterStop = false
     private var verifyingCloudKey = false
-    private var verifyingPolishKey = false
 
     /// Live config; the app reads engine/provider/model choices out of here.
     var config: AppConfig = AppConfig()
@@ -122,12 +111,13 @@ final class SetupWindow: NSObject, NSWindowDelegate {
 
         // MARK: Engine choice
         root.addArrangedSubview(heading("Speech engine",
-            "Local runs Qwen3-ASR on this Mac (voice never leaves, ~4 GB once). "
-            + "Cloud sends the audio to a provider — faster to start, costs a little."))
+            "Both engines are the same Qwen3-ASR model. Local runs on this Mac "
+            + "(voice never leaves, ~4 GB once); Cloud goes through OpenRouter "
+            + "(faster to start, pay per use). Offline, dictation falls back to Local."))
 
         enginePopup.addItems(withTitles: [
             "Local — Qwen3-ASR on this Mac",
-            "Cloud — send audio to a provider",
+            "Cloud — OpenRouter (Qwen3-ASR-Flash)",
         ])
         enginePopup.target = self
         enginePopup.action = #selector(engineChanged)
@@ -208,32 +198,11 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         root.addArrangedSubview(logScroll)
 
         // MARK: Cloud configuration
-        providerPopup.addItems(withTitles: CloudProvider.allCases.map { $0.profile.name })
-        providerPopup.target = self
-        providerPopup.action = #selector(providerChanged)
-        providerPopup.setContentHuggingPriority(.required, for: .horizontal)
-        providerPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 300).isActive = true
-        cloudRows.append(formRow(label: "Provider", view: providerPopup))
-
-        baseURLField.placeholderString = "https://… (OpenAI-compatible base URL)"
-        baseURLField.target = self
-        baseURLField.action = #selector(baseURLEdited)
-        cloudRows.append(formRow(label: "API base URL", view: baseURLField))
-
-        modelField.placeholderString = "model id"
-        modelField.target = self
-        modelField.action = #selector(modelEdited)
-        cloudRows.append(formRow(label: "Model", view: modelField))
-
-        keyField.placeholderString = "API key"
+        keyField.placeholderString = "sk-or-…"
         keyField.onChange = { [weak self] in self?.syncKeyButtons() }
-        cloudRows.append(formRow(label: "API key", view: keyRow(
+        cloudRows.append(formRow(label: "OpenRouter API key", view: keyRow(
             field: keyField, save: keyButton, saveAction: #selector(saveKey),
             remove: keyRemoveButton, removeAction: #selector(removeKey))))
-
-        detectLabel.font = .systemFont(ofSize: 11)
-        detectLabel.textColor = .secondaryLabelColor
-        cloudRows.append(formRow(label: "", view: detectLabel))
 
         let cloudStatusRow = NSStackView(views: [cloudStatus])
         cloudStatusRow.orientation = .horizontal
@@ -245,21 +214,6 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         for row in cloudRows {
             root.addArrangedSubview(row)
         }
-
-        root.addArrangedSubview(separator())
-        root.addArrangedSubview(heading("Cloud polish  (optional)",
-            "Tidies filler words and punctuation through Groq. Sends the transcript only, never audio. "
-            + "Leave it off and everything stays here."))
-        // Entered right here, the same way as the key above it. It used to be a separate
-        // dialog, which meant the two keys the app needs were asked for in two different
-        // ways for no reason a user could see.
-        polishKeyField.placeholderString = "gsk_…"
-        polishKeyField.onChange = { [weak self] in self?.syncKeyButtons() }
-        root.addArrangedSubview(formRow(label: "Groq key", view: keyRow(
-            field: polishKeyField, save: polishKeyButton, saveAction: #selector(savePolishKey),
-            remove: polishRemoveButton, removeAction: #selector(removePolishKey))))
-        polishStatus.font = .systemFont(ofSize: 11)
-        root.addArrangedSubview(formRow(label: "", view: polishStatus))
 
         root.addArrangedSubview(separator())
         root.addArrangedSubview(heading("Permissions",
@@ -431,21 +385,10 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         // Cloud section
         let isCloud = config.asrEngine == .cloud
         for row in cloudRows { row.isHidden = !isCloud }
-        providerPopup.selectItem(at: CloudProvider.allCases.firstIndex(of: config.cloudProvider) ?? 0)
-        // Never clobber a field the user is editing: refresh() runs on a 1.5-second
-        // timer, and rewriting a field mid-edit erases the URL/model they are part-way
-        // through typing (same failure the key fields had, fixed earlier).
-        if baseURLField.currentEditor() == nil {
-            baseURLField.stringValue = config.cloudBaseURL
-        }
-        if modelField.currentEditor() == nil {
-            modelField.stringValue = config.cloudModel
-        }
-        detectLabel.stringValue = detectedProviderText()
 
         // Never clear the key fields here. refresh() runs on a 1.5-second timer, and wiping
         // the field was erasing whatever the user was part-way through typing or pasting.
-        let cloudKey = CloudKeyStore.apiKey(for: config.cloudProvider)
+        let cloudKey = CloudKeyStore.apiKey()
         if let cloudKey = cloudKey {
             cloudStatus.stringValue = "Key saved (\(Self.masked(cloudKey)))"
             cloudStatus.textColor = .systemGreen
@@ -454,16 +397,6 @@ final class SetupWindow: NSObject, NSWindowDelegate {
             cloudStatus.textColor = .secondaryLabelColor
         }
         keyRemoveButton.isHidden = cloudKey == nil
-
-        let polishKey = TextRefiner.apiKey()
-        if let polishKey = polishKey {
-            polishStatus.stringValue = "Key saved (\(Self.masked(polishKey)))"
-            polishStatus.textColor = .systemGreen
-        } else {
-            polishStatus.stringValue = "Not configured — transcripts go in exactly as dictated."
-            polishStatus.textColor = .secondaryLabelColor
-        }
-        polishRemoveButton.isHidden = polishKey == nil
         syncKeyButtons()
 
         let mic = AVCaptureDeviceAuthorization.isGranted
@@ -481,14 +414,6 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         axButton.isHidden = ax
     }
 
-    private func detectedProviderText() -> String {
-        let detected = CloudProvider.detect(baseURL: baseURLField.stringValue)
-        if detected == .custom {
-            return "Custom base URL — requests go to it as-is."
-        }
-        return "Detected: \(detected.profile.name)"
-    }
-
     private static func masked(_ key: String) -> String {
         guard key.count > 10 else { return "•••" }
         return "\(key.prefix(6))…\(key.suffix(4))"
@@ -504,67 +429,27 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         refresh()
     }
 
-    @objc private func providerChanged() {
-        let index = providerPopup.indexOfSelectedItem
-        guard CloudProvider.allCases.indices.contains(index) else { return }
-        let provider = CloudProvider.allCases[index]
-        guard provider != config.cloudProvider else { return }
-        config.cloudProvider = provider
-        config.cloudBaseURL = provider.profile.defaultBaseURL
-        config.cloudModel = provider.profile.defaultModel
-        onConfigChanged?(config)
-        refresh()
-    }
-
-    @objc private func baseURLEdited() {
-        let url = baseURLField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        config.cloudBaseURL = url
-        // Auto-detect: a pasted official/OpenRouter/DashScope URL flips the provider and
-        // fills the model id, unless the user already typed their own.
-        let detected = CloudProvider.detect(baseURL: url)
-        if detected != .custom, detected != config.cloudProvider {
-            config.cloudProvider = detected
-            config.cloudModel = detected.profile.defaultModel
-            providerPopup.selectItem(at: CloudProvider.allCases.firstIndex(of: detected) ?? 0)
-        }
-        onConfigChanged?(config)
-        refresh()
-    }
-
-    @objc private func modelEdited() {
-        config.cloudModel = modelField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        onConfigChanged?(config)
-    }
-
     /// Save is only live when there is something to save, so pressing it always does
     /// something. Held down while a key is being checked, so it cannot be double-fired.
     private func syncKeyButtons() {
-        if !verifyingCloudKey {
-            keyButton.title = "Save"
-            keyButton.isEnabled = !keyField.stringValue
-                .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
-        if !verifyingPolishKey {
-            polishKeyButton.title = "Save"
-            polishKeyButton.isEnabled = !polishKeyField.stringValue
-                .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
+        guard !verifyingCloudKey else { return }
+        keyButton.title = "Save"
+        keyButton.isEnabled = !keyField.stringValue
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     @objc private func saveKey() {
         let key = keyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return }
-        let provider = config.cloudProvider
-        let baseURL = config.cloudBaseURL
 
         verifyingCloudKey = true
         keyButton.isEnabled = false
         keyButton.title = "Checking…"
-        cloudStatus.stringValue = "Checking the key with \(provider.profile.name)…"
+        cloudStatus.stringValue = "Checking the key with OpenRouter…"
         cloudStatus.textColor = .secondaryLabelColor
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let result = CloudASRClient.validate(apiKey: key, baseURL: baseURL)
+            let result = CloudASRClient.validate(apiKey: key)
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.verifyingCloudKey = false
@@ -573,24 +458,24 @@ final class SetupWindow: NSObject, NSWindowDelegate {
                     break
                 case .rejected:
                     self.cloudStatus.stringValue =
-                        "\(provider.profile.name) did not accept that key. Nothing was saved."
+                        "OpenRouter did not accept that key. Nothing was saved."
                     self.cloudStatus.textColor = .systemOrange
                     self.syncKeyButtons()
                     return
                 case .unreachable(let message):
                     self.cloudStatus.stringValue =
-                        "Could not reach \(provider.profile.name) (\(message)). Nothing was saved — check your network and the API base URL."
+                        "Could not reach OpenRouter (\(message)). Nothing was saved — check your network."
                     self.cloudStatus.textColor = .systemOrange
                     self.syncKeyButtons()
                     return
                 case .invalidURL:
                     self.cloudStatus.stringValue =
-                        "The API base URL is not a valid address. Fix it, then save the key again."
+                        "OpenRouter's address is invalid. Nothing was saved."
                     self.cloudStatus.textColor = .systemOrange
                     self.syncKeyButtons()
                     return
                 }
-                guard CloudKeyStore.storeAPIKey(key, for: provider) else {
+                guard CloudKeyStore.storeAPIKey(key) else {
                     self.cloudStatus.stringValue = "Could not write the key to the keychain."
                     self.cloudStatus.textColor = .systemOrange
                     self.syncKeyButtons()
@@ -604,67 +489,12 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     }
 
     @objc private func removeKey() {
-        CloudKeyStore.deleteAPIKey(for: config.cloudProvider)
+        CloudKeyStore.deleteAPIKey()
         keyField.stringValue = ""
         onConfigChanged?(config)
         refresh()
     }
 
-    @objc private func savePolishKey() {
-        let key = polishKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return }
-
-        verifyingPolishKey = true
-        polishKeyButton.isEnabled = false
-        polishKeyButton.title = "Checking…"
-        polishStatus.stringValue = "Checking the key with Groq…"
-        polishStatus.textColor = .secondaryLabelColor
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let result = TextRefiner.validate(key)
-            DispatchQueue.main.async {
-                guard let self = self else { return }
-                self.verifyingPolishKey = false
-                switch result {
-                case .valid:
-                    break
-                case .rejected:
-                    self.polishStatus.stringValue = "Groq did not accept that key. Nothing was saved."
-                    self.polishStatus.textColor = .systemOrange
-                    self.syncKeyButtons()
-                    return
-                case .unreachable(let message):
-                    self.polishStatus.stringValue =
-                        "Could not reach Groq (\(message)). Nothing was saved — check your network."
-                    self.polishStatus.textColor = .systemOrange
-                    self.syncKeyButtons()
-                    return
-                case .invalidURL:
-                    self.polishStatus.stringValue =
-                        "Groq's address is invalid. Nothing was saved."
-                    self.polishStatus.textColor = .systemOrange
-                    self.syncKeyButtons()
-                    return
-                }
-                guard TextRefiner.storeAPIKey(key) else {
-                    self.polishStatus.stringValue = "Could not write the key to the keychain."
-                    self.polishStatus.textColor = .systemOrange
-                    self.syncKeyButtons()
-                    return
-                }
-                self.polishKeyField.stringValue = ""
-                self.onConfigChanged?(self.config)
-                self.refresh()
-            }
-        }
-    }
-
-    @objc private func removePolishKey() {
-        TextRefiner.deleteAPIKey()
-        polishKeyField.stringValue = ""
-        onConfigChanged?(config)
-        refresh()
-    }
     @objc private func openMicSettings() {
         open("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
     }

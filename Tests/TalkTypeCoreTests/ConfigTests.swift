@@ -17,12 +17,7 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.asrPort, 9999, "existing settings must survive")
         XCTAssertTrue(config.launchAtLogin)
         XCTAssertEqual(config.silenceAutoStopSeconds, 42)
-        XCTAssertEqual(config.refineEnabled, AppConfig().refineEnabled, "new keys take defaults")
-        XCTAssertEqual(config.refineModel, AppConfig().refineModel)
         XCTAssertEqual(config.asrEngine, AppConfig().asrEngine)
-        XCTAssertEqual(config.cloudProvider, AppConfig().cloudProvider)
-        XCTAssertEqual(config.cloudModel, AppConfig().cloudModel)
-        XCTAssertEqual(config.cloudBaseURL, AppConfig().cloudBaseURL)
     }
 
     func testEmptyObjectYieldsDefaults() throws {
@@ -31,19 +26,11 @@ final class ConfigTests: XCTestCase {
 
     func testRoundTrip() throws {
         var config = AppConfig()
-        config.refineEnabled = false
         config.asrPort = 1234
         config.asrEngine = .cloud
-        config.cloudProvider = .dashScope
-        config.cloudModel = "qwen3-asr-flash"
-        config.cloudBaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
         let data = try JSONEncoder().encode(config)
         let back = try JSONDecoder().decode(AppConfig.self, from: data)
-        XCTAssertEqual(back.refineEnabled, false)
         XCTAssertEqual(back.asrPort, 1234)
         XCTAssertEqual(back.asrEngine, .cloud)
-        XCTAssertEqual(back.cloudProvider, .dashScope)
-        XCTAssertEqual(back.cloudModel, "qwen3-asr-flash")
-        XCTAssertEqual(back.cloudBaseURL, "https://dashscope.aliyuncs.com/compatible-mode/v1")
     }
 }

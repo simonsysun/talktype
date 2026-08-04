@@ -30,14 +30,6 @@ struct FallbackPolicy {
     static let cloudTimeoutWithoutLocal: TimeInterval = 60
 
     let localInstalled: Bool
-    /// Display name of the configured cloud provider, for the "go fix it" hints.
-    /// Defaults to OpenRouter so pure-logic callers and tests stay simple.
-    let providerName: String
-
-    init(localInstalled: Bool, providerName: String = "OpenRouter") {
-        self.localInstalled = localInstalled
-        self.providerName = providerName
-    }
 
     /// Decide before trying the cloud: when offline there is no point attempting it.
     func plan(offline: Bool) -> EnginePlan {
@@ -67,9 +59,9 @@ struct FallbackPolicy {
         }
         switch failure {
         case .invalidKey:
-            return .blocked(message: "云端 key 无效或额度用完。去设置里更换 \(providerName) key。")
+            return .blocked(message: "云端 key 无效或额度用完。去设置里更换 OpenRouter key。")
         case .limitOrRate:
-            return .blocked(message: "云端额度用完或请求太频繁。去 \(providerName) 查看额度。")
+            return .blocked(message: "云端额度用完或请求太频繁。去 OpenRouter 查看额度。")
         case .offline, .timeout, .serviceError, .unknown:
             return .blocked(message: "云端暂时不可用。检查网络后重试，或到设置里安装本地引擎。")
         }

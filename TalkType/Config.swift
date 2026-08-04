@@ -24,18 +24,8 @@ struct AppConfig: Codable {
     var silenceAutoStopSeconds: Double = 20
     var silenceRmsThreshold: Double = 0.008
     var minTranscribeRms: Double = 0.012
-    /// Cloud refinement of the transcript. The only step that leaves the machine, so it
-    /// is opt-in-shaped: off means dictation still works, just less polished.
-    var refineEnabled: Bool = true
-    var refineModel: String = "qwen/qwen3.6-27b"
-    var refineTimeoutSeconds: Double = 2.5
     /// UID of the microphone to record from. Empty means follow the system default.
     var inputDeviceUID: String = ""
-    /// Cloud engine settings. Keys are not stored here — each provider keeps its own key
-    /// in the login keychain, keyed by `CloudProvider.profile.keychainService`.
-    var cloudProvider: CloudProvider = .openRouter
-    var cloudModel: String = CloudProvider.openRouter.profile.defaultModel
-    var cloudBaseURL: String = CloudProvider.openRouter.profile.defaultBaseURL
 
     enum CodingKeys: String, CodingKey {
         case sampleRate = "sample_rate"
@@ -47,13 +37,7 @@ struct AppConfig: Codable {
         case silenceAutoStopSeconds = "silence_auto_stop_seconds"
         case silenceRmsThreshold = "silence_rms_threshold"
         case minTranscribeRms = "min_transcribe_rms"
-        case refineEnabled = "refine_enabled"
-        case refineModel = "refine_model"
-        case refineTimeoutSeconds = "refine_timeout_seconds"
         case inputDeviceUID = "input_device_uid"
-        case cloudProvider = "cloud_provider"
-        case cloudModel = "cloud_model"
-        case cloudBaseURL = "cloud_base_url"
     }
 
     init() {}
@@ -73,13 +57,7 @@ struct AppConfig: Codable {
         silenceAutoStopSeconds = try c.decodeIfPresent(Double.self, forKey: .silenceAutoStopSeconds) ?? d.silenceAutoStopSeconds
         silenceRmsThreshold = try c.decodeIfPresent(Double.self, forKey: .silenceRmsThreshold) ?? d.silenceRmsThreshold
         minTranscribeRms = try c.decodeIfPresent(Double.self, forKey: .minTranscribeRms) ?? d.minTranscribeRms
-        refineEnabled = try c.decodeIfPresent(Bool.self, forKey: .refineEnabled) ?? d.refineEnabled
-        refineModel = try c.decodeIfPresent(String.self, forKey: .refineModel) ?? d.refineModel
-        refineTimeoutSeconds = try c.decodeIfPresent(Double.self, forKey: .refineTimeoutSeconds) ?? d.refineTimeoutSeconds
         inputDeviceUID = try c.decodeIfPresent(String.self, forKey: .inputDeviceUID) ?? d.inputDeviceUID
-        cloudProvider = try c.decodeIfPresent(CloudProvider.self, forKey: .cloudProvider) ?? d.cloudProvider
-        cloudModel = try c.decodeIfPresent(String.self, forKey: .cloudModel) ?? d.cloudModel
-        cloudBaseURL = try c.decodeIfPresent(String.self, forKey: .cloudBaseURL) ?? d.cloudBaseURL
     }
 }
 

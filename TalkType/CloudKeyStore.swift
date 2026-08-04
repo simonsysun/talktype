@@ -1,15 +1,14 @@
 import Foundation
 import Security
 
-/// Cloud ASR API keys, one keychain slot per provider (service name from the provider
-/// profile). Same pattern as the Groq polish key (`TextRefiner`), kept separate so each
-/// provider can hold its own credential without re-entering it per model.
+/// The one API key TalkType needs: OpenRouter. A single slot, because there is a single
+/// provider by design.
 enum CloudKeyStore {
 
-    static func apiKey(for provider: CloudProvider) -> String? {
+    static func apiKey() -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: provider.profile.keychainService,
+            kSecAttrService as String: CloudDefaults.keychainService,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
@@ -23,14 +22,16 @@ enum CloudKeyStore {
         return key
     }
 
+    /// Store or replace the key. `SecItemAdd` fails on a duplicate rather than replacing,
+    /// so an existing item is removed first.
     @discardableResult
-    static func storeAPIKey(_ key: String, for provider: CloudProvider) -> Bool {
+    static func storeAPIKey(_ key: String) -> Bool {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let data = trimmed.data(using: .utf8), !trimmed.isEmpty else { return false }
-        deleteAPIKey(for: provider)
+        deleteAPIKey()
         let attrs: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: provider.profile.keychainService,
+            kSecAttrService as String: CloudDefaults.keychainService,
             kSecAttrAccount as String: NSUserName(),
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
@@ -41,10 +42,10 @@ enum CloudKeyStore {
     }
 
     @discardableResult
-    static func deleteAPIKey(for provider: CloudProvider) -> Bool {
+    static func deleteAPIKey() -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: provider.profile.keychainService,
+            kSecAttrService as String: CloudDefaults.keychainService,
         ]
         return SecItemDelete(query as CFDictionary) == errSecSuccess
     }

@@ -21,11 +21,9 @@
 		A10013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10015; };
 		A10014 /* HotkeySettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10016; };
 		A10016 /* SidecarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10017; };
-		A10017 /* TextRefiner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10018; };
 		A10018 /* AudioDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10019; };
 		A10019 /* SetupWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10020; };
 		A10022 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10023; };
-		A10023 /* CloudProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10024; };
 		A10024 /* CloudASRClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10025; };
 		A10025 /* CloudKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10026; };
 		A10026 /* FallbackPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10027; };
@@ -39,7 +37,6 @@
 		A20005 /* PostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10012; };
 		A20006 /* VocabularyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10008; };
 		A20007 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10010; };
-		A20011 /* CloudProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10024; };
 		A20012 /* CloudASRClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10025; };
 		A20013 /* FallbackPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10027; };
 		A20009 /* AppIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10011; };
@@ -50,7 +47,6 @@
 		A30004 /* PostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10012; };
 		A30005 /* VocabularyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10008; };
 		A30006 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10010; };
-		A30009 /* CloudProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10024; };
 		A30010 /* CloudASRClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10025; };
 		A30011 /* FallbackPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10027; };
 		A30008 /* AppIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10011; };
@@ -98,11 +94,9 @@
 		C10001 /* TalkType.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkType.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10016 /* HotkeySettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeySettingsWindow.swift; sourceTree = "<group>"; };
 		B10017 /* SidecarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidecarManager.swift; sourceTree = "<group>"; };
-		B10018 /* TextRefiner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextRefiner.swift; sourceTree = "<group>"; };
 		B10019 /* AudioDevices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDevices.swift; sourceTree = "<group>"; };
 		B10020 /* SetupWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupWindow.swift; sourceTree = "<group>"; };
 		B10023 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
-		B10024 /* CloudProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudProvider.swift; sourceTree = "<group>"; };
 		B10025 /* CloudASRClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudASRClient.swift; sourceTree = "<group>"; };
 		B10026 /* CloudKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKeyStore.swift; sourceTree = "<group>"; };
 		B10027 /* FallbackPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FallbackPolicy.swift; sourceTree = "<group>"; };
@@ -171,11 +165,9 @@
 				B10012 /* PostProcessor.swift */,
 				B10016 /* HotkeySettingsWindow.swift */,
 				B10017 /* SidecarManager.swift */,
-				B10018 /* TextRefiner.swift */,
 				B10019 /* AudioDevices.swift */,
 				B10020 /* SetupWindow.swift */,
 				B10023 /* Log.swift */,
-				B10024 /* CloudProvider.swift */,
 				B10025 /* CloudASRClient.swift */,
 				B10026 /* CloudKeyStore.swift */,
 				B10027 /* FallbackPolicy.swift */,
@@ -356,11 +348,9 @@
 				A10012 /* PostProcessor.swift in Sources */,
 				A10014 /* HotkeySettingsWindow.swift in Sources */,
 				A10016 /* SidecarManager.swift in Sources */,
-				A10017 /* TextRefiner.swift in Sources */,
 				A10018 /* AudioDevices.swift in Sources */,
 				A10019 /* SetupWindow.swift in Sources */,
 				A10022 /* Log.swift in Sources */,
-				A10023 /* CloudProvider.swift in Sources */,
 				A10024 /* CloudASRClient.swift in Sources */,
 				A10025 /* CloudKeyStore.swift in Sources */,
 				A10026 /* FallbackPolicy.swift in Sources */,
@@ -378,7 +368,6 @@
 				A20005 /* PostProcessor.swift in Sources */,
 				A20006 /* VocabularyStore.swift in Sources */,
 				A20007 /* Config.swift in Sources */,
-				A20011 /* CloudProvider.swift in Sources */,
 				A20012 /* CloudASRClient.swift in Sources */,
 				A20013 /* FallbackPolicy.swift in Sources */,
 				A20009 /* AppIdentity.swift in Sources */,
@@ -395,7 +384,6 @@
 				A30004 /* PostProcessor.swift in Sources */,
 				A30005 /* VocabularyStore.swift in Sources */,
 				A30006 /* Config.swift in Sources */,
-				A30009 /* CloudProvider.swift in Sources */,
 				A30010 /* CloudASRClient.swift in Sources */,
 				A30011 /* FallbackPolicy.swift in Sources */,
 				A30008 /* AppIdentity.swift in Sources */,
@@ -489,10 +477,10 @@
 				CODE_SIGN_ENTITLEMENTS = TalkType/TalkType.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 204;
+				CURRENT_PROJECT_VERSION = 205;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TalkType/Info.plist;
-				MARKETING_VERSION = 2.1.0;
+				MARKETING_VERSION = 2.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.talktype.local;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -509,10 +497,10 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 204;
+				CURRENT_PROJECT_VERSION = 205;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TalkType/Info.plist;
-				MARKETING_VERSION = 2.1.0;
+				MARKETING_VERSION = 2.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.talktype.local;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;

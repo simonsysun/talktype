@@ -1,24 +1,29 @@
 import Foundation
 
-/// Speech-to-text through a cloud provider's OpenAI-compatible endpoint.
+/// The single cloud dialect TalkType speaks. Everything about the cloud engine is fixed
+/// by design — one provider (OpenRouter), one model family (Qwen3-ASR) — so there is
+/// nothing to configure and nothing to get wrong.
+enum CloudDefaults {
+    static let baseURL = "https://openrouter.ai/api/v1"
+    static let model = "qwen/qwen3-asr-flash-2026-02-10"
+    static let keychainService = "talktype-asr-openrouter"
+}
+
+/// Speech-to-text through OpenRouter's audio endpoint.
 ///
-/// The audio is the same WAV the local sidecar gets; only the transport differs. Three
-/// shapes exist because the providers disagree: OpenRouter takes base64 JSON, OpenAI and
-/// Groq take multipart, and DashScope's Qwen-ASR is a chat-completions call with an
-/// `input_audio` content block. Response parsing is split the same way.
+/// The audio is the same WAV the local sidecar gets; only the transport differs.
+/// OpenRouter takes base64 JSON under `input_audio`.
 final class CloudASRClient {
     let baseURL: URL
     let apiKey: String
     let model: String
-    let shape: CloudRequestShape
     let timeout: TimeInterval
     private let session: URLSession
 
     init(
-        baseURL: String,
         apiKey: String,
-        model: String,
-        shape: CloudRequestShape,
+        model: String = CloudDefaults.model,
+        baseURL: String = CloudDefaults.baseURL,
         timeout: TimeInterval = 60.0,
         session: URLSession? = nil
     ) {
@@ -27,7 +32,6 @@ final class CloudASRClient {
         self.baseURL = URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))) ?? URL(string: "https://invalid.local")!
         self.apiKey = apiKey
         self.model = model
-        self.shape = shape
         self.timeout = timeout
         if let session = session {
             self.session = session
@@ -42,7 +46,7 @@ final class CloudASRClient {
     // MARK: - Transcription
 
     /// The dictation flow is background-thread and synchronous, so there is only the
-    /// sync variant; the request building and response parsing are shared with the
+    /// sync variant; request building and response parsing are shared with the
     /// static helpers below.
     func transcribeSync(
         audio: [Float],
@@ -54,7 +58,7 @@ final class CloudASRClient {
         let effectiveTimeout = timeout ?? self.timeout
         let wav = WAVEncoder.encode(samples: audio, sampleRate: sampleRate)
         let request = Self.makeRequest(
-            shape: shape, baseURL: baseURL, apiKey: apiKey, model: model,
+            baseURL: baseURL, apiKey: apiKey, model: model,
             audioWAV: wav, vocabularyHints: vocabularyHints, timeout: effectiveTimeout)
 
         let semaphore = DispatchSemaphore(value: 0)
@@ -76,12 +80,7 @@ final class CloudASRClient {
             }
             do {
                 try Self.checkStatus(data: data, response: response)
-                switch self.shape {
-                case .dashScopeChat:
-                    result = try Self.parseChatCompletionsResponse(data: data)
-                case .openRouterJSON, .openAIMultipart:
-                    result = try Self.parseTranscriptionsResponse(data: data)
-                }
+                result = try Self.parseTranscriptionsResponse(data: data)
             } catch {
                 requestError = error
             }
@@ -95,23 +94,20 @@ final class CloudASRClient {
         return result
     }
 
-    /// Which path actually authenticates the key. OpenRouter's `/models` is public — it
-    /// returns 200 even with no key — so `/auth/key` is the real check there. Every other
-    /// provider requires auth on `/models`, so it works as-is.
-    static func validationPath(for baseURL: String) -> String {
-        baseURL.lowercased().contains("openrouter") ? "auth/key" : "models"
-    }
-
-    /// Probe the provider with the key, so a typo surfaces at entry rather than as a
-    /// silent dictation failure later.
-    static func validate(apiKey: String, baseURL: String, timeout: TimeInterval = 8) -> KeyValidationResult {
+    /// Probe the key with OpenRouter. `/models` is public — it returns 200 even with
+    /// no key — so `/auth/key` is the real check.
+    static func validate(
+        apiKey: String,
+        baseURL: String = CloudDefaults.baseURL,
+        timeout: TimeInterval = 8
+    ) -> KeyValidationResult {
         let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
               let base = URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))),
               base.scheme != nil,
               base.host != nil
         else { return .invalidURL }
-        var request = URLRequest(url: base.appendingPathComponent(Self.validationPath(for: baseURL)))
+        var request = URLRequest(url: base.appendingPathComponent("auth/key"))
         request.setValue("Bearer \(trimmed)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = timeout
 
@@ -138,33 +134,12 @@ final class CloudASRClient {
     // MARK: - Request building
 
     static func makeRequest(
-        shape: CloudRequestShape,
         baseURL: URL,
         apiKey: String,
         model: String,
         audioWAV: Data,
         vocabularyHints: [String]?,
         timeout: TimeInterval
-    ) -> URLRequest {
-        switch shape {
-        case .openRouterJSON:
-            return openRouterJSONRequest(baseURL: baseURL, apiKey: apiKey, model: model,
-                                         audioWAV: audioWAV, vocabularyHints: vocabularyHints,
-                                         timeout: timeout)
-        case .openAIMultipart:
-            return openAIMultipartRequest(baseURL: baseURL, apiKey: apiKey, model: model,
-                                          audioWAV: audioWAV, vocabularyHints: vocabularyHints,
-                                          timeout: timeout)
-        case .dashScopeChat:
-            return dashScopeChatRequest(baseURL: baseURL, apiKey: apiKey, model: model,
-                                        audioWAV: audioWAV, vocabularyHints: vocabularyHints,
-                                        timeout: timeout)
-        }
-    }
-
-    private static func openRouterJSONRequest(
-        baseURL: URL, apiKey: String, model: String, audioWAV: Data,
-        vocabularyHints: [String]?, timeout: TimeInterval
     ) -> URLRequest {
         var request = URLRequest(url: baseURL.appendingPathComponent("audio/transcriptions"))
         request.httpMethod = "POST"
@@ -180,70 +155,10 @@ final class CloudASRClient {
             ],
         ]
         if let prompt = buildPrompt(vocabularyHints: vocabularyHints) {
-            // OpenRouter accepts the field but ignores it (verified 2026-08-04); kept for
-            // providers that do honour it. The client-side vocabulary post-processing is
-            // the reliable path for cloud dictation.
+            // OpenRouter accepts the field but ignores it (verified 2026-08-04); kept
+            // because the vocabulary post-processing is the reliable path anyway.
             body["prompt"] = prompt
         }
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        return request
-    }
-
-    private static func openAIMultipartRequest(
-        baseURL: URL, apiKey: String, model: String, audioWAV: Data,
-        vocabularyHints: [String]?, timeout: TimeInterval
-    ) -> URLRequest {
-        var request = URLRequest(url: baseURL.appendingPathComponent("audio/transcriptions"))
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = timeout
-
-        let boundary = "Boundary-\(UUID().uuidString)"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
-        var data = Data()
-        data.appendMultipart(name: "model", value: model, boundary: boundary)
-        if let prompt = buildPrompt(vocabularyHints: vocabularyHints) {
-            data.appendMultipart(name: "prompt", value: prompt, boundary: boundary)
-        }
-        data.appendMultipart(name: "response_format", value: "json", boundary: boundary)
-        data.appendMultipartFile(name: "file", filename: "audio.wav", contentType: "audio/wav",
-                                 body: audioWAV, boundary: boundary)
-        data.append(Data("--\(boundary)--\r\n".utf8))
-        request.httpBody = data
-        return request
-    }
-
-    private static func dashScopeChatRequest(
-        baseURL: URL, apiKey: String, model: String, audioWAV: Data,
-        vocabularyHints: [String]?, timeout: TimeInterval
-    ) -> URLRequest {
-        var request = URLRequest(url: baseURL.appendingPathComponent("chat/completions"))
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = timeout
-
-        let dataURI = "data:audio/wav;base64,\(audioWAV.base64EncodedString())"
-        var messages: [[String: Any]] = []
-        // Bare comma list, same rule as the local sidecar's X-TalkType-Context: prose
-        // context has been observed making Qwen complete the prompt instead of
-        // transcribing. Whether cloud Flash does the same is a bake-off question.
-        if let prompt = buildPrompt(vocabularyHints: vocabularyHints) {
-            messages.append(["role": "system", "content": "Vocabulary: \(prompt)"])
-        }
-        messages.append([
-            "role": "user",
-            "content": [
-                ["type": "input_audio", "input_audio": ["data": dataURI]],
-            ],
-        ])
-
-        let body: [String: Any] = [
-            "model": model,
-            "messages": messages,
-            "asr_options": ["enable_itn": true],
-        ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         return request
     }
@@ -268,22 +183,12 @@ final class CloudASRClient {
         }
     }
 
-    /// `{"text": "..."}` — OpenRouter JSON and OpenAI multipart both come back like this.
+    /// `{"text": "..."}` — OpenRouter's transcription response.
     static func parseTranscriptionsResponse(data: Data) throws -> String {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let text = json["text"] as? String
         else { throw CloudASRError.emptyResponse }
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    /// `{"choices": [{"message": {"content": "..."}}]}` — DashScope's chat-completions shape.
-    static func parseChatCompletionsResponse(data: Data) throws -> String {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let message = choices.first?["message"] as? [String: Any],
-              let content = message["content"] as? String
-        else { throw CloudASRError.emptyResponse }
-        return content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
@@ -337,24 +242,4 @@ enum KeyValidationResult: Equatable {
     case unreachable(String)
     /// The base URL is not a valid address.
     case invalidURL
-}
-
-// MARK: - Multipart helpers
-
-private extension Data {
-    mutating func appendMultipart(name: String, value: String, boundary: String) {
-        append(Data("--\(boundary)\r\n".utf8))
-        append(Data("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".utf8))
-        append(Data("\(value)\r\n".utf8))
-    }
-
-    mutating func appendMultipartFile(
-        name: String, filename: String, contentType: String, body: Data, boundary: String
-    ) {
-        append(Data("--\(boundary)\r\n".utf8))
-        append(Data("Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n".utf8))
-        append(Data("Content-Type: \(contentType)\r\n\r\n".utf8))
-        append(body)
-        append(Data("\r\n".utf8))
-    }
 }

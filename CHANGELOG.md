@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.2.0 — 2026-08-04
+
+One model, one provider, one key.
+
+### Changed
+
+- **Cloud engine is OpenRouter only** — Qwen3-ASR-Flash, fixed. The provider dropdown,
+  custom base URL, and model field are gone; there is nothing left to misconfigure.
+- **Settings window is two things:** your OpenRouter key, and the local engine's
+  install/delete. Groq polish, its key, and the menu toggle are removed — the transcript
+  is exactly what the engine heard, tidied by deterministic local rules.
+- **Local engine unchanged** as the offline fallback: no network (or cloud unreachable)
+  switches automatically, and back again when the cloud recovers.
+
 ## v2.1.0 — 2026-08-04
 
 Cloud-first dictation with automatic local fallback.

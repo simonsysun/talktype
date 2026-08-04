@@ -28,11 +28,11 @@ final class CloudASRClientTests: XCTestCase {
         XCTAssertNil(CloudASRClient.buildPrompt(vocabularyHints: nil))
     }
 
-    // MARK: - Request shapes
+    // MARK: - Request shape
 
     func testOpenRouterJSONRequest() throws {
         let request = CloudASRClient.makeRequest(
-            shape: .openRouterJSON, baseURL: base, apiKey: "sk-or-test", model: "qwen/qwen3-asr-flash-2026-02-10",
+            baseURL: base, apiKey: "sk-or-test", model: "qwen/qwen3-asr-flash-2026-02-10",
             audioWAV: wav, vocabularyHints: ["TalkType"], timeout: 30)
 
         XCTAssertEqual(request.url?.path, "/api/v1/audio/transcriptions")
@@ -51,56 +51,6 @@ final class CloudASRClientTests: XCTestCase {
                           "OpenRouter wants raw base64, not a data URI")
     }
 
-    func testOpenAIMultipartRequest() throws {
-        let request = CloudASRClient.makeRequest(
-            shape: .openAIMultipart, baseURL: base, apiKey: "sk-test", model: "gpt-4o-transcribe",
-            audioWAV: wav, vocabularyHints: nil, timeout: 30)
-
-        XCTAssertEqual(request.url?.path, "/api/v1/audio/transcriptions")
-        let contentType = try XCTUnwrap(request.value(forHTTPHeaderField: "Content-Type"))
-        XCTAssertTrue(contentType.hasPrefix("multipart/form-data; boundary="))
-
-        let body = try XCTUnwrap(request.httpBody)
-        let text = String(data: body, encoding: .utf8) ?? ""
-        XCTAssertTrue(text.contains("name=\"model\""))
-        XCTAssertTrue(text.contains("gpt-4o-transcribe"))
-        XCTAssertTrue(text.contains("name=\"file\"; filename=\"audio.wav\""))
-        XCTAssertTrue(text.contains("Content-Type: audio/wav"))
-        XCTAssertTrue(text.contains("response_format"))
-    }
-
-    func testDashScopeChatRequest() throws {
-        let request = CloudASRClient.makeRequest(
-            shape: .dashScopeChat, baseURL: base, apiKey: "sk-dash", model: "qwen3-asr-flash",
-            audioWAV: wav, vocabularyHints: ["API"], timeout: 30)
-
-        XCTAssertEqual(request.url?.path, "/api/v1/chat/completions")
-        let body = try XCTUnwrap(request.httpBody)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertEqual(json["model"] as? String, "qwen3-asr-flash")
-        XCTAssertNotNil(json["asr_options"])
-
-        let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
-        XCTAssertEqual(messages.count, 2, "vocab system message + user audio")
-        XCTAssertEqual(messages[0]["role"] as? String, "system")
-        XCTAssertEqual(messages[0]["content"] as? String, "Vocabulary: API")
-        XCTAssertEqual(messages[1]["role"] as? String, "user")
-        let content = try XCTUnwrap(messages[1]["content"] as? [[String: Any]])
-        let audio = try XCTUnwrap(content[0]["input_audio"] as? [String: Any])
-        XCTAssertEqual(audio["data"] as? String, "data:audio/wav;base64,\(wav.base64EncodedString())",
-                       "DashScope wants a data URI")
-    }
-
-    func testDashScopeChatOmitsVocabWhenEmpty() throws {
-        let request = CloudASRClient.makeRequest(
-            shape: .dashScopeChat, baseURL: base, apiKey: "sk-dash", model: "qwen3-asr-flash",
-            audioWAV: wav, vocabularyHints: nil, timeout: 30)
-        let body = try XCTUnwrap(request.httpBody)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
-        XCTAssertEqual(messages.count, 1, "no vocab means no system message")
-    }
-
     // MARK: - Response parsing
 
     func testParseTranscriptionsResponse() throws {
@@ -113,29 +63,12 @@ final class CloudASRClientTests: XCTestCase {
         XCTAssertThrowsError(try CloudASRClient.parseTranscriptionsResponse(data: Data("garbage".utf8)))
     }
 
-    func testParseChatCompletionsResponse() throws {
-        let data = #"{"choices": [{"message": {"content": " 转写结果 "}}]}"#.data(using: .utf8)!
-        XCTAssertEqual(try CloudASRClient.parseChatCompletionsResponse(data: data), "转写结果")
-    }
-
-    func testParseChatCompletionsResponseThrowsWhenEmpty() {
-        XCTAssertThrowsError(try CloudASRClient.parseChatCompletionsResponse(data: Data(#"{"choices": []}"#.utf8)))
-        XCTAssertThrowsError(try CloudASRClient.parseChatCompletionsResponse(data: Data("{}".utf8)))
-    }
-
     func testCheckStatus() throws {
         let ok = HTTPURLResponse(url: base, statusCode: 200, httpVersion: nil, headerFields: nil)!
         XCTAssertNoThrow(try CloudASRClient.checkStatus(data: Data(), response: ok))
 
         let bad = HTTPURLResponse(url: base, statusCode: 401, httpVersion: nil, headerFields: nil)!
         XCTAssertThrowsError(try CloudASRClient.checkStatus(data: Data("unauthorized".utf8), response: bad))
-    }
-
-    func testValidationPathOpenRouterUsesAuthEndpoint() {
-        XCTAssertEqual(CloudASRClient.validationPath(for: "https://openrouter.ai/api/v1"), "auth/key")
-        XCTAssertEqual(CloudASRClient.validationPath(for: "https://api.openai.com/v1"), "models")
-        XCTAssertEqual(CloudASRClient.validationPath(for: "https://dashscope.aliyuncs.com/compatible-mode/v1"), "models")
-        XCTAssertEqual(CloudASRClient.validationPath(for: "https://api.groq.com/openai/v1"), "models")
     }
 
     // MARK: - Error classification
@@ -172,9 +105,8 @@ final class CloudASRClientTests: XCTestCase {
         // session the client owns needs the stub wired in explicitly.
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]
-        return CloudASRClient(baseURL: "https://openrouter.ai/api/v1", apiKey: "sk-or-test",
-                              model: "qwen/qwen3-asr-flash", shape: .openRouterJSON,
-                              timeout: timeout, session: URLSession(configuration: config))
+        return CloudASRClient(apiKey: "sk-or-test", timeout: timeout,
+                              session: URLSession(configuration: config))
     }
 
     func testTranscribeSyncReturnsParsedText() throws {
@@ -244,8 +176,7 @@ final class CloudASRClientTests: XCTestCase {
                                            httpVersion: nil, headerFields: nil)!
             return (response, Data())
         }
-        XCTAssertEqual(CloudASRClient.validate(apiKey: "sk-or-good",
-                                               baseURL: "https://openrouter.ai/api/v1"), .valid)
+        XCTAssertEqual(CloudASRClient.validate(apiKey: "sk-or-good"), .valid)
     }
 
     func testValidateRejectsNon200() {
@@ -254,15 +185,13 @@ final class CloudASRClientTests: XCTestCase {
                                            httpVersion: nil, headerFields: nil)!
             return (response, Data())
         }
-        XCTAssertEqual(CloudASRClient.validate(apiKey: "sk-or-bad",
-                                               baseURL: "https://openrouter.ai/api/v1"), .rejected)
+        XCTAssertEqual(CloudASRClient.validate(apiKey: "sk-or-bad"), .rejected)
     }
 
     /// Offline must not read as "the key was rejected" — the fixes are different.
     func testValidateDistinguishesNetworkFailureFromRejection() {
         MockURLProtocol.handler = { _ in throw URLError(.notConnectedToInternet) }
-        let result = CloudASRClient.validate(apiKey: "sk-or-x",
-                                             baseURL: "https://openrouter.ai/api/v1")
+        let result = CloudASRClient.validate(apiKey: "sk-or-x")
         guard case .unreachable = result else {
             return XCTFail("expected .unreachable, got \(result)")
         }
