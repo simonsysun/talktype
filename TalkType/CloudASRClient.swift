@@ -187,8 +187,9 @@ final class CloudASRClient {
             ],
         ]
         if let prompt = buildPrompt(vocabularyHints: vocabularyHints) {
-            // Accepted where the provider supports it; OpenRouter passes it through to
-            // providers that honour it. Verify per provider in the bake-off.
+            // OpenRouter accepts the field but ignores it (verified 2026-08-04); kept for
+            // providers that do honour it. The client-side vocabulary post-processing is
+            // the reliable path for cloud dictation.
             body["prompt"] = prompt
         }
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)

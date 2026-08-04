@@ -19,3 +19,8 @@ Consequences:
 - Privacy: audio leaves the machine by default; offline dictations stay local.
 - Predictability: each dictation may come from a different engine; the switch notification
   and the menu bar state are how the user can tell.
+
+The Local Engine is an optional one-click download, never a requirement: Setup offers
+"download local engine" but cloud-only users never touch the 3.8 GB weights. Offline
+without the Local Engine installed shows a clear "need network, or install the local
+engine" message instead of failing silently.

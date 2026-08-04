@@ -12,8 +12,9 @@ struct AppConfig: Codable {
     // The hotkey itself is owned by the KeyboardShortcuts library (UserDefaults), not this file.
     var sampleRate: Int = 16000
     var launchAtLogin: Bool = false
-    /// Local or cloud. Local stays the default where the sidecar is installed.
-    var asrEngine: ASREngine = .local
+    /// Local or cloud. Cloud is the default (cloud-first, ADR-0001): the ~4 GB local
+    /// engine stays an optional one-click download for offline dictation.
+    var asrEngine: ASREngine = .cloud
     /// Loopback port of the local ASR sidecar.
     var asrPort: Int = SidecarDefaults.port
     /// Generous by design: inference is local, so a slow response means a long recording,

@@ -121,6 +121,10 @@ below is the fix, plus look at GPU priority in the sidecar.
 
 ## Cloud ASR as a switchable engine (2026-08-02)
 
+> **Superseded 2026-08-04** by "OpenRouter 实测 + 设计决定" below: cloud is now the default
+> engine (OpenRouter qwen-flash), and the local engine is an optional download. This section
+> stays as the history of how the engine became switchable.
+
 Amends the ASR decision above: local Qwen3-ASR stays the default, but local-*only* no longer holds.
 The sidecar is 4.1 GB resident with weights loaded and 3.8 GB on disk. On a 16 GB machine that is a
 quarter of RAM for something used a few seconds at a time. Not only a small-Mac problem either —
