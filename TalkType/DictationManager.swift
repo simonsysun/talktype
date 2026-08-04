@@ -14,6 +14,7 @@ final class DictationManager {
     private var config: AppConfig
     private let recorder: AudioRecorder
     let transcriber: Transcriber
+    private var cloudASR: CloudASRClient?
     private var refiner: TextRefiner
     private let vocabularyStore: VocabularyStore
     private let overlay: OverlayWindow
@@ -41,6 +42,7 @@ final class DictationManager {
             port: config.asrPort,
             timeout: config.asrTimeoutSeconds
         )
+        self.cloudASR = Self.makeCloudClient(config)
 
         self.refiner = TextRefiner(
             model: config.refineModel,
@@ -97,9 +99,21 @@ final class DictationManager {
         config = newConfig
         transcriberLock.lock()
         transcriber.timeout = newConfig.asrTimeoutSeconds
+        cloudASR = Self.makeCloudClient(newConfig)
         refiner = TextRefiner(model: newConfig.refineModel, timeout: newConfig.refineTimeoutSeconds)
         transcriberLock.unlock()
         applyInputSelection()
+    }
+
+    private static func makeCloudClient(_ config: AppConfig) -> CloudASRClient? {
+        guard let key = CloudKeyStore.apiKey(for: config.cloudProvider) else { return nil }
+        return CloudASRClient(
+            baseURL: config.cloudBaseURL,
+            apiKey: key,
+            model: config.cloudModel,
+            shape: config.cloudProvider.profile.requestShape,
+            timeout: config.asrTimeoutSeconds
+        )
     }
 
     /// Empty config UID means Automatic: follow the system default, except skip a
@@ -270,11 +284,25 @@ final class DictationManager {
                 }
                 self.transcriberLock.lock()
                 let text: String
-                do {
-                    text = try self.transcriber.transcribe(audio: audio, sampleRate: self.config.sampleRate, vocabularyHints: hints)
-                } catch {
-                    self.transcriberLock.unlock()
-                    throw error
+                if self.config.asrEngine == .cloud {
+                    guard let cloud = self.cloudASR else {
+                        self.transcriberLock.unlock()
+                        self.trayDelegate?.notifyError("Cloud speech engine has no API key. Add one under Setup.")
+                        return
+                    }
+                    do {
+                        text = try cloud.transcribeSync(audio: audio, sampleRate: self.config.sampleRate, vocabularyHints: hints)
+                    } catch {
+                        self.transcriberLock.unlock()
+                        throw error
+                    }
+                } else {
+                    do {
+                        text = try self.transcriber.transcribe(audio: audio, sampleRate: self.config.sampleRate, vocabularyHints: hints)
+                    } catch {
+                        self.transcriberLock.unlock()
+                        throw error
+                    }
                 }
                 self.transcriberLock.unlock()
 

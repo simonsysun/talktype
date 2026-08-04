@@ -51,7 +51,27 @@ echo "==> Installing qwen3-asr-mlx"
 "$UV" pip install --quiet --python "$DEST/venv/bin/python" qwen3-asr-mlx
 
 echo "==> Downloading weights (skipped if already cached)"
-HF_HOME="$DEST/hf" "$DEST/venv/bin/hf" download "$MODEL"
+HF_HOME="$DEST/hf" "$DEST/venv/bin/python" - "$MODEL" <<'PY'
+import sys
+from huggingface_hub import snapshot_download
+from tqdm import tqdm
+
+class Progress(tqdm):
+    """tqdm that also emits a machine-readable percentage the app can parse.
+
+    TalkType's SetupWindow reads `[progress] NN` lines and drives a progress bar with
+    them; everything else tqdm prints goes to stderr and into the install log.
+    """
+
+    def update(self, n=1):
+        super().update(n)
+        if self.total:
+            pct = min(100, int(self.n * 100 / self.total))
+            print(f"[progress] {pct}", flush=True)
+
+snapshot_download(sys.argv[1], tqdm_class=Progress)
+print("[progress] 100", flush=True)
+PY
 
 echo "==> Installing server.py"
 cp "$SRC/server.py" "$DEST/server.py"

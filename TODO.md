@@ -126,21 +126,30 @@ The sidecar is 4.1 GB resident with weights loaded and 3.8 GB on disk. On a 16 G
 quarter of RAM for something used a few seconds at a time. Not only a small-Mac problem either —
 this 64 GB machine was carrying 17 GB of swap while idle.
 
-- [ ] **A chosen engine, not a fallback.** Menu: Speech engine → Local (Qwen3-ASR) / Cloud (…).
+- [x] **A chosen engine, not a fallback.** Menu: Speech engine → Local (Qwen3-ASR) / Cloud (…).
       Local stays the default where the sidecar is installed. Whichever is chosen does all the work,
       so the same sentence never transcribes differently depending on what happened to be up.
-- [ ] **Say what leaves the machine.** The Groq polish sends the transcript; a cloud ASR sends the
+      Done 2026-08-03: `config.asr_engine`, engine submenu, sidecar stopped when cloud is chosen.
+- [x] **Say what leaves the machine.** The Groq polish sends the transcript; a cloud ASR sends the
       *audio*. That is a different promise from the one the README makes today, and the UI has to
       state it plainly at the moment of choosing.
+      UI done 2026-08-03 (menu tooltip, setup copy, engine-switch notification). README rewrite
+      waits for the release pass.
 - [ ] Pick the provider from the numbers in "ASR decision", then re-measure — that bake-off was one
       clip. Soniox stt-async-v5 was the most accurate on Simon's Chinese-with-English but 2.9–4.6 s;
       OpenAI gpt-4o-mini was 0.5–1.1 s but made a meaning error (财报 → 采访).
       → Shortlist and recommendation in "Cloud engine research" below.
 - [ ] Recover rather than reinvent: `KeyStorage.swift`, `ASRProvider`, and the multipart body
       building were deleted in the cut-over and are in git history.
-- [ ] Setup must stop assuming local. `SetupWindow` blocks on a missing venv today; with cloud
+      Done 2026-08-03 — rebuilt as `CloudASRClient` (three request shapes) + `CloudKeyStore`
+      (per-provider keychain), informed by what git history kept.
+- [x] Setup must stop assuming local. `SetupWindow` blocks on a missing venv today; with cloud
       chosen there is nothing to install and the 3.8 GB download has to be skippable.
+      Done 2026-08-03: engine popup, cloud provider/URL/model/key section, local install shows a
+      real download percentage.
 - [ ] Vocabulary hints and `PostProcessor` must behave identically on both paths.
+      Client-side done 2026-08-03 (bare comma list on all three shapes); cloud-Qwen behaviour is
+      a bake-off question.
 
 ---
 
@@ -191,6 +200,41 @@ measuring latency, word accuracy, and vocabulary-hint behaviour per path:
       hallucination on cloud Qwen too.
 - [ ] Check provider retention/training terms before writing the privacy copy — audio leaving the
       machine changes the README's promise regardless of which engine wins.
+
+---
+
+## Cloud engine — implementation (2026-08-03)
+
+Architecture and current state, so the next session can pick up without re-deriving it:
+
+- `config.json` gains `asr_engine` (`local` | `cloud`), `cloud_provider`, `cloud_model`,
+  `cloud_base_url`. All decode with defaults, so old configs keep working.
+- Cloud keys live in the login keychain, one slot per provider
+  (`talktype-asr-<provider>`, `CloudKeyStore`). Provider is auto-detected from the pasted base
+  URL (OpenRouter / OpenAI / DashScope / Groq / custom); key prefix `sk-or-` is a secondary hint.
+  The Setup window fills model + URL from the detected provider and validates the key against
+  `{base}/models` before saving.
+- `CloudASRClient` speaks the three dialects: OpenRouter base64 JSON (`/audio/transcriptions`),
+  OpenAI/Groq multipart, DashScope chat-completions `input_audio`. Vocabulary is a bare comma
+  list on every path (`buildPrompt`), same rule as the local sidecar's `X-TalkType-Context`.
+- Engine switch stops the sidecar when going cloud (frees ~4 GB) and starts it when going local.
+  Launch only spawns the sidecar for local; cloud with no key opens Setup instead of blocking.
+- Local install (`asr/install.sh`) now emits `[progress] NN` while the weights download, and the
+  Setup window drives a real percentage bar off it.
+
+Verified: 74 `swift test` cases green (15 new: provider detection, three request shapes, response
+parsing, config round-trip) and a Release `xcodebuild` passes. **Not verified on hardware** —
+Simon asked not to run the app; the re-bake-off and a real dictation are the field tests.
+
+Still open:
+
+- [ ] Re-bake-off with Simon's clips + keys: Qwen3-ASR-Flash (OpenRouter + DashScope),
+      gpt-4o-transcribe, Soniox stt-async-v5, Groq whisper-large-v3-turbo (free arm).
+- [ ] Confirm cloud Qwen does not "complete the prompt" when given the comma-list vocab context
+      (the local lesson) — if it does, drop vocab hints on the cloud path.
+- [ ] README + privacy copy for the cloud engine; provider retention/training terms first.
+- [ ] Local model size choice (1.7B vs 0.6B) in Setup — server.py currently hardcodes 1.7B, so
+      this needs the sidecar to know its installed size first.
 
 ---
 
