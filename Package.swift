@@ -34,6 +34,8 @@ let package = Package(
                 "AppIdentity.swift",
                 "AudioDevices.swift",
                 "AudioRecorder.swift",
+                "CloudASRClient.swift",
+                "CloudProvider.swift",
                 "Config.swift",
                 "PostProcessor.swift",
                 "Transcriber.swift",

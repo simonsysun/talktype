@@ -1,9 +1,20 @@
 import Foundation
 
+/// Which engine turns audio into words. Local runs Qwen3-ASR through the sidecar; cloud
+/// sends the WAV to the configured provider. A chosen engine does all the work — there is
+/// deliberately no silent fallback, so the same sentence never transcribes differently
+/// depending on what happened to be up.
+enum ASREngine: String, Codable {
+    case local
+    case cloud
+}
+
 struct AppConfig: Codable {
     // The hotkey itself is owned by the KeyboardShortcuts library (UserDefaults), not this file.
     var sampleRate: Int = 16000
     var launchAtLogin: Bool = false
+    /// Local or cloud. Local stays the default where the sidecar is installed.
+    var asrEngine: ASREngine = .local
     /// Loopback port of the local ASR sidecar.
     var asrPort: Int = SidecarDefaults.port
     /// Generous by design: inference is local, so a slow response means a long recording,
@@ -20,10 +31,16 @@ struct AppConfig: Codable {
     var refineTimeoutSeconds: Double = 2.5
     /// UID of the microphone to record from. Empty means follow the system default.
     var inputDeviceUID: String = ""
+    /// Cloud engine settings. Keys are not stored here — each provider keeps its own key
+    /// in the login keychain, keyed by `CloudProvider.profile.keychainService`.
+    var cloudProvider: CloudProvider = .openRouter
+    var cloudModel: String = CloudProvider.openRouter.profile.defaultModel
+    var cloudBaseURL: String = CloudProvider.openRouter.profile.defaultBaseURL
 
     enum CodingKeys: String, CodingKey {
         case sampleRate = "sample_rate"
         case launchAtLogin = "launch_at_login"
+        case asrEngine = "asr_engine"
         case asrPort = "asr_port"
         case asrTimeoutSeconds = "asr_timeout_seconds"
         case silenceAutoStopEnabled = "silence_auto_stop_enabled"
@@ -34,6 +51,9 @@ struct AppConfig: Codable {
         case refineModel = "refine_model"
         case refineTimeoutSeconds = "refine_timeout_seconds"
         case inputDeviceUID = "input_device_uid"
+        case cloudProvider = "cloud_provider"
+        case cloudModel = "cloud_model"
+        case cloudBaseURL = "cloud_base_url"
     }
 
     init() {}
@@ -46,6 +66,7 @@ struct AppConfig: Codable {
         let d = AppConfig()
         sampleRate = try c.decodeIfPresent(Int.self, forKey: .sampleRate) ?? d.sampleRate
         launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? d.launchAtLogin
+        asrEngine = try c.decodeIfPresent(ASREngine.self, forKey: .asrEngine) ?? d.asrEngine
         asrPort = try c.decodeIfPresent(Int.self, forKey: .asrPort) ?? d.asrPort
         asrTimeoutSeconds = try c.decodeIfPresent(Double.self, forKey: .asrTimeoutSeconds) ?? d.asrTimeoutSeconds
         silenceAutoStopEnabled = try c.decodeIfPresent(Bool.self, forKey: .silenceAutoStopEnabled) ?? d.silenceAutoStopEnabled
@@ -56,6 +77,9 @@ struct AppConfig: Codable {
         refineModel = try c.decodeIfPresent(String.self, forKey: .refineModel) ?? d.refineModel
         refineTimeoutSeconds = try c.decodeIfPresent(Double.self, forKey: .refineTimeoutSeconds) ?? d.refineTimeoutSeconds
         inputDeviceUID = try c.decodeIfPresent(String.self, forKey: .inputDeviceUID) ?? d.inputDeviceUID
+        cloudProvider = try c.decodeIfPresent(CloudProvider.self, forKey: .cloudProvider) ?? d.cloudProvider
+        cloudModel = try c.decodeIfPresent(String.self, forKey: .cloudModel) ?? d.cloudModel
+        cloudBaseURL = try c.decodeIfPresent(String.self, forKey: .cloudBaseURL) ?? d.cloudBaseURL
     }
 }
 
