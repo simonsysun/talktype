@@ -47,6 +47,30 @@ final class SidecarManager {
         return .ready
     }
 
+    /// Whether a stopped download left weights behind. The downloader resumes from whatever
+    /// is already in this directory, so its presence is the difference between "not
+    /// installed" and "paused partway".
+    static var hasPartialDownload: Bool {
+        let contents = try? FileManager.default.contentsOfDirectory(atPath: huggingFaceHome.path)
+        return !(contents ?? []).isEmpty
+    }
+
+    /// Throw away downloaded weights but keep the Python environment. Someone who stops a
+    /// download wants the gigabytes back, not a reinstall of everything — and keeping the
+    /// environment makes starting over quick.
+    @discardableResult
+    static func deleteDownloadedWeights() -> Bool {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: huggingFaceHome.path) else { return true }
+        do {
+            try fm.removeItem(at: huggingFaceHome)
+            return true
+        } catch {
+            print("[sidecar] could not delete weights: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     // MARK: - Lifecycle
 
     var isRunning: Bool {

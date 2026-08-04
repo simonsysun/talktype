@@ -7,6 +7,11 @@ import Cocoa
 /// It opens by itself when something is missing, and from the menu bar afterwards.
 final class SetupWindow: NSObject, NSWindowDelegate {
 
+    /// Width every row is laid out to. Rows used to hardcode this number in nine places,
+    /// which is how one of them ended up too narrow for its own buttons. Wide enough here
+    /// that a base URL and a key are both readable without scrolling.
+    private static let contentWidth: CGFloat = 548
+
     private var window: NSWindow?
     private var installTask: Process?
 
@@ -16,6 +21,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     // Local engine
     private let engineStatus = NSTextField(labelWithString: "")
     private let engineButton = NSButton()
+    private let pauseButton = NSButton()
     private let deleteEngineButton = NSButton()
     private let progressBar = NSProgressIndicator()
     private let progressLabel = NSTextField(labelWithString: "")
@@ -28,14 +34,17 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     private let providerPopup = NSPopUpButton()
     private let baseURLField = NSTextField()
     private let modelField = NSTextField()
-    private let keyField = NSSecureTextField()
+    private let keyField = SecretField()
     private let keyButton = NSButton()
+    private let keyRemoveButton = NSButton()
     private let detectLabel = NSTextField(labelWithString: "")
     private var cloudRows: [NSView] = []
 
     // Polish
     private let polishStatus = NSTextField(labelWithString: "")
-    private let polishButton = NSButton()
+    private let polishKeyField = SecretField()
+    private let polishKeyButton = NSButton()
+    private let polishRemoveButton = NSButton()
 
     // Permissions
     private let micStatus = NSTextField(labelWithString: "")
@@ -45,6 +54,13 @@ final class SetupWindow: NSObject, NSWindowDelegate {
 
     private var refreshTimer: Timer?
     private var installOutputBuffer = ""
+    /// Set when the user pauses or discards, so the installer exiting non-zero is reported
+    /// as what it is rather than as a failure.
+    private var userStoppedInstall = false
+    /// Weights are removed after the installer has actually exited, never underneath it.
+    private var deleteWeightsAfterStop = false
+    private var verifyingCloudKey = false
+    private var verifyingPolishKey = false
 
     /// Live config; the app reads engine/provider/model choices out of here.
     var config: AppConfig = AppConfig()
@@ -56,8 +72,6 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     /// Called after the user confirms deleting the local engine; the app stops the sidecar
     /// and removes the ~4 GB of weights.
     var onEngineDeleted: (() -> Void)?
-    /// Called when the user asks to enter a Groq key; the app owns that dialog already.
-    var onEditKey: (() -> Void)?
     /// Called to clear a stale Accessibility grant and ask again; the app owns that dialog.
     var onRepairAccessibility: (() -> Void)?
 
@@ -93,7 +107,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
 
     private func build() {
         let w = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 460),
+            contentRect: NSRect(x: 0, y: 0, width: Self.contentWidth + 52, height: 460),
             styleMask: [.titled, .closable], backing: .buffered, defer: false)
         w.title = "TalkType Setup"
         w.delegate = self
@@ -119,32 +133,43 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         enginePopup.action = #selector(engineChanged)
         enginePopup.setContentHuggingPriority(.required, for: .horizontal)
 
-        let engineRow = NSStackView(views: [enginePopup, engineStatus, spinner, engineButton])
+        // The engine picker gets a row to itself. Sharing one with the status and the
+        // buttons is what left no room for "Reinstall" and clipped it to "Rei…".
+        let pickerRow = NSStackView(views: [enginePopup, NSView()])
+        pickerRow.orientation = .horizontal
+        pickerRow.spacing = 10
+        pickerRow.alignment = .centerY
+        pickerRow.translatesAutoresizingMaskIntoConstraints = false
+        pickerRow.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
+        root.addArrangedSubview(pickerRow)
+
+        for button in [engineButton, pauseButton, deleteEngineButton] {
+            button.bezelStyle = .rounded
+            button.target = self
+            // Buttons say what they do; a squeezed row must take space from the status
+            // text, which can afford to wrap, never from a label that turns into "Rei…".
+            button.setContentHuggingPriority(.required, for: .horizontal)
+            button.setContentCompressionResistancePriority(.required, for: .horizontal)
+        }
+        engineButton.action = #selector(installEngine)
+        pauseButton.action = #selector(pauseInstall)
+        pauseButton.isHidden = true
+        deleteEngineButton.action = #selector(deleteEngine)
+        deleteEngineButton.contentTintColor = .systemRed
+        deleteEngineButton.isHidden = true
+
+        engineStatus.setContentHuggingPriority(.init(1), for: .horizontal)
+        let statusSpacer = NSView()
+        statusSpacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        let engineRow = NSStackView(views: [
+            engineStatus, spinner, statusSpacer, engineButton, pauseButton, deleteEngineButton,
+        ])
         engineRow.orientation = .horizontal
-        engineRow.spacing = 10
+        engineRow.spacing = 8
         engineRow.alignment = .centerY
         engineRow.translatesAutoresizingMaskIntoConstraints = false
-        engineRow.widthAnchor.constraint(equalToConstant: 468).isActive = true
-        engineStatus.setContentHuggingPriority(.required, for: .horizontal)
+        engineRow.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
         root.addArrangedSubview(engineRow)
-
-        engineButton.bezelStyle = .rounded
-        engineButton.target = self
-        engineButton.action = #selector(installEngine)
-
-        // Delete lives on its own row so the engine row never crowds on narrow screens.
-        deleteEngineButton.title = "Delete local engine…"
-        deleteEngineButton.bezelStyle = .rounded
-        deleteEngineButton.contentTintColor = .systemRed
-        deleteEngineButton.target = self
-        deleteEngineButton.action = #selector(deleteEngine)
-        deleteEngineButton.isHidden = true
-        let deleteRow = NSStackView(views: [deleteEngineButton])
-        deleteRow.orientation = .horizontal
-        deleteRow.alignment = .leading
-        deleteRow.translatesAutoresizingMaskIntoConstraints = false
-        deleteRow.widthAnchor.constraint(equalToConstant: 468).isActive = true
-        root.addArrangedSubview(deleteRow)
 
         spinner.style = .spinning
         spinner.controlSize = .small
@@ -166,7 +191,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         progressRow.spacing = 10
         progressRow.alignment = .centerY
         progressRow.translatesAutoresizingMaskIntoConstraints = false
-        progressRow.widthAnchor.constraint(equalToConstant: 468).isActive = true
+        progressRow.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
         root.addArrangedSubview(progressRow)
 
         logView.isEditable = false
@@ -179,7 +204,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         logScroll.isHidden = true
         logScroll.translatesAutoresizingMaskIntoConstraints = false
         logScroll.heightAnchor.constraint(equalToConstant: 96).isActive = true
-        logScroll.widthAnchor.constraint(equalToConstant: 468).isActive = true
+        logScroll.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
         root.addArrangedSubview(logScroll)
 
         // MARK: Cloud configuration
@@ -200,16 +225,11 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         modelField.action = #selector(modelEdited)
         cloudRows.append(formRow(label: "Model", view: modelField))
 
-        let keyStack = NSStackView(views: [keyField, keyButton])
-        keyStack.orientation = .horizontal
-        keyStack.spacing = 8
-        keyStack.alignment = .centerY
-        keyStack.widthAnchor.constraint(greaterThanOrEqualToConstant: 300).isActive = true
         keyField.placeholderString = "API key"
-        keyButton.bezelStyle = .rounded
-        keyButton.target = self
-        keyButton.action = #selector(saveKey)
-        cloudRows.append(formRow(label: "API key", view: keyStack))
+        keyField.onChange = { [weak self] in self?.syncKeyButtons() }
+        cloudRows.append(formRow(label: "API key", view: keyRow(
+            field: keyField, save: keyButton, saveAction: #selector(saveKey),
+            remove: keyRemoveButton, removeAction: #selector(removeKey))))
 
         detectLabel.font = .systemFont(ofSize: 11)
         detectLabel.textColor = .secondaryLabelColor
@@ -219,7 +239,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         cloudStatusRow.orientation = .horizontal
         cloudStatusRow.alignment = .centerY
         cloudStatusRow.translatesAutoresizingMaskIntoConstraints = false
-        cloudStatusRow.widthAnchor.constraint(equalToConstant: 468).isActive = true
+        cloudStatusRow.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
         cloudRows.append(cloudStatusRow)
 
         for row in cloudRows {
@@ -230,8 +250,16 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         root.addArrangedSubview(heading("Cloud polish  (optional)",
             "Tidies filler words and punctuation through Groq. Sends the transcript only, never audio. "
             + "Leave it off and everything stays here."))
-        root.addArrangedSubview(row(status: polishStatus, button: polishButton,
-                                    action: #selector(editKey)))
+        // Entered right here, the same way as the key above it. It used to be a separate
+        // dialog, which meant the two keys the app needs were asked for in two different
+        // ways for no reason a user could see.
+        polishKeyField.placeholderString = "gsk_…"
+        polishKeyField.onChange = { [weak self] in self?.syncKeyButtons() }
+        root.addArrangedSubview(formRow(label: "Groq key", view: keyRow(
+            field: polishKeyField, save: polishKeyButton, saveAction: #selector(savePolishKey),
+            remove: polishRemoveButton, removeAction: #selector(removePolishKey))))
+        polishStatus.font = .systemFont(ofSize: 11)
+        root.addArrangedSubview(formRow(label: "", view: polishStatus))
 
         root.addArrangedSubview(separator())
         root.addArrangedSubview(heading("Permissions",
@@ -272,7 +300,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         let d = NSTextField(wrappingLabelWithString: detail)
         d.font = .systemFont(ofSize: 11)
         d.textColor = .secondaryLabelColor
-        d.preferredMaxLayoutWidth = 468
+        d.preferredMaxLayoutWidth = Self.contentWidth
         stack.addArrangedSubview(d)
         return stack
     }
@@ -289,11 +317,37 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         stack.spacing = 10
         stack.alignment = .centerY
         stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.widthAnchor.constraint(equalToConstant: 468).isActive = true
+        stack.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
         if let field = view as? NSTextField {
             field.setContentHuggingPriority(.init(1), for: .horizontal)
             field.widthAnchor.constraint(greaterThanOrEqualToConstant: 300).isActive = true
         }
+        return stack
+    }
+
+    /// Both API keys are entered the same way: type or paste, Save, and Remove once one is
+    /// stored. Save stays disabled until the field holds something, so the button always
+    /// tells the truth about whether pressing it will do anything.
+    private func keyRow(field: SecretField, save: NSButton, saveAction: Selector,
+                        remove: NSButton, removeAction: Selector) -> NSView {
+        save.title = "Save"
+        remove.title = "Remove"
+        remove.contentTintColor = .systemRed
+        for (button, action) in [(save, saveAction), (remove, removeAction)] {
+            button.bezelStyle = .rounded
+            button.target = self
+            button.action = action
+            button.setContentHuggingPriority(.required, for: .horizontal)
+            button.setContentCompressionResistancePriority(.required, for: .horizontal)
+        }
+
+        let stack = NSStackView(views: [field, save, remove])
+        stack.orientation = .horizontal
+        stack.spacing = 8
+        stack.alignment = .centerY
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.widthAnchor.constraint(greaterThanOrEqualToConstant: 300).isActive = true
+        field.setContentHuggingPriority(.init(1), for: .horizontal)
         return stack
     }
 
@@ -314,7 +368,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         status.setContentHuggingPriority(.required, for: .horizontal)
         button.setContentHuggingPriority(.required, for: .horizontal)
         stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.widthAnchor.constraint(equalToConstant: 468).isActive = true
+        stack.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
         return stack
     }
 
@@ -322,7 +376,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         let line = NSBox()
         line.boxType = .separator
         line.translatesAutoresizingMaskIntoConstraints = false
-        line.widthAnchor.constraint(equalToConstant: 468).isActive = true
+        line.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
         return line
     }
 
@@ -338,13 +392,39 @@ final class SetupWindow: NSObject, NSWindowDelegate {
             engineStatus.stringValue = config.asrEngine == .cloud ? "Installed (not running)" : "Installed"
             engineStatus.textColor = .systemGreen
             engineButton.title = "Reinstall"
+            engineButton.isHidden = false
             engineButton.isEnabled = !installing
+            pauseButton.isHidden = true
+            deleteEngineButton.title = "Delete local engine…"
             deleteEngineButton.isHidden = installing
+        case .missing where installing:
+            // consumeInstallOutput owns this label while percentages are arriving; the
+            // refresh timer must not stamp over them every 1.5 seconds.
+            if !engineStatus.stringValue.hasPrefix("Downloading") {
+                engineStatus.stringValue = "Installing…"
+            }
+            engineStatus.textColor = .secondaryLabelColor
+            engineButton.isHidden = true
+            pauseButton.title = "Pause"
+            pauseButton.isHidden = false
+            deleteEngineButton.title = "Delete"
+            deleteEngineButton.isHidden = false
+        case .missing where SidecarManager.hasPartialDownload:
+            engineStatus.stringValue = "Paused — partly downloaded"
+            engineStatus.textColor = .systemOrange
+            engineButton.title = "Resume"
+            engineButton.isHidden = false
+            engineButton.isEnabled = true
+            pauseButton.isHidden = true
+            deleteEngineButton.title = "Delete"
+            deleteEngineButton.isHidden = false
         case .missing:
-            engineStatus.stringValue = installing ? "Installing…" : "Not installed"
-            engineStatus.textColor = installing ? .secondaryLabelColor : .systemOrange
+            engineStatus.stringValue = "Not installed"
+            engineStatus.textColor = .systemOrange
             engineButton.title = "Install"
-            engineButton.isEnabled = !installing
+            engineButton.isHidden = false
+            engineButton.isEnabled = true
+            pauseButton.isHidden = true
             deleteEngineButton.isHidden = true
         }
 
@@ -356,27 +436,28 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         modelField.stringValue = config.cloudModel
         detectLabel.stringValue = detectedProviderText()
 
-        let key = CloudKeyStore.apiKey(for: config.cloudProvider)
-        if let key = key {
-            cloudStatus.stringValue = "Key saved (\(Self.masked(key)))"
+        // Never clear the key fields here. refresh() runs on a 1.5-second timer, and wiping
+        // the field was erasing whatever the user was part-way through typing or pasting.
+        let cloudKey = CloudKeyStore.apiKey(for: config.cloudProvider)
+        if let cloudKey = cloudKey {
+            cloudStatus.stringValue = "Key saved (\(Self.masked(cloudKey)))"
             cloudStatus.textColor = .systemGreen
-            keyButton.title = "Replace"
-            keyField.stringValue = ""
         } else {
             cloudStatus.stringValue = "No key saved"
             cloudStatus.textColor = .secondaryLabelColor
-            keyButton.title = "Save"
         }
+        keyRemoveButton.isHidden = cloudKey == nil
 
-        if TextRefiner.apiKey() != nil {
-            polishStatus.stringValue = "Groq key saved"
+        let polishKey = TextRefiner.apiKey()
+        if let polishKey = polishKey {
+            polishStatus.stringValue = "Key saved (\(Self.masked(polishKey)))"
             polishStatus.textColor = .systemGreen
-            polishButton.title = "Change"
         } else {
-            polishStatus.stringValue = "Not configured"
+            polishStatus.stringValue = "Not configured — transcripts go in exactly as dictated."
             polishStatus.textColor = .secondaryLabelColor
-            polishButton.title = "Add Groq key"
         }
+        polishRemoveButton.isHidden = polishKey == nil
+        syncKeyButtons()
 
         let mic = AVCaptureDeviceAuthorization.isGranted
         micStatus.stringValue = mic ? "Microphone: granted" : "Microphone: not granted"
@@ -448,57 +529,105 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         onConfigChanged?(config)
     }
 
-    @objc private func saveKey() {
-        let provider = config.cloudProvider
-        if let existing = CloudKeyStore.apiKey(for: provider) {
-            let alert = NSAlert()
-            alert.messageText = "\(provider.profile.name) API key"
-            alert.informativeText = "Current key: \(Self.masked(existing))\n\n"
-                + "Only the recorded audio is sent to \(provider.profile.name)."
-            alert.addButton(withTitle: "Replace")
-            alert.addButton(withTitle: "Done")
-            alert.addButton(withTitle: "Remove")
-            switch alert.runModal() {
-            case .alertFirstButtonReturn: break
-            case .alertThirdButtonReturn:
-                CloudKeyStore.deleteAPIKey(for: provider)
-                onConfigChanged?(config)
-                refresh()
-                return
-            default:
-                refresh()
-                return
-            }
+    /// Save is only live when there is something to save, so pressing it always does
+    /// something. Held down while a key is being checked, so it cannot be double-fired.
+    private func syncKeyButtons() {
+        if !verifyingCloudKey {
+            keyButton.title = "Save"
+            keyButton.isEnabled = !keyField.stringValue
+                .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
+        if !verifyingPolishKey {
+            polishKeyButton.title = "Save"
+            polishKeyButton.isEnabled = !polishKeyField.stringValue
+                .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
 
+    @objc private func saveKey() {
         let key = keyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return }
+        let provider = config.cloudProvider
+        let baseURL = config.cloudBaseURL
+
+        verifyingCloudKey = true
         keyButton.isEnabled = false
-        keyButton.title = "Verifying…"
+        keyButton.title = "Checking…"
+        cloudStatus.stringValue = "Checking the key with \(provider.profile.name)…"
+        cloudStatus.textColor = .secondaryLabelColor
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let valid = CloudASRClient.validate(apiKey: key, baseURL: self?.config.cloudBaseURL ?? "")
+            let valid = CloudASRClient.validate(apiKey: key, baseURL: baseURL)
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                self.keyButton.isEnabled = true
-                self.keyButton.title = "Save"
+                self.verifyingCloudKey = false
                 guard valid else {
-                    self.cloudStatus.stringValue = "Could not verify the key — check the key and your network."
+                    self.cloudStatus.stringValue =
+                        "\(provider.profile.name) did not accept that key. Nothing was saved."
                     self.cloudStatus.textColor = .systemOrange
+                    self.syncKeyButtons()
                     return
                 }
-                guard CloudKeyStore.storeAPIKey(key, for: self.config.cloudProvider) else {
+                guard CloudKeyStore.storeAPIKey(key, for: provider) else {
                     self.cloudStatus.stringValue = "Could not write the key to the keychain."
                     self.cloudStatus.textColor = .systemOrange
+                    self.syncKeyButtons()
                     return
                 }
+                self.keyField.stringValue = ""
                 self.onConfigChanged?(self.config)
                 self.refresh()
             }
         }
     }
 
-    @objc private func editKey() { onEditKey?() }
+    @objc private func removeKey() {
+        CloudKeyStore.deleteAPIKey(for: config.cloudProvider)
+        keyField.stringValue = ""
+        onConfigChanged?(config)
+        refresh()
+    }
+
+    @objc private func savePolishKey() {
+        let key = polishKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+
+        verifyingPolishKey = true
+        polishKeyButton.isEnabled = false
+        polishKeyButton.title = "Checking…"
+        polishStatus.stringValue = "Checking the key with Groq…"
+        polishStatus.textColor = .secondaryLabelColor
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let valid = TextRefiner.validate(key)
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.verifyingPolishKey = false
+                guard valid else {
+                    self.polishStatus.stringValue = "Groq did not accept that key. Nothing was saved."
+                    self.polishStatus.textColor = .systemOrange
+                    self.syncKeyButtons()
+                    return
+                }
+                guard TextRefiner.storeAPIKey(key) else {
+                    self.polishStatus.stringValue = "Could not write the key to the keychain."
+                    self.polishStatus.textColor = .systemOrange
+                    self.syncKeyButtons()
+                    return
+                }
+                self.polishKeyField.stringValue = ""
+                self.onConfigChanged?(self.config)
+                self.refresh()
+            }
+        }
+    }
+
+    @objc private func removePolishKey() {
+        TextRefiner.deleteAPIKey()
+        polishKeyField.stringValue = ""
+        onConfigChanged?(config)
+        refresh()
+    }
     @objc private func openMicSettings() {
         open("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
     }
@@ -509,17 +638,59 @@ final class SetupWindow: NSObject, NSWindowDelegate {
 
     // MARK: - Local engine install
 
+    /// Stop the installer without losing what it has already fetched. The download resumes
+    /// from whatever is on disk, so pausing costs nothing but the time already spent.
+    @objc private func pauseInstall() {
+        stopInstall()
+        appendLog("\nPaused. Resume continues from here.\n")
+    }
+
+    private func stopInstall() {
+        guard let task = installTask, task.isRunning else { return }
+        userStoppedInstall = true
+        // Signal the whole process group. The script is its own group leader, and the
+        // download itself runs in a Python child — signalling only the script would leave
+        // that child running, still writing gigabytes nobody is watching any more.
+        kill(-task.processIdentifier, SIGTERM)
+    }
+
     @objc private func deleteEngine() {
-        guard installTask?.isRunning != true else { return }
+        let installed = SidecarManager.installState() == .ready
+        let running = installTask?.isRunning == true
+
+        if installed && !running {
+            let alert = NSAlert()
+            alert.messageText = "Delete the local engine?"
+            alert.informativeText = "Removes about 4 GB — the model weights, the Python "
+                + "environment and the server. Offline dictation stops working; cloud "
+                + "dictation is unaffected. You can install it again at any time."
+            alert.addButton(withTitle: "Delete")
+            alert.addButton(withTitle: "Cancel")
+            alert.alertStyle = .warning
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            onEngineDeleted?()
+            return
+        }
+
         let alert = NSAlert()
-        alert.messageText = "删除本地引擎？"
-        alert.informativeText = "将移除约 4 GB 的模型文件（Python 环境、权重、server.py）。"
-            + "删除后离线听写不可用，云端听写不受影响；以后随时可以重新安装。"
-        alert.addButton(withTitle: "删除")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = running ? "Stop the download and delete it?" : "Delete the partial download?"
+        alert.informativeText = "Removes what has downloaded so far and frees the space. "
+            + "The Python environment stays, so starting again is quick. "
+            + "Cloud dictation is unaffected."
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .warning
         guard alert.runModal() == .alertFirstButtonReturn else { return }
-        onEngineDeleted?()
+
+        if running {
+            // Deleted once the installer has exited, so nothing is pulled out from under it.
+            deleteWeightsAfterStop = true
+            stopInstall()
+        } else {
+            SidecarManager.deleteDownloadedWeights()
+            appendLog("Downloaded data removed.\n")
+            refresh()
+        }
     }
 
     @objc private func installEngine() {
@@ -531,6 +702,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
 
         logView.string = ""
         logScroll.isHidden = false
+        userStoppedInstall = false
         spinner.startAnimation(nil)
         progressBar.isHidden = true
         progressLabel.isHidden = true
@@ -559,12 +731,20 @@ final class SetupWindow: NSObject, NSWindowDelegate {
                 self.progressBar.isHidden = true
                 self.progressLabel.isHidden = true
                 self.installTask = nil
-                if finished.terminationStatus == 0 {
+
+                if self.deleteWeightsAfterStop {
+                    self.deleteWeightsAfterStop = false
+                    SidecarManager.deleteDownloadedWeights()
+                    self.appendLog("\nStopped, and the downloaded data was removed.\n")
+                } else if self.userStoppedInstall {
+                    // Not a failure: the exit code just reflects the signal we sent.
+                } else if finished.terminationStatus == 0 {
                     self.appendLog("\nDone. Starting the engine…\n")
                     self.onEngineInstalled?()
                 } else {
                     self.appendLog("\nInstall failed (exit \(finished.terminationStatus)).\n")
                 }
+                self.userStoppedInstall = false
                 self.refresh()
             }
         }
@@ -609,6 +789,87 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         ]))
         logView.scrollToEndOfDocument(nil)
     }
+}
+
+// MARK: - Secret field
+
+/// A key field you can look at.
+///
+/// Masked by default, because someone may be standing behind you. But a key you cannot
+/// read is a key you cannot check, and "the provider rejected it" is almost always either
+/// a stray space or the wrong provider's key pasted in — both invisible behind dots. The
+/// eye is what turns a dead end into a two-second check.
+final class SecretField: NSView, NSTextFieldDelegate {
+    private let masked = NSSecureTextField()
+    private let shown = NSTextField()
+    private let reveal = NSButton()
+    private var isRevealed = false
+
+    /// Called on every keystroke, so a Save button can enable itself only when there is
+    /// something to save.
+    var onChange: (() -> Void)?
+
+    var placeholderString: String? {
+        didSet {
+            masked.placeholderString = placeholderString
+            shown.placeholderString = placeholderString
+        }
+    }
+
+    var stringValue: String {
+        get { (isRevealed ? shown : masked).stringValue }
+        set { masked.stringValue = newValue; shown.stringValue = newValue }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+
+        for field in [masked as NSTextField, shown] {
+            field.font = .systemFont(ofSize: 12)
+            field.delegate = self
+            field.setContentHuggingPriority(.init(1), for: .horizontal)
+        }
+        shown.isHidden = true
+
+        reveal.bezelStyle = .texturedRounded
+        reveal.setButtonType(.momentaryPushIn)
+        reveal.image = NSImage(systemSymbolName: "eye", accessibilityDescription: "Show the key")
+        reveal.imagePosition = .imageOnly
+        reveal.target = self
+        reveal.action = #selector(toggleReveal)
+        reveal.setContentHuggingPriority(.required, for: .horizontal)
+        reveal.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let stack = NSStackView(views: [masked, shown, reveal])
+        stack.orientation = .horizontal
+        stack.spacing = 6
+        stack.alignment = .centerY
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    @objc private func toggleReveal() {
+        let text = stringValue
+        isRevealed.toggle()
+        masked.stringValue = text
+        shown.stringValue = text
+        masked.isHidden = isRevealed
+        shown.isHidden = !isRevealed
+        reveal.image = NSImage(
+            systemSymbolName: isRevealed ? "eye.slash" : "eye",
+            accessibilityDescription: isRevealed ? "Hide the key" : "Show the key")
+        window?.makeFirstResponder(isRevealed ? shown : masked)
+    }
+
+    func controlTextDidChange(_ obj: Notification) { onChange?() }
 }
 
 // MARK: - Microphone authorisation

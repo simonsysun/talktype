@@ -384,7 +384,6 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             self.refreshEngineStatus()
             self.configureEngineMenu()
         }
-        setupWindow.onEditKey = { [weak self] in self?.promptForGroqKey() }
         setupWindow.onRepairAccessibility = { [weak self] in self?.promptAccessibilityRepair() }
         setupWindow.onEngineInstalled = { [weak self] in
             guard let self = self else { return }
@@ -425,68 +424,11 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
     // MARK: - Cloud refinement
 
+    /// Both API keys are entered in Setup now, in the same place and the same way. This
+    /// used to open a dialog of its own, which meant the app asked for its two keys through
+    /// two unrelated pieces of interface.
     @objc private func editGroqKey() {
-        let existing = TextRefiner.apiKey()
-
-        if let existing = existing {
-            let alert = NSAlert()
-            alert.messageText = "Groq API Key"
-            alert.informativeText = "Current key: \(Self.masked(existing))\n\n"
-                + "Only the transcript is sent to Groq, never the audio. "
-                + "Removing the key turns polishing off; dictation still works."
-            alert.addButton(withTitle: "Replace")
-            alert.addButton(withTitle: "Done")
-            alert.addButton(withTitle: "Remove")
-            switch alert.runModal() {
-            case .alertFirstButtonReturn: promptForGroqKey()
-            case .alertThirdButtonReturn:
-                TextRefiner.deleteAPIKey()
-                refreshRefineItem()
-                notifyInfo("Groq key removed. Polishing is off; everything stays on this machine.")
-            default: break
-            }
-        } else {
-            promptForGroqKey()
-        }
-    }
-
-    private func promptForGroqKey() {
-        let alert = NSAlert()
-        alert.messageText = "Groq API Key"
-        alert.informativeText = "Paste a key from console.groq.com/keys.\n\n"
-            + "It polishes the transcript — removing filler words, fixing punctuation. "
-            + "Only text is sent, never audio."
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-
-        let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
-        field.placeholderString = "gsk_..."
-        alert.accessoryView = field
-        alert.window.initialFirstResponder = field
-
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        let key = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return }
-
-        // Verify before storing, so a typo surfaces here rather than as silently
-        // missing polish later.
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let valid = TextRefiner.validate(key)
-            DispatchQueue.main.async {
-                guard let self = self else { return }
-                guard valid else {
-                    self.notifyError("Groq rejected that key. Nothing was saved.")
-                    return
-                }
-                guard TextRefiner.storeAPIKey(key) else {
-                    self.notifyError("Could not write the key to the keychain.")
-                    return
-                }
-                self.refreshRefineItem()
-                self.dictationManager.prewarmRefiner()
-                self.notifyInfo("Groq key saved. Transcripts will be polished before typing.")
-            }
-        }
+        setupWindow.show()
     }
 
     private static func masked(_ key: String) -> String {
