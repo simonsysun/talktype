@@ -32,6 +32,12 @@ final class DictationManager {
     // Reachability: cheap pre-check so an offline machine never pays a cloud timeout.
     private let reachabilityQueue = DispatchQueue(label: "talktype.reachability")
     private let pathMonitor = NWPathMonitor()
+    private let reachabilityLock = NSLock()
+    private var reachabilityState: NWPath.Status = .satisfied
+    /// False until the monitor has delivered its first update. NWPathMonitor's initial
+    /// snapshot can read as "unsatisfied" for a moment at launch, so the offline shortcut
+    /// must not be trusted before the first real status arrives.
+    private var reachabilityKnown = false
 
     /// The engine actually used by the last dictation (cloud vs local fallback). Nil
     /// until the first dictation; drives the menu state and transition notifications.
@@ -69,6 +75,13 @@ final class DictationManager {
         // Set level callback after init since it captures self
         self.recorder.onLevel = { [weak self] level in
             self?.onAudioLevel(level)
+        }
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            guard let self = self else { return }
+            self.reachabilityLock.lock()
+            self.reachabilityState = path.status
+            self.reachabilityKnown = true
+            self.reachabilityLock.unlock()
         }
         pathMonitor.start(queue: reachabilityQueue)
     }
@@ -138,7 +151,9 @@ final class DictationManager {
     // MARK: - Engine selection (cloud-first, automatic local fallback)
 
     private var isOffline: Bool {
-        pathMonitor.currentPath.status != .satisfied
+        reachabilityLock.lock()
+        defer { reachabilityLock.unlock() }
+        return reachabilityKnown && reachabilityState != .satisfied
     }
 
     private static var localEngineInstalled: Bool {

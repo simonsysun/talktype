@@ -74,9 +74,12 @@ Press **⌘⇧Space** and start talking.
   headset doesn't stall your playback).
 - **Vocabulary** — add names and terms the model keeps mishearing. Only distinctive spellings are
   auto-corrected: `TestFlight` is recoverable from "test flight"; `xAI` is not recoverable from
-  "what's a ship" — those sound nearly identical, and no vocabulary fixes that.
+  "what's a ship" — those sound nearly identical, and no vocabulary fixes that. On the cloud
+  engine the hints never reach the model — only this conservative client-side correction applies.
 - **Engine** — menu bar ▸ Speech engine ▸ Cloud / Local. Cloud is the default; the menu shows
   which one is active.
+- **Local engine** — install or reinstall it from Setup; the red "Delete local engine…" button
+  frees the ~4 GB when you no longer need offline dictation.
 - **Keys** — Setup lets you add, replace, or remove them; they live in your login Keychain.
 - **Offline** — TalkType switches to the local engine on its own and notifies you at the switch.
   With no local engine and no network, it tells you to install the local engine or get online.
@@ -115,7 +118,7 @@ Press **⌘⇧Space** and start talking.
 ## Building from source
 
 ```bash
-git clone git@github-personal:simonsysun/talktype.git
+git clone https://github.com/simonsysun/talktype.git
 cd talktype
 
 ./asr/install.sh                 # Python env + Qwen3-ASR weights, into ~/.talktype/asr

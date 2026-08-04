@@ -1,5 +1,27 @@
 # Changelog
 
+## v2.1.0 — 2026-08-04
+
+Cloud-first dictation with automatic local fallback.
+
+### Added
+
+- **Cloud engine is now the default** — Qwen3-ASR-Flash through OpenRouter (bring your own key,
+  ≈ $2/month at 30 min/day). The ~4 GB local engine is an optional one-click download you can
+  delete any time from Setup.
+- **Automatic offline fallback** — no network (or the cloud unreachable) switches to the local
+  engine on its own and tells you at the switch; it returns to cloud when the network is back.
+  Cloud requests use a short 10 s deadline when the local engine is installed, so the fallback
+  never makes you wait out a long timeout.
+- **Delete local engine** in Setup, with a confirmation dialog.
+- **README rewritten** as a product guide plus a manual (English / 中文), including an honest
+  privacy table.
+
+### Notes
+
+- If you were on a local-only build, the new default is cloud: Setup will ask for an OpenRouter
+  key. Choose Local in the menu if you'd rather audio never leave the machine.
+
 ## v2.0.2 — 2026-08-02
 
 Dictation now reaches your cursor. It did not, before.

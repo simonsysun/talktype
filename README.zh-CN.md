@@ -55,8 +55,9 @@ TalkType 有两种把你的声音变成文字的方式，并且自动帮你选�
 
 - **快捷键**——默认 ⌘⇧Space；在菜单栏"更改快捷键…"里改。
 - **麦克风**——指定一个，或选自动（自动模式会故意跳过蓝牙麦克风，避免耳机让播放卡顿）。
-- **词库**——把模型老听错的词加进去。只有足够独特的拼写会被自动纠正：`TestFlight` 能从 "test flight" 救回来；`xAI` 从 "what's a ship" 救不回来——念起来几乎一样，加多少词库都没用。
+- **词库**——把模型老听错的词加进去。只有足够独特的拼写会被自动纠正：`TestFlight` 能从 "test flight" 救回来；`xAI` 从 "what's a ship" 救不回来——念起来几乎一样，加多少词库都没用。云端引擎不会把词库发给模型，只做保守的客户端纠错。
 - **引擎**——菜单栏 ▸ 语音引擎 ▸ 云端 / 本地。默认云端，菜单里能看到当前用哪个。
+- **本地引擎**——设置里可安装/重装；红色"删除本地引擎…"按钮可释放约 4 GB，不需要离线听写时再删。
 - **Key**——设置里可添加、更换、删除；都存在登录钥匙串里。
 - **离线**——TalkType 会自动切本地引擎，并在切换时通知你。本地没装、网也没有时，它会告诉你"装本地引擎或联网"。
 
@@ -87,7 +88,7 @@ TalkType 有两种把你的声音变成文字的方式，并且自动帮你选�
 ## 从源码构建
 
 ```bash
-git clone git@github-personal:simonsysun/talktype.git
+git clone https://github.com/simonsysun/talktype.git
 cd talktype
 
 ./asr/install.sh                 # Python 环境 + Qwen3-ASR 权重，装到 ~/.talktype/asr
