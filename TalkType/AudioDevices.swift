@@ -12,6 +12,7 @@ enum AudioDevices {
         let id: AudioDeviceID
         let uid: String
         let name: String
+        let isBluetooth: Bool
     }
 
     /// Every device that can currently record, in the order CoreAudio reports them.
@@ -22,7 +23,7 @@ enum AudioDevices {
                 guard let uid = stringProperty(id, kAudioDevicePropertyDeviceUID),
                       let name = stringProperty(id, kAudioObjectPropertyName)
                 else { return nil }
-                return Device(id: id, uid: uid, name: name)
+                return Device(id: id, uid: uid, name: name, isBluetooth: isBluetooth(id))
             }
     }
 
@@ -40,7 +41,28 @@ enum AudioDevices {
               let uid = stringProperty(deviceID, kAudioDevicePropertyDeviceUID),
               let name = stringProperty(deviceID, kAudioObjectPropertyName)
         else { return nil }
-        return Device(id: deviceID, uid: uid, name: name)
+        return Device(id: deviceID, uid: uid, name: name, isBluetooth: isBluetooth(deviceID))
+    }
+
+    /// The input to record from when the user has not pinned one.
+    ///
+    /// Follows the system default — unless that default is a Bluetooth headset. Opening
+    /// a Bluetooth mic forces the link to renegotiate: AirPods' output drops from
+    /// 48 kHz stereo to 24 kHz mono for minutes, and starving the 2.4 GHz radio is what
+    /// a frozen mouse looks like. The headset's voice mic also only captures 24 kHz
+    /// against the built-in array's 48 kHz. An explicit pick always wins; this only
+    /// shapes Automatic.
+    static func automaticInput() -> (device: Device?, skippedBluetooth: Bool) {
+        guard let defaultDevice = systemDefaultInput() else { return (nil, false) }
+        guard defaultDevice.isBluetooth else { return (defaultDevice, false) }
+
+        let candidates = inputDevices().filter { !$0.isBluetooth }
+        // Prefer the built-in mic when it exists: it is always present on a MacBook and
+        // cannot be a virtual or aggregate device that captures nothing.
+        let fallback = candidates.first { transportType($0.id) == kAudioDeviceTransportTypeBuiltIn }
+            ?? candidates.first
+        guard let fallback else { return (defaultDevice, false) }
+        return (fallback, true)
     }
 
     /// Resolve a saved UID. Returns nil when the preference is "follow the system", or
@@ -83,6 +105,30 @@ enum AudioDevices {
 
         let list = UnsafeMutableAudioBufferListPointer(buffer.assumingMemoryBound(to: AudioBufferList.self))
         return list.contains { $0.mNumberChannels > 0 }
+    }
+
+    /// Whether the device is a Bluetooth headset or earbuds. The transport type is the
+    /// durable signal — the name ("AirPods Pro") is not.
+    private static func isBluetooth(_ id: AudioDeviceID) -> Bool {
+        switch transportType(id) {
+        case kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func transportType(_ id: AudioDeviceID) -> UInt32 {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr else {
+            return 0
+        }
+        return value
     }
 
     private static func stringProperty(_ id: AudioDeviceID, _ selector: AudioObjectPropertySelector) -> String? {

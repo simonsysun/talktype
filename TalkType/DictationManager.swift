@@ -51,7 +51,7 @@ final class DictationManager {
             sampleRate: config.sampleRate,
             onLevel: nil
         )
-        self.recorder.preferredDeviceUID = config.inputDeviceUID
+        applyInputSelection()
         // Set level callback after init since it captures self
         self.recorder.onLevel = { [weak self] level in
             self?.onAudioLevel(level)
@@ -99,7 +99,16 @@ final class DictationManager {
         transcriber.timeout = newConfig.asrTimeoutSeconds
         refiner = TextRefiner(model: newConfig.refineModel, timeout: newConfig.refineTimeoutSeconds)
         transcriberLock.unlock()
-        recorder.preferredDeviceUID = newConfig.inputDeviceUID
+        applyInputSelection()
+    }
+
+    /// Empty config UID means Automatic: follow the system default, except skip a
+    /// Bluetooth default — see `AudioDevices.automaticInput`. An explicit pick wins.
+    private func applyInputSelection() {
+        let automatic = AudioDevices.automaticInput()
+        recorder.preferredDeviceUID = config.inputDeviceUID.isEmpty
+            ? automatic.device?.uid
+            : config.inputDeviceUID
     }
 
     // MARK: - Refinement
