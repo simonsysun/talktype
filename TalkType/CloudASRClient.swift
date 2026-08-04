@@ -36,30 +36,9 @@ final class CloudASRClient {
 
     // MARK: - Transcription
 
-    func transcribe(
-        audio: [Float],
-        sampleRate: Int = 16000,
-        vocabularyHints: [String]? = nil,
-        timeout: TimeInterval? = nil
-    ) async throws -> String {
-        guard !audio.isEmpty else { return "" }
-        let effectiveTimeout = timeout ?? self.timeout
-        let wav = WAVEncoder.encode(samples: audio, sampleRate: sampleRate)
-        let request = Self.makeRequest(
-            shape: shape, baseURL: baseURL, apiKey: apiKey, model: model,
-            audioWAV: wav, vocabularyHints: vocabularyHints, timeout: effectiveTimeout)
-
-        let (data, response) = try await session.data(for: request)
-        try Self.checkStatus(data: data, response: response)
-        switch shape {
-        case .dashScopeChat:
-            return try Self.parseChatCompletionsResponse(data: data)
-        case .openRouterJSON, .openAIMultipart:
-            return try Self.parseTranscriptionsResponse(data: data)
-        }
-    }
-
-    /// Synchronous variant for the existing background-thread dictation flow.
+    /// The dictation flow is background-thread and synchronous, so there is only the
+    /// sync variant; the request building and response parsing are shared with the
+    /// static helpers below.
     func transcribeSync(
         audio: [Float],
         sampleRate: Int = 16000,
@@ -79,8 +58,7 @@ final class CloudASRClient {
         let task = session.dataTask(with: request) { data, response, error in
             defer { semaphore.signal() }
             if let error = error {
-                if (error as? URLError)?.code == .timedOut
-                    || (error as NSError).code == NSURLErrorTimedOut {
+                if (error as? URLError)?.code == .timedOut {
                     requestError = CloudASRError.timedOut
                 } else {
                     requestError = CloudASRError.unreachable(underlying: error.localizedDescription)
