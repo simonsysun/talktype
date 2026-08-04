@@ -86,7 +86,7 @@ final class TextRefiner {
 
     /// Check a key against Groq before storing it, so a typo is caught at entry rather
     /// than silently disabling polish until someone reads a log.
-    static func validate(_ key: String, timeout: TimeInterval = 8) -> Bool {
+    static func validate(_ key: String, timeout: TimeInterval = 8) -> KeyValidationResult {
         var request = URLRequest(url: URL(string: "https://api.groq.com/openai/v1/models")!)
         request.setValue("Bearer \(key.trimmingCharacters(in: .whitespacesAndNewlines))",
                          forHTTPHeaderField: "Authorization")
@@ -94,14 +94,23 @@ final class TextRefiner {
         request.timeoutInterval = timeout
 
         let semaphore = DispatchSemaphore(value: 0)
-        var ok = false
-        let task = URLSession.shared.dataTask(with: request) { _, response, _ in
-            ok = (response as? HTTPURLResponse)?.statusCode == 200
-            semaphore.signal()
+        var result = KeyValidationResult.unreachable("no response")
+        let task = URLSession.shared.dataTask(with: request) { _, response, error in
+            defer { semaphore.signal() }
+            if let http = response as? HTTPURLResponse {
+                result = http.statusCode == 200 ? .valid : .rejected
+                return
+            }
+            if let transportError = error {
+                result = .unreachable(transportError.localizedDescription)
+            }
         }
         task.resume()
-        if semaphore.wait(timeout: .now() + timeout + 1) != .success { task.cancel() }
-        return ok
+        if semaphore.wait(timeout: .now() + timeout + 1) != .success {
+            task.cancel()
+            result = .unreachable("request timed out")
+        }
+        return result
     }
 
     /// Open the connection ahead of first use so the initial dictation does not pay for

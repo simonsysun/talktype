@@ -19,7 +19,8 @@ final class CloudASRClient {
         apiKey: String,
         model: String,
         shape: CloudRequestShape,
-        timeout: TimeInterval = 60.0
+        timeout: TimeInterval = 60.0,
+        session: URLSession? = nil
     ) {
         // Tolerate a base URL with or without a trailing slash; the endpoints below are
         // appended on top. Invalid URLs are caught here rather than mid-dictation.
@@ -28,10 +29,14 @@ final class CloudASRClient {
         self.model = model
         self.shape = shape
         self.timeout = timeout
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = timeout
-        config.timeoutIntervalForResource = timeout
-        self.session = URLSession(configuration: config)
+        if let session = session {
+            self.session = session
+        } else {
+            let config = URLSessionConfiguration.default
+            config.timeoutIntervalForRequest = timeout
+            config.timeoutIntervalForResource = timeout
+            self.session = URLSession(configuration: config)
+        }
     }
 
     // MARK: - Transcription
@@ -99,25 +104,35 @@ final class CloudASRClient {
 
     /// Probe the provider with the key, so a typo surfaces at entry rather than as a
     /// silent dictation failure later.
-    static func validate(apiKey: String, baseURL: String, timeout: TimeInterval = 8) -> Bool {
+    static func validate(apiKey: String, baseURL: String, timeout: TimeInterval = 8) -> KeyValidationResult {
         let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
               let base = URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))),
-              base.scheme != nil
-        else { return false }
+              base.scheme != nil,
+              base.host != nil
+        else { return .invalidURL }
         var request = URLRequest(url: base.appendingPathComponent(Self.validationPath(for: baseURL)))
         request.setValue("Bearer \(trimmed)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = timeout
 
         let semaphore = DispatchSemaphore(value: 0)
-        var ok = false
-        let task = URLSession.shared.dataTask(with: request) { _, response, _ in
-            ok = (response as? HTTPURLResponse)?.statusCode == 200
-            semaphore.signal()
+        var result = KeyValidationResult.unreachable("no response")
+        let task = URLSession.shared.dataTask(with: request) { _, response, error in
+            defer { semaphore.signal() }
+            if let http = response as? HTTPURLResponse {
+                result = http.statusCode == 200 ? .valid : .rejected
+                return
+            }
+            if let transportError = error {
+                result = .unreachable(transportError.localizedDescription)
+            }
         }
         task.resume()
-        if semaphore.wait(timeout: .now() + timeout + 1) != .success { task.cancel() }
-        return ok
+        if semaphore.wait(timeout: .now() + timeout + 1) != .success {
+            task.cancel()
+            result = .unreachable("request timed out")
+        }
+        return result
     }
 
     // MARK: - Request building
@@ -310,6 +325,18 @@ enum CloudASRError: LocalizedError {
             return .serviceError
         }
     }
+}
+
+/// Why a key check did not succeed, so Setup can tell "the provider rejected the key"
+/// apart from "this Mac could not reach the provider" — the two need different fixes.
+enum KeyValidationResult: Equatable {
+    case valid
+    /// The provider answered and said the key is wrong.
+    case rejected
+    /// The request never got a usable answer — offline, DNS failure, timeout.
+    case unreachable(String)
+    /// The base URL is not a valid address.
+    case invalidURL
 }
 
 // MARK: - Multipart helpers

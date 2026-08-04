@@ -130,8 +130,7 @@ final class DictationManager {
         // refine tweak mid-fallback must not orphan a running sidecar — the menu would
         // say Cloud while the ~4 GB process kept running.
         if newConfig.asrEngine != config.asrEngine {
-            effectiveEngine = nil
-            fallbackInProgress = false
+            setEngineState(nil, fallback: false, notify: nil)
         }
         transcriberLock.lock()
         config = newConfig
@@ -144,8 +143,7 @@ final class DictationManager {
 
     /// Called after the local engine is deleted: the fallback can no longer use it.
     func clearFallbackState() {
-        effectiveEngine = nil
-        fallbackInProgress = false
+        setEngineState(nil, fallback: false, notify: nil)
     }
 
     private static func makeCloudClient(_ config: AppConfig) -> CloudASRClient? {
@@ -177,7 +175,8 @@ final class DictationManager {
     /// it is installed, so a dictation only fails when neither path can work.
     private func transcribeWithFallback(audio: [Float], hints: [String]?, config: AppConfig,
                                         cloud: CloudASRClient?, local: Transcriber) throws -> String {
-        let policy = FallbackPolicy(localInstalled: Self.localEngineInstalled)
+        let policy = FallbackPolicy(localInstalled: Self.localEngineInstalled,
+                                    providerName: config.cloudProvider.profile.name)
 
         // No cloud client means no API key stored. With the local engine installed the
         // dictation still works; otherwise the user gets the exact fix to make.
@@ -187,7 +186,7 @@ final class DictationManager {
                                              reason: "没有云端 key，已用本地。去设置添加 key。",
                                              config: config, local: local)
             }
-            throw UserFacingError(message: "云端语音引擎没有 API key。去设置里添加 OpenRouter key。")
+            throw UserFacingError(message: "云端语音引擎没有 API key。去设置里添加 \(config.cloudProvider.profile.name) key。")
         }
 
         switch policy.plan(offline: isOffline) {
@@ -239,12 +238,7 @@ final class DictationManager {
         try ensureLocalSidecar(port: config.asrPort, timeout: config.asrTimeoutSeconds)
         let text = try local.transcribe(audio: audio, sampleRate: config.sampleRate,
                                         vocabularyHints: hints)
-        if effectiveEngine != .local {
-            effectiveEngine = .local
-            fallbackInProgress = true
-            trayDelegate?.notifyInfo(reason)
-            trayDelegate?.engineStateDidChange(.local)
-        }
+        setEngineState(.local, fallback: true, notify: reason)
         return text
     }
 
@@ -269,7 +263,9 @@ final class DictationManager {
             }
         }
         let probe = Transcriber(port: port)
-        let deadline = Date().addingTimeInterval(timeout)
+        // Cold start pays the weight load once — up to a couple of minutes on a slow
+        // machine. A warm start has no such excuse, so it keeps the configured deadline.
+        let deadline = Date().addingTimeInterval(coldStart ? max(timeout, 120) : timeout)
         while Date() < deadline {
             // `== .ready` would be ambiguous — SidecarHealth.ready and
             // SidecarManager.InstallState.ready share the case name.
@@ -287,12 +283,16 @@ final class DictationManager {
     /// A cloud dictation succeeded — if the local fallback was active, free the ~4 GB
     /// resident model and tell the user we are back on cloud.
     private func markCloudRecovered() {
-        guard effectiveEngine == .local, fallbackInProgress else { return }
-        fallbackInProgress = false
-        effectiveEngine = .cloud
-        sidecar.stop()
-        trayDelegate?.notifyInfo("已回到云端引擎。")
-        trayDelegate?.engineStateDidChange(.cloud)
+        // All engine-state reads and writes live on the main thread; the stop is the one
+        // expensive part, so it runs off-main after the main-thread check confirmed we
+        // were actually in fallback.
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.effectiveEngine == .local, self.fallbackInProgress else { return }
+            self.setEngineState(.cloud, fallback: false, notify: "已回到云端引擎。")
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                self?.sidecar.stop()
+            }
+        }
     }
 
     /// Empty config UID means Automatic: follow the system default, except skip a
@@ -302,6 +302,29 @@ final class DictationManager {
         recorder.preferredDeviceUID = config.inputDeviceUID.isEmpty
             ? automatic.device?.uid
             : config.inputDeviceUID
+    }
+
+    /// Mutations of the engine-state pair and the tray notifications that go with them
+    /// always land on the main thread. The transcription thread decides which engine
+    /// actually ran; the main thread owns the bookkeeping, so menu reads never race a
+    /// background write. `notify` only fires when the state actually changes, which is
+    /// what makes "tell the user at the switch" possible without nagging on every
+    /// dictation while the fallback stays active.
+    private func setEngineState(_ engine: ASREngine?, fallback: Bool, notify: String?) {
+        let apply = { [weak self] in
+            guard let self = self else { return }
+            let changed = self.effectiveEngine != engine || self.fallbackInProgress != fallback
+            self.effectiveEngine = engine
+            self.fallbackInProgress = fallback
+            guard changed, let engine = engine else { return }
+            if let notify = notify { self.trayDelegate?.notifyInfo(notify) }
+            self.trayDelegate?.engineStateDidChange(engine)
+        }
+        if Thread.isMainThread {
+            apply()
+        } else {
+            DispatchQueue.main.async(execute: apply)
+        }
     }
 
     // MARK: - Refinement
@@ -564,6 +587,14 @@ final class DictationManager {
     private func onAudioLevel(_ level: Float) {
         overlay.updateAudioLevel(level)
 
+        // The auto-stop check reads shared state; hop to main so state/config are only
+        // ever touched on the main thread.
+        DispatchQueue.main.async { [weak self] in
+            self?.considerSilenceAutoStop(level: level)
+        }
+    }
+
+    private func considerSilenceAutoStop(level: Float) {
         guard state == .recording, config.silenceAutoStopEnabled else { return }
 
         let rms = level * 0.15
@@ -574,9 +605,7 @@ final class DictationManager {
         } else if lastSpeechTime > 0 && (now - lastSpeechTime) >= config.silenceAutoStopSeconds {
             lastSpeechTime = 0
             print("[audio] silence for \(config.silenceAutoStopSeconds)s, auto-stopping")
-            DispatchQueue.main.async { [weak self] in
-                self?.stopDictation(autoStopped: true)
-            }
+            stopDictation(autoStopped: true)
         }
     }
 

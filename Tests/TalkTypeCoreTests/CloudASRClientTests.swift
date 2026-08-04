@@ -6,6 +6,18 @@ final class CloudASRClientTests: XCTestCase {
     private let base = URL(string: "https://openrouter.ai/api/v1")!
     private let wav = Data([0x52, 0x49, 0x46, 0x46, 0x01, 0x02, 0x03])
 
+    override func setUp() {
+        super.setUp()
+        URLProtocol.registerClass(MockURLProtocol.self)
+        MockURLProtocol.handler = nil
+    }
+
+    override func tearDown() {
+        MockURLProtocol.handler = nil
+        URLProtocol.unregisterClass(MockURLProtocol.self)
+        super.tearDown()
+    }
+
     // MARK: - Vocabulary
 
     func testBuildPromptIsBareCommaList() {
@@ -151,5 +163,113 @@ final class CloudASRClientTests: XCTestCase {
 
     func testClassificationUnreachableIsUnknown() {
         XCTAssertEqual(CloudASRError.unreachable(underlying: "connection reset").classification, .unknown)
+    }
+
+    // MARK: - Live request behaviour (stubbed)
+
+    private func makeClient(timeout: TimeInterval = 5) -> CloudASRClient {
+        // Registered URLProtocol classes are only consulted by URLSession.shared; a
+        // session the client owns needs the stub wired in explicitly.
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        return CloudASRClient(baseURL: "https://openrouter.ai/api/v1", apiKey: "sk-or-test",
+                              model: "qwen/qwen3-asr-flash", shape: .openRouterJSON,
+                              timeout: timeout, session: URLSession(configuration: config))
+    }
+
+    func testTranscribeSyncReturnsParsedText() throws {
+        MockURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/audio/transcriptions")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200,
+                                           httpVersion: nil, headerFields: nil)!
+            return (response, Data(#"{"text":"  hello world  "}"#.utf8))
+        }
+        XCTAssertEqual(try makeClient().transcribeSync(audio: [0.1, 0.2, 0.3]), "hello world")
+    }
+
+    func testTranscribeSyncSurfacesHTTPStatusClassification() {
+        MockURLProtocol.handler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 402,
+                                           httpVersion: nil, headerFields: nil)!
+            return (response, Data(#"{"error":"insufficient_quota"}"#.utf8))
+        }
+        do {
+            _ = try makeClient().transcribeSync(audio: [0.1])
+            XCTFail("expected an error")
+        } catch let error as CloudASRError {
+            XCTAssertEqual(error.classification, .limitOrRate)
+        } catch {
+            XCTFail("unexpected error: \(error)")
+        }
+    }
+
+    func testTranscribeSyncSurfacesConnectionFailures() {
+        MockURLProtocol.handler = { _ in throw URLError(.cannotConnectToHost) }
+        do {
+            _ = try makeClient().transcribeSync(audio: [0.1])
+            XCTFail("expected an error")
+        } catch let error as CloudASRError {
+            XCTAssertEqual(error.classification, .unknown)
+        } catch {
+            XCTFail("unexpected error: \(error)")
+        }
+    }
+
+    /// The semaphore backstop exists because URLSession can fail to call back; a server
+    /// that never answers must produce .timedOut, not a permanently hung dictation.
+    func testTranscribeSyncTimesOutWhenServerNeverAnswers() {
+        MockURLProtocol.handler = { request in
+            Thread.sleep(forTimeInterval: 2)
+            let response = HTTPURLResponse(url: request.url!,
+                                           statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(#"{"text":"late"}"#.utf8))
+        }
+        do {
+            _ = try makeClient(timeout: 0.3).transcribeSync(audio: [0.1])
+            XCTFail("expected a timeout")
+        } catch let error as CloudASRError {
+            XCTAssertEqual(error.classification, .timeout)
+        } catch {
+            XCTFail("unexpected error: \(error)")
+        }
+    }
+
+    // MARK: - Key validation (stubbed)
+
+    func testValidateAccepts200() {
+        MockURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/auth/key", "OpenRouter must be checked via /auth/key")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer sk-or-good")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200,
+                                           httpVersion: nil, headerFields: nil)!
+            return (response, Data())
+        }
+        XCTAssertEqual(CloudASRClient.validate(apiKey: "sk-or-good",
+                                               baseURL: "https://openrouter.ai/api/v1"), .valid)
+    }
+
+    func testValidateRejectsNon200() {
+        MockURLProtocol.handler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 401,
+                                           httpVersion: nil, headerFields: nil)!
+            return (response, Data())
+        }
+        XCTAssertEqual(CloudASRClient.validate(apiKey: "sk-or-bad",
+                                               baseURL: "https://openrouter.ai/api/v1"), .rejected)
+    }
+
+    /// Offline must not read as "the key was rejected" — the fixes are different.
+    func testValidateDistinguishesNetworkFailureFromRejection() {
+        MockURLProtocol.handler = { _ in throw URLError(.notConnectedToInternet) }
+        let result = CloudASRClient.validate(apiKey: "sk-or-x",
+                                             baseURL: "https://openrouter.ai/api/v1")
+        guard case .unreachable = result else {
+            return XCTFail("expected .unreachable, got \(result)")
+        }
+    }
+
+    func testValidateRejectsMalformedURL() {
+        XCTAssertEqual(CloudASRClient.validate(apiKey: "sk-or-x", baseURL: "not a url"), .invalidURL)
+        XCTAssertEqual(CloudASRClient.validate(apiKey: "sk-or-x", baseURL: ""), .invalidURL)
     }
 }

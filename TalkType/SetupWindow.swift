@@ -432,8 +432,15 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         let isCloud = config.asrEngine == .cloud
         for row in cloudRows { row.isHidden = !isCloud }
         providerPopup.selectItem(at: CloudProvider.allCases.firstIndex(of: config.cloudProvider) ?? 0)
-        baseURLField.stringValue = config.cloudBaseURL
-        modelField.stringValue = config.cloudModel
+        // Never clobber a field the user is editing: refresh() runs on a 1.5-second
+        // timer, and rewriting a field mid-edit erases the URL/model they are part-way
+        // through typing (same failure the key fields had, fixed earlier).
+        if baseURLField.currentEditor() == nil {
+            baseURLField.stringValue = config.cloudBaseURL
+        }
+        if modelField.currentEditor() == nil {
+            modelField.stringValue = config.cloudModel
+        }
         detectLabel.stringValue = detectedProviderText()
 
         // Never clear the key fields here. refresh() runs on a 1.5-second timer, and wiping
@@ -557,13 +564,28 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         cloudStatus.textColor = .secondaryLabelColor
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let valid = CloudASRClient.validate(apiKey: key, baseURL: baseURL)
+            let result = CloudASRClient.validate(apiKey: key, baseURL: baseURL)
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.verifyingCloudKey = false
-                guard valid else {
+                switch result {
+                case .valid:
+                    break
+                case .rejected:
                     self.cloudStatus.stringValue =
                         "\(provider.profile.name) did not accept that key. Nothing was saved."
+                    self.cloudStatus.textColor = .systemOrange
+                    self.syncKeyButtons()
+                    return
+                case .unreachable(let message):
+                    self.cloudStatus.stringValue =
+                        "Could not reach \(provider.profile.name) (\(message)). Nothing was saved — check your network and the API base URL."
+                    self.cloudStatus.textColor = .systemOrange
+                    self.syncKeyButtons()
+                    return
+                case .invalidURL:
+                    self.cloudStatus.stringValue =
+                        "The API base URL is not a valid address. Fix it, then save the key again."
                     self.cloudStatus.textColor = .systemOrange
                     self.syncKeyButtons()
                     return
@@ -599,12 +621,27 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         polishStatus.textColor = .secondaryLabelColor
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let valid = TextRefiner.validate(key)
+            let result = TextRefiner.validate(key)
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.verifyingPolishKey = false
-                guard valid else {
+                switch result {
+                case .valid:
+                    break
+                case .rejected:
                     self.polishStatus.stringValue = "Groq did not accept that key. Nothing was saved."
+                    self.polishStatus.textColor = .systemOrange
+                    self.syncKeyButtons()
+                    return
+                case .unreachable(let message):
+                    self.polishStatus.stringValue =
+                        "Could not reach Groq (\(message)). Nothing was saved — check your network."
+                    self.polishStatus.textColor = .systemOrange
+                    self.syncKeyButtons()
+                    return
+                case .invalidURL:
+                    self.polishStatus.stringValue =
+                        "Groq's address is invalid. Nothing was saved."
                     self.polishStatus.textColor = .systemOrange
                     self.syncKeyButtons()
                     return

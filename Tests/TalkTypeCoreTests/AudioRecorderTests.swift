@@ -42,9 +42,31 @@ final class AudioRecorderTests: XCTestCase {
         XCTAssertEqual(AudioRecorder.resample([], from: 48000, to: 16000), [])
     }
 
-    func testIntegerRatioDecimatesEveryNthSample() {
-        let audio: [Float] = [0, 1, 2, 3, 4, 5, 6, 7, 8]
-        XCTAssertEqual(AudioRecorder.resample(audio, from: 48000, to: 16000), [0, 3, 6])
+    /// DC passes through the anti-aliasing filter unchanged (unity gain at 0 Hz), so a
+    /// constant signal still decimates exactly.
+    func testIntegerRatioDecimationPassesDCThrough() {
+        let audio = [Float](repeating: 0.5, count: 36)
+        let out = AudioRecorder.resample(audio, from: 48000, to: 16000)
+        XCTAssertEqual(out.count, 12)
+        XCTAssertEqual(out.first ?? 0, 0.5, accuracy: 1e-4)
+    }
+
+    /// A tone well below the target Nyquist survives decimation at full amplitude.
+    func testLowFrequencySurvivesDecimation() {
+        let tone = (0..<48000).map { Float(sin(2 * .pi * 1000 * Double($0) / 48000.0)) }
+        let out = AudioRecorder.resample(tone, from: 48000, to: 16000)
+        XCTAssertEqual(out.count, 16000)
+        XCTAssertEqual(AudioRecorder.calculateRMS(out), 0.7071, accuracy: 0.05)
+    }
+
+    /// A tone above the target Nyquist (20 kHz, which would alias down to 4 kHz) is
+    /// attenuated before it can fold into the passband.
+    func testHighFrequencyIsAttenuatedBeforeDecimation() {
+        let tone = (0..<48000).map { Float(sin(2 * .pi * 20000 * Double($0) / 48000.0)) }
+        let out = AudioRecorder.resample(tone, from: 48000, to: 16000)
+        XCTAssertEqual(out.count, 16000)
+        XCTAssertLessThan(AudioRecorder.calculateRMS(out), 0.15,
+                          "unfiltered decimation would fold 20 kHz down to 4 kHz at full amplitude")
     }
 
     func testNonIntegerRatioInterpolates() throws {

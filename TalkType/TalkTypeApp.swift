@@ -212,10 +212,6 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         refineItem.target = self
         menu.addItem(refineItem)
 
-        let keyItem = NSMenuItem(title: "Groq API Key...", action: #selector(editGroqKey), keyEquivalent: "")
-        keyItem.target = self
-        menu.addItem(keyItem)
-
         let setupItem = NSMenuItem(title: "Setup...", action: #selector(openSetup), keyEquivalent: "")
         setupItem.target = self
         menu.addItem(setupItem)
@@ -423,13 +419,6 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     }
 
     // MARK: - Cloud refinement
-
-    /// Both API keys are entered in Setup now, in the same place and the same way. This
-    /// used to open a dialog of its own, which meant the app asked for its two keys through
-    /// two unrelated pieces of interface.
-    @objc private func editGroqKey() {
-        setupWindow.show()
-    }
 
     private static func masked(_ key: String) -> String {
         guard key.count > 10 else { return "•••" }

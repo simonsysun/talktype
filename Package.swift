@@ -17,6 +17,7 @@ let package = Package(
             path: "TalkType",
             exclude: [
                 "Assets.xcassets",
+                "CloudKeyStore.swift",
                 "DictationManager.swift",
                 "HotkeyManager.swift",
                 "HotkeySettingsWindow.swift",

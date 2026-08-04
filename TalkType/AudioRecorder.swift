@@ -183,7 +183,10 @@ final class AudioRecorder {
         if hwSampleRate % targetSampleRate == 0 {
             // Integer ratio decimation (e.g. 48k -> 16k = take every 3rd)
             let ratio = hwSampleRate / targetSampleRate
-            return stride(from: 0, to: audio.count, by: ratio).map { audio[$0] }
+            // Decimation without a low-pass folds everything above the new Nyquist
+            // (8 kHz for 48k -> 16k) back into the passband. A short windowed-sinc
+            // first keeps the fold-back below the frequencies speech carries.
+            return antiAliasFilter(audio, decimation: ratio)
         }
 
         // Linear interpolation for non-integer ratios
@@ -203,5 +206,48 @@ final class AudioRecorder {
             result[i] = audio[lo] * (1 - frac) + audio[hi] * frac
         }
         return result
+    }
+
+    /// Low-pass FIR (Blackman-windowed sinc) with the cutoff at the target Nyquist —
+    /// 0.5/ratio of the original rate. 33 taps is cheap (a 30 s clip is well under a
+    /// millisecond of work) and gives a clean stopband for speech purposes.
+    private static func antiAliasFilter(_ audio: [Float], decimation: Int) -> [Float] {
+        let taps = 33
+        let half = (taps - 1) / 2
+        let cutoff = 0.5 / Double(decimation)
+
+        var kernel = [Float](repeating: 0, count: taps)
+        var sum: Float = 0
+        for i in 0..<taps {
+            let n = i - half
+            let sinc = n == 0
+                ? Float(2 * cutoff)
+                : Float(sin(.pi * 2 * cutoff * Double(n)) / (.pi * Double(n)))
+            let window = 0.42 - 0.5 * cos(2 * .pi * Double(i) / Double(taps - 1))
+                + 0.08 * cos(4 * .pi * Double(i) / Double(taps - 1))
+            kernel[i] = sinc * Float(window)
+            sum += kernel[i]
+        }
+        for i in 0..<taps { kernel[i] /= sum }   // unity gain at DC
+
+        // Pad by half the kernel on each side, replicating the edge values, so every
+        // output sample keeps its full kernel support. Zero padding would present the
+        // filter with a step at the boundary and smear the transient into the signal.
+        let padded = [Float](repeating: audio[0], count: half)
+            + audio
+            + [Float](repeating: audio[audio.count - 1], count: half)
+        var filtered = [Float](repeating: 0, count: padded.count)
+        for n in 0..<padded.count {
+            var acc: Float = 0
+            for k in 0..<taps {
+                let idx = n + k - half
+                guard idx >= 0 && idx < padded.count else { continue }
+                acc += padded[idx] * kernel[k]
+            }
+            filtered[n] = acc
+        }
+        // The padding exists only to feed the kernel; the decimated samples come from
+        // the middle, where the filter has full support.
+        return stride(from: half, to: half + audio.count, by: decimation).map { filtered[$0] }
     }
 }
