@@ -13,3 +13,7 @@ dist/
 
 # Never publish: the code-signing private key lives here.
 secrets/
+
+# Recordings are private; never commit Simon's voice.
+docs/bakeoff/audio/
+bakeoff-results/
