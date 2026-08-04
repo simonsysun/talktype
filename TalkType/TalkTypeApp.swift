@@ -313,11 +313,19 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         guard let uid = sender.representedObject as? String else { return }
         guard uid != config.inputDeviceUID else { return }
         config.inputDeviceUID = uid
-        ConfigManager.save(config)
+        persistConfig()
         dictationManager.reloadConfig(config)
         rebuildInputMenu()
         notifyInfo(uid.isEmpty ? "Microphone: following the system default."
                                : "Microphone: \(sender.title).")
+    }
+
+    /// Persist a config change made from the menu bar. The Setup window keeps its own
+    /// copy, and any edit there sends that copy back wholesale through onConfigChanged —
+    /// so it must be kept in step or a stale copy would silently revert menu changes.
+    private func persistConfig() {
+        ConfigManager.save(config)
+        setupWindow.config = config
     }
 
     // MARK: - Setup
@@ -367,7 +375,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             // with no working path — move to cloud, the default.
             if self.config.asrEngine == .local {
                 self.config.asrEngine = .cloud
-                ConfigManager.save(self.config)
+                self.persistConfig()
                 self.dictationManager.reloadConfig(self.config)
                 self.engineLocalItem?.state = .off
                 self.engineCloudItem?.state = .on
@@ -453,7 +461,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
     @objc private func toggleRefine() {
         config.refineEnabled.toggle()
-        ConfigManager.save(config)
+        persistConfig()
         dictationManager.reloadConfig(config)
         refreshRefineItem()
         if config.refineEnabled {
@@ -516,7 +524,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         else { return }
 
         config.asrEngine = engine
-        ConfigManager.save(config)
+        persistConfig()
         dictationManager.reloadConfig(config)
 
         if engine == .cloud {
@@ -699,7 +707,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
                 }
                 launchItem.state = target ? .on : .off
                 config.launchAtLogin = target
-                ConfigManager.save(config)
+                persistConfig()
             } catch {
                 notifyError("Failed to update launch-at-login: \(error.localizedDescription)")
             }
@@ -707,7 +715,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             // Fallback: just save config
             launchItem.state = target ? .on : .off
             config.launchAtLogin = target
-            ConfigManager.save(config)
+            persistConfig()
         }
     }
 

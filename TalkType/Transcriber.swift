@@ -98,7 +98,10 @@ final class Transcriber {
             }
         }
         task.resume()
-        semaphore.wait()
+        // Same backstop as transcribe(): never trust URLSession to always call back.
+        if semaphore.wait(timeout: .now() + 4) != .success {
+            task.cancel()
+        }
         return health
     }
 

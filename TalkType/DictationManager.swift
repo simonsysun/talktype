@@ -133,8 +133,8 @@ final class DictationManager {
             effectiveEngine = nil
             fallbackInProgress = false
         }
-        config = newConfig
         transcriberLock.lock()
+        config = newConfig
         transcriber.timeout = newConfig.asrTimeoutSeconds
         cloudASR = Self.makeCloudClient(newConfig)
         refiner = TextRefiner(model: newConfig.refineModel, timeout: newConfig.refineTimeoutSeconds)
@@ -253,12 +253,19 @@ final class DictationManager {
     /// would hit a 503 and the dictation would be dropped — the audio is already in
     /// memory, so waiting here is free.
     private func ensureLocalSidecar(port: Int, timeout: TimeInterval) throws {
+        var coldStart = false
         if !sidecar.isRunning {
             let probe = Transcriber(port: port)
             let alreadyServing = probe.health() != .unreachable
             let state = sidecar.start(port: port, alreadyServing: alreadyServing)
             if case .missing(let what) = state {
                 throw UserFacingError(message: "本地引擎不可用：\(what)。联网，或在设置里安装本地引擎。")
+            }
+            if !alreadyServing {
+                // The wait below can run tens of seconds while the weights load; without
+                // this the user just sees the overlay spin with no explanation.
+                coldStart = true
+                trayDelegate?.notifyInfo("正在启动本地引擎，这一句会稍等几秒。")
             }
         }
         let probe = Transcriber(port: port)
@@ -267,6 +274,11 @@ final class DictationManager {
             // `== .ready` would be ambiguous — SidecarHealth.ready and
             // SidecarManager.InstallState.ready share the case name.
             if case .ready = probe.health() { return }
+            if coldStart && !sidecar.isRunning {
+                // The process we just spawned died (broken venv, OOM) — fail now
+                // rather than grinding out the rest of the deadline.
+                throw UserFacingError(message: "本地引擎启动失败（进程已退出）。到设置里重装，或查看 ~/.talktype/asr/server.log。")
+            }
             usleep(250_000)
         }
         throw UserFacingError(message: "本地引擎启动超时。稍后再试，或到设置里查看状态。")
