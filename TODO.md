@@ -230,11 +230,36 @@ Still open:
 
 - [ ] Re-bake-off with Simon's clips + keys: Qwen3-ASR-Flash (OpenRouter + DashScope),
       gpt-4o-transcribe, Soniox stt-async-v5, Groq whisper-large-v3-turbo (free arm).
-- [ ] Confirm cloud Qwen does not "complete the prompt" when given the comma-list vocab context
-      (the local lesson) — if it does, drop vocab hints on the cloud path.
-- [ ] README + privacy copy for the cloud engine; provider retention/training terms first.
+- [x] Vocab-hint behaviour on cloud Qwen — answered 2026-08-04: OpenRouter does NOT forward vocab
+      hints (qwen-flash's supported params have no prompt/context; top-level `prompt` and
+      `provider.options` both no-op). No prompt-completion risk, but cloud vocab is dead — accept
+      client-side correction; real cloud vocab would need DashScope official (parked).
+- [x] README + privacy copy for the cloud engine — done 2026-08-04: rewritten as a product blurb
+      plus manual; privacy copy says audio leaves on cloud, transcript-only to Groq.
 - [ ] Local model size choice (1.7B vs 0.6B) in Setup — server.py currently hardcodes 1.7B, so
       this needs the sidecar to know its installed size first.
+- [ ] "Delete local engine" affordance in Setup (design agreed 2026-08-04; not implemented).
+- [ ] Auto fallback cloud→local when offline/unreachable — design agreed 2026-08-04, code still
+      "chosen engine" (see next section).
+- [ ] `CloudASRClient.validate()` cannot detect a bad OpenRouter key — it checks the public
+      `/models` endpoint, which returns 200 with no auth. Real check needs an authenticated call.
+
+## OpenRouter 实测 + 设计决定 (2026-08-04)
+
+OpenRouter 实测（2 clips × 6 arms, 全 200）: qwen-flash 稳定且与昨日结果一致, ~2 s, $0.002/min;
+gpt-4o-transcribe ~1–1.7 s; x-ai/grok-stt-1.0 最快但中文最差; Grok 走 OpenRouter 与官方 x.ai
+结果一致, 仅多 0.1–0.2 s。用 git 历史恢复的朗读脚本做了确定性打分（非靠耳朵）。
+
+Grill 后确定的设计（README 已按此写）:
+- 定位 A: 个人工具 + 开源副产品。云默认 (OpenRouter qwen-flash), 本地 Qwen 可选下载/删除,
+  目前只接 OpenRouter 一家。
+- 离线/云端失败 → 自动回退本地并只在切换时通知。判定: NWPathMonitor 预检 + 云端 10 s 短超时
+  （仅本地已装时启用）。
+- 本地 sidecar 生命周期: 按需启动, 断网期间常驻, 网络恢复后停止。
+- 云端失败提示分三类: 没网 / key 无效或额度用完 / 服务故障——人话 + 下一步。
+- 润色留在 Groq（0.3 s vs OpenRouter 2.4–4.5 s, 同一模型质量相同; 第二把 key 可选但推荐,
+  README 写明）。
+- 词库: OpenRouter 不透传（见上）, 客户端纠错兜底。
 
 ---
 

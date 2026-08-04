@@ -19,8 +19,8 @@ costs about 4 GB of memory while loaded.
 _Avoid_: on-device model (vague)
 
 **Cloud Engine**:
-The recorded audio is sent to a third party (OpenRouter, Alibaba DashScope) and transcribed
-there. Costs almost no memory; needs a network.
+The recorded audio is sent to a third party (OpenRouter, currently) and transcribed there.
+Costs almost no memory; needs a network.
 
 **Offline Fallback**:
 When the Cloud Engine cannot be reached, a dictation is handled by the Local Engine instead,
