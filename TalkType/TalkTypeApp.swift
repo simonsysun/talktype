@@ -34,9 +34,40 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory) // No dock icon
+        app.mainMenu = makeMainMenu()
         let delegate = TalkTypeApp()
         app.delegate = delegate
         app.run()
+    }
+
+    /// A menu bar we never show, purely so ⌘C/⌘V/⌘X/⌘A work.
+    ///
+    /// AppKit routes command-key equivalents through the main menu before anything else
+    /// sees them. An agent app has no menu bar, so without this there is nothing to route
+    /// them to and every text field in the app silently ignores paste — which is a hard
+    /// place to be when the first thing setup asks for is a pasted API key. The titles
+    /// below never appear on screen; only the key equivalents matter.
+    private static func makeMainMenu() -> NSMenu {
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        // Close the frontmost window, the one shortcut people reach for without thinking.
+        let window = NSMenu(title: "Window")
+        window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+
+        let main = NSMenu()
+        for submenu in [edit, window] {
+            let item = NSMenuItem()
+            item.submenu = submenu
+            main.addItem(item)
+        }
+        return main
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
