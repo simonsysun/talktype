@@ -349,6 +349,29 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             }
             self.notifyInfo("Speech engine installed. Press \(self.hotkeyDisplayString()) to dictate.")
         }
+        setupWindow.onEngineDeleted = { [weak self] in
+            guard let self = self else { return }
+            self.healthTimer?.invalidate()
+            if let error = self.sidecar.uninstall() {
+                self.notifyError(error)
+                self.refreshEngineStatus()
+                return
+            }
+            // Deleting the local engine while it is the chosen engine leaves dictation
+            // with no working path — move to cloud, the default.
+            if self.config.asrEngine == .local {
+                self.config.asrEngine = .cloud
+                ConfigManager.save(self.config)
+                self.dictationManager.reloadConfig(self.config)
+                self.engineLocalItem?.state = .off
+                self.engineCloudItem?.state = .on
+                self.notifyInfo("本地引擎已删除，语音引擎已切到云端。")
+            } else {
+                self.notifyInfo("本地引擎已删除，约 4 GB 已释放。")
+            }
+            self.refreshEngineStatus()
+            self.setupWindow.refresh()
+        }
     }
 
     // MARK: - Cloud refinement

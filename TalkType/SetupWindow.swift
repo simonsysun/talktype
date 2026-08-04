@@ -16,6 +16,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     // Local engine
     private let engineStatus = NSTextField(labelWithString: "")
     private let engineButton = NSButton()
+    private let deleteEngineButton = NSButton()
     private let progressBar = NSProgressIndicator()
     private let progressLabel = NSTextField(labelWithString: "")
     private let logScroll = NSScrollView()
@@ -52,6 +53,9 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     var onConfigChanged: ((AppConfig) -> Void)?
     /// Called when the local engine finishes installing, so the app can start the sidecar.
     var onEngineInstalled: (() -> Void)?
+    /// Called after the user confirms deleting the local engine; the app stops the sidecar
+    /// and removes the ~4 GB of weights.
+    var onEngineDeleted: (() -> Void)?
     /// Called when the user asks to enter a Groq key; the app owns that dialog already.
     var onEditKey: (() -> Void)?
     /// Called to clear a stale Accessibility grant and ask again; the app owns that dialog.
@@ -123,6 +127,20 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         engineRow.widthAnchor.constraint(equalToConstant: 468).isActive = true
         engineStatus.setContentHuggingPriority(.required, for: .horizontal)
         root.addArrangedSubview(engineRow)
+
+        // Delete lives on its own row so the engine row never crowds on narrow screens.
+        deleteEngineButton.title = "Delete local engine…"
+        deleteEngineButton.bezelStyle = .rounded
+        deleteEngineButton.contentTintColor = .systemRed
+        deleteEngineButton.target = self
+        deleteEngineButton.action = #selector(deleteEngine)
+        deleteEngineButton.isHidden = true
+        let deleteRow = NSStackView(views: [deleteEngineButton])
+        deleteRow.orientation = .horizontal
+        deleteRow.alignment = .leading
+        deleteRow.translatesAutoresizingMaskIntoConstraints = false
+        deleteRow.widthAnchor.constraint(equalToConstant: 468).isActive = true
+        root.addArrangedSubview(deleteRow)
 
         spinner.style = .spinning
         spinner.controlSize = .small
@@ -317,11 +335,13 @@ final class SetupWindow: NSObject, NSWindowDelegate {
             engineStatus.textColor = .systemGreen
             engineButton.title = "Reinstall"
             engineButton.isEnabled = !installing
+            deleteEngineButton.isHidden = installing
         case .missing:
             engineStatus.stringValue = installing ? "Installing…" : "Not installed"
             engineStatus.textColor = installing ? .secondaryLabelColor : .systemOrange
             engineButton.title = "Install"
             engineButton.isEnabled = !installing
+            deleteEngineButton.isHidden = true
         }
 
         // Cloud section
@@ -484,6 +504,19 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     }
 
     // MARK: - Local engine install
+
+    @objc private func deleteEngine() {
+        guard installTask?.isRunning != true else { return }
+        let alert = NSAlert()
+        alert.messageText = "删除本地引擎？"
+        alert.informativeText = "将移除约 4 GB 的模型文件（Python 环境、权重、server.py）。"
+            + "删除后离线听写不可用，云端听写不受影响；以后随时可以重新安装。"
+        alert.addButton(withTitle: "删除")
+        alert.addButton(withTitle: "取消")
+        alert.alertStyle = .warning
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        onEngineDeleted?()
+    }
 
     @objc private func installEngine() {
         guard installTask?.isRunning != true else { return }

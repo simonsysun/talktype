@@ -119,6 +119,13 @@ final class CloudASRClientTests: XCTestCase {
         XCTAssertThrowsError(try CloudASRClient.checkStatus(data: Data("unauthorized".utf8), response: bad))
     }
 
+    func testValidationPathOpenRouterUsesAuthEndpoint() {
+        XCTAssertEqual(CloudASRClient.validationPath(for: "https://openrouter.ai/api/v1"), "auth/key")
+        XCTAssertEqual(CloudASRClient.validationPath(for: "https://api.openai.com/v1"), "models")
+        XCTAssertEqual(CloudASRClient.validationPath(for: "https://dashscope.aliyuncs.com/compatible-mode/v1"), "models")
+        XCTAssertEqual(CloudASRClient.validationPath(for: "https://api.groq.com/openai/v1"), "models")
+    }
+
     // MARK: - Error classification
 
     func testClassificationInvalidKey() {

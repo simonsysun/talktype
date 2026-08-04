@@ -112,7 +112,14 @@ final class CloudASRClient {
         return result
     }
 
-    /// Probe `{base}/models` with the key, so a typo surfaces at entry rather than as a
+    /// Which path actually authenticates the key. OpenRouter's `/models` is public — it
+    /// returns 200 even with no key — so `/auth/key` is the real check there. Every other
+    /// provider requires auth on `/models`, so it works as-is.
+    static func validationPath(for baseURL: String) -> String {
+        baseURL.lowercased().contains("openrouter") ? "auth/key" : "models"
+    }
+
+    /// Probe the provider with the key, so a typo surfaces at entry rather than as a
     /// silent dictation failure later.
     static func validate(apiKey: String, baseURL: String, timeout: TimeInterval = 8) -> Bool {
         let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -120,7 +127,7 @@ final class CloudASRClient {
               let base = URL(string: baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))),
               base.scheme != nil
         else { return false }
-        var request = URLRequest(url: base.appendingPathComponent("models"))
+        var request = URLRequest(url: base.appendingPathComponent(Self.validationPath(for: baseURL)))
         request.setValue("Bearer \(trimmed)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = timeout
 

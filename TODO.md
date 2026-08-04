@@ -238,11 +238,13 @@ Still open:
       plus manual; privacy copy says audio leaves on cloud, transcript-only to Groq.
 - [ ] Local model size choice (1.7B vs 0.6B) in Setup — server.py currently hardcodes 1.7B, so
       this needs the sidecar to know its installed size first.
-- [ ] "Delete local engine" affordance in Setup (design agreed 2026-08-04; not implemented).
-- [ ] Auto fallback cloud→local when offline/unreachable — design agreed 2026-08-04, code still
-      "chosen engine" (see next section).
-- [ ] `CloudASRClient.validate()` cannot detect a bad OpenRouter key — it checks the public
-      `/models` endpoint, which returns 200 with no auth. Real check needs an authenticated call.
+- [x] "Delete local engine" affordance in Setup — done 2026-08-04: confirmation dialog, stops the
+      sidecar, removes the ~4 GB; auto-switches to cloud when local was the chosen engine.
+- [x] Auto fallback cloud→local when offline/unreachable — done 2026-08-04 (commit 10f604f):
+      NWPathMonitor pre-check, 10 s cloud timeout when local is installed, transition-only
+      notification, sidecar started on demand and stopped on recovery (see next section).
+- [x] `CloudASRClient.validate()` could not detect a bad OpenRouter key (public `/models` returns
+      200 with no auth) — done 2026-08-04: OpenRouter keys now validate against `/auth/key`.
 
 ## OpenRouter 实测 + 设计决定 (2026-08-04)
 

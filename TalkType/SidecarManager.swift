@@ -141,4 +141,21 @@ final class SidecarManager {
         }
         print("[sidecar] stopped")
     }
+
+    /// Stop the sidecar and remove the installed local engine — the Python venv, the
+    /// ~4 GB weights, and server.py. Returns an error message on failure, nil on success.
+    /// The engine can be reinstalled at any time from Setup.
+    @discardableResult
+    func uninstall() -> String? {
+        stop()
+        let fm = FileManager.default
+        do {
+            if fm.fileExists(atPath: Self.asrDir.path) {
+                try fm.removeItem(at: Self.asrDir)
+            }
+            return nil
+        } catch {
+            return "删除本地引擎失败：\(error.localizedDescription)"
+        }
+    }
 }
