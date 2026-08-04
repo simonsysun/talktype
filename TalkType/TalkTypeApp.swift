@@ -384,6 +384,10 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
                 self.notifyInfo("本地引擎已删除，约 4 GB 已释放。")
             }
             self.refreshEngineStatus()
+            // The delete flow changed the app's config (possibly the engine); push it
+            // back into the open Setup window so its engine dropdown and status refresh
+            // against the new reality instead of the stale copy.
+            self.setupWindow.config = self.config
             self.setupWindow.refresh()
         }
     }
