@@ -68,7 +68,8 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         dictationManager = DictationManager(
             config: config,
             vocabularyStore: vocabularyStore,
-            overlay: overlay
+            overlay: overlay,
+            sidecar: sidecar
         )
         dictationManager.setTrayDelegate(self)
 
@@ -449,9 +450,8 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
     // MARK: - Local speech engine
 
-    /// Engine menu: a status row plus Local/Cloud radio items. Cloud is not a fallback —
-    /// whichever is chosen does all the work, so the same sentence never transcribes
-    /// differently depending on what happened to be up.
+    /// Engine menu: a status row plus Local/Cloud radio items. Cloud is cloud-first with
+    /// automatic local fallback when unreachable; Local runs on-device only.
     private func configureEngineMenu() {
         guard let submenu = engineItem.submenu else { return }
         submenu.removeAllItems()
@@ -546,10 +546,15 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     private func refreshEngineStatus(completion: ((SidecarHealth?) -> Void)? = nil) {
         if config.asrEngine == .cloud {
             let configured = CloudKeyStore.apiKey(for: config.cloudProvider) != nil
-            engineStatusItem?.title = "Cloud · \(config.cloudProvider.profile.name) · \(config.cloudModel)"
-            engineItem?.title = configured
-                ? "Speech engine: cloud (\(config.cloudModel))"
-                : "Speech engine: cloud (no API key)"
+            if dictationManager?.effectiveEngine == .local {
+                engineStatusItem?.title = "Local · fallback (cloud unavailable)"
+                engineItem?.title = "Speech engine: local (cloud fallback)"
+            } else {
+                engineStatusItem?.title = "Cloud · \(config.cloudProvider.profile.name) · \(config.cloudModel)"
+                engineItem?.title = configured
+                    ? "Speech engine: cloud (\(config.cloudModel))"
+                    : "Speech engine: cloud (no API key)"
+            }
             completion?(nil)
             return
         }
@@ -869,6 +874,17 @@ extension TalkTypeApp: TrayDelegate {
 
     func accessibilityMissing() {
         DispatchQueue.main.async { self.promptAccessibilityRepair() }
+    }
+
+    func engineStateDidChange(_ engine: ASREngine) {
+        DispatchQueue.main.async {
+            if engine == .local {
+                self.startHealthPolling()
+            } else {
+                self.healthTimer?.invalidate()
+                self.refreshEngineStatus()
+            }
+        }
     }
 
     private func sendNotification(title: String, subtitle: String, body: String) {

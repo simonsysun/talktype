@@ -118,4 +118,30 @@ final class CloudASRClientTests: XCTestCase {
         let bad = HTTPURLResponse(url: base, statusCode: 401, httpVersion: nil, headerFields: nil)!
         XCTAssertThrowsError(try CloudASRClient.checkStatus(data: Data("unauthorized".utf8), response: bad))
     }
+
+    // MARK: - Error classification
+
+    func testClassificationInvalidKey() {
+        XCTAssertEqual(CloudASRError.badStatus(statusCode: 401, body: "").classification, .invalidKey)
+        XCTAssertEqual(CloudASRError.badStatus(statusCode: 403, body: "").classification, .invalidKey)
+    }
+
+    func testClassificationQuotaOrRateLimit() {
+        XCTAssertEqual(CloudASRError.badStatus(statusCode: 429, body: "").classification, .limitOrRate)
+    }
+
+    func testClassificationTimeout() {
+        XCTAssertEqual(CloudASRError.timedOut.classification, .timeout)
+        XCTAssertEqual(CloudASRError.badStatus(statusCode: 408, body: "").classification, .timeout)
+    }
+
+    func testClassificationServiceError() {
+        XCTAssertEqual(CloudASRError.badStatus(statusCode: 500, body: "").classification, .serviceError)
+        XCTAssertEqual(CloudASRError.badStatus(statusCode: 502, body: "").classification, .serviceError)
+        XCTAssertEqual(CloudASRError.emptyResponse.classification, .serviceError)
+    }
+
+    func testClassificationUnreachableIsUnknown() {
+        XCTAssertEqual(CloudASRError.unreachable(underlying: "connection reset").classification, .unknown)
+    }
 }

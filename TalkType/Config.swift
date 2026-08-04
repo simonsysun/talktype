@@ -1,9 +1,8 @@
 import Foundation
 
 /// Which engine turns audio into words. Local runs Qwen3-ASR through the sidecar; cloud
-/// sends the WAV to the configured provider. A chosen engine does all the work — there is
-/// deliberately no silent fallback, so the same sentence never transcribes differently
-/// depending on what happened to be up.
+/// sends the WAV to the configured provider. Cloud is cloud-first with an automatic local
+/// fallback when the cloud is unreachable (the switch is notified); Local is on-device only.
 enum ASREngine: String, Codable {
     case local
     case cloud

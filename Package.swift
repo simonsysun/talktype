@@ -37,6 +37,7 @@ let package = Package(
                 "CloudASRClient.swift",
                 "CloudProvider.swift",
                 "Config.swift",
+                "FallbackPolicy.swift",
                 "PostProcessor.swift",
                 "Transcriber.swift",
                 "VocabularyStore.swift",

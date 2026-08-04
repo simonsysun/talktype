@@ -39,13 +39,15 @@ final class CloudASRClient {
     func transcribe(
         audio: [Float],
         sampleRate: Int = 16000,
-        vocabularyHints: [String]? = nil
+        vocabularyHints: [String]? = nil,
+        timeout: TimeInterval? = nil
     ) async throws -> String {
         guard !audio.isEmpty else { return "" }
+        let effectiveTimeout = timeout ?? self.timeout
         let wav = WAVEncoder.encode(samples: audio, sampleRate: sampleRate)
         let request = Self.makeRequest(
             shape: shape, baseURL: baseURL, apiKey: apiKey, model: model,
-            audioWAV: wav, vocabularyHints: vocabularyHints, timeout: timeout)
+            audioWAV: wav, vocabularyHints: vocabularyHints, timeout: effectiveTimeout)
 
         let (data, response) = try await session.data(for: request)
         try Self.checkStatus(data: data, response: response)
@@ -61,13 +63,15 @@ final class CloudASRClient {
     func transcribeSync(
         audio: [Float],
         sampleRate: Int = 16000,
-        vocabularyHints: [String]? = nil
+        vocabularyHints: [String]? = nil,
+        timeout: TimeInterval? = nil
     ) throws -> String {
         guard !audio.isEmpty else { return "" }
+        let effectiveTimeout = timeout ?? self.timeout
         let wav = WAVEncoder.encode(samples: audio, sampleRate: sampleRate)
         let request = Self.makeRequest(
             shape: shape, baseURL: baseURL, apiKey: apiKey, model: model,
-            audioWAV: wav, vocabularyHints: vocabularyHints, timeout: timeout)
+            audioWAV: wav, vocabularyHints: vocabularyHints, timeout: effectiveTimeout)
 
         let semaphore = DispatchSemaphore(value: 0)
         var result = ""
@@ -75,7 +79,12 @@ final class CloudASRClient {
         let task = session.dataTask(with: request) { data, response, error in
             defer { semaphore.signal() }
             if let error = error {
-                requestError = CloudASRError.unreachable(underlying: error.localizedDescription)
+                if (error as? URLError)?.code == .timedOut
+                    || (error as NSError).code == NSURLErrorTimedOut {
+                    requestError = CloudASRError.timedOut
+                } else {
+                    requestError = CloudASRError.unreachable(underlying: error.localizedDescription)
+                }
                 return
             }
             guard let data = data else {
@@ -95,7 +104,10 @@ final class CloudASRClient {
             }
         }
         task.resume()
-        semaphore.wait()
+        if semaphore.wait(timeout: .now() + effectiveTimeout + 1) != .success {
+            task.cancel()
+            throw CloudASRError.timedOut
+        }
         if let error = requestError { throw error }
         return result
     }
@@ -278,6 +290,7 @@ enum CloudASRError: LocalizedError {
     case unreachable(underlying: String)
     case badStatus(statusCode: Int, body: String)
     case emptyResponse
+    case timedOut
 
     var errorDescription: String? {
         switch self {
@@ -287,6 +300,27 @@ enum CloudASRError: LocalizedError {
             return "Cloud speech engine error (\(code)): \(body)"
         case .emptyResponse:
             return "Cloud speech engine returned no text."
+        case .timedOut:
+            return "Cloud speech engine timed out."
+        }
+    }
+
+    /// Maps the error onto the user-facing taxonomy that drives the fallback policy.
+    var classification: CloudFailure {
+        switch self {
+        case .timedOut:
+            return .timeout
+        case .badStatus(let code, _):
+            switch code {
+            case 401, 403: return .invalidKey
+            case 408: return .timeout
+            case 429: return .limitOrRate
+            default: return .serviceError
+            }
+        case .unreachable:
+            return .unknown
+        case .emptyResponse:
+            return .serviceError
         }
     }
 }

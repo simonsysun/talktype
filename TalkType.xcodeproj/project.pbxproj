@@ -28,6 +28,7 @@
 		A10023 /* CloudProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10024; };
 		A10024 /* CloudASRClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10025; };
 		A10025 /* CloudKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10026; };
+		A10026 /* FallbackPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10027; };
 		A10020 /* install.sh in Resources */ = {isa = PBXBuildFile; fileRef = B10021; };
 		A10021 /* server.py in Resources */ = {isa = PBXBuildFile; fileRef = B10022; };
 		A10015 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = PKG10002; };
@@ -40,6 +41,7 @@
 		A20007 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10010; };
 		A20011 /* CloudProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10024; };
 		A20012 /* CloudASRClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10025; };
+		A20013 /* FallbackPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10027; };
 		A20009 /* AppIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10011; };
 		A20010 /* TalkTypeKeyboard.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C30001; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A30001 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30001; };
@@ -50,6 +52,7 @@
 		A30006 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10010; };
 		A30009 /* CloudProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10024; };
 		A30010 /* CloudASRClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10025; };
+		A30011 /* FallbackPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10027; };
 		A30008 /* AppIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10011; };
 /* End PBXBuildFile section */
 
@@ -102,6 +105,7 @@
 		B10024 /* CloudProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudProvider.swift; sourceTree = "<group>"; };
 		B10025 /* CloudASRClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudASRClient.swift; sourceTree = "<group>"; };
 		B10026 /* CloudKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKeyStore.swift; sourceTree = "<group>"; };
+		B10027 /* FallbackPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FallbackPolicy.swift; sourceTree = "<group>"; };
 		B10021 /* install.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; name = install.sh; path = ../asr/install.sh; sourceTree = "<group>"; };
 		B10022 /* server.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = server.py; path = ../asr/server.py; sourceTree = "<group>"; };
 		B20001 /* TalkTypeiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkTypeiOSApp.swift; sourceTree = "<group>"; };
@@ -174,6 +178,7 @@
 				B10024 /* CloudProvider.swift */,
 				B10025 /* CloudASRClient.swift */,
 				B10026 /* CloudKeyStore.swift */,
+				B10027 /* FallbackPolicy.swift */,
 				B10021 /* install.sh */,
 				B10022 /* server.py */,
 				B10013 /* Info.plist */,
@@ -358,6 +363,7 @@
 				A10023 /* CloudProvider.swift in Sources */,
 				A10024 /* CloudASRClient.swift in Sources */,
 				A10025 /* CloudKeyStore.swift in Sources */,
+				A10026 /* FallbackPolicy.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -374,6 +380,7 @@
 				A20007 /* Config.swift in Sources */,
 				A20011 /* CloudProvider.swift in Sources */,
 				A20012 /* CloudASRClient.swift in Sources */,
+				A20013 /* FallbackPolicy.swift in Sources */,
 				A20009 /* AppIdentity.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -390,6 +397,7 @@
 				A30006 /* Config.swift in Sources */,
 				A30009 /* CloudProvider.swift in Sources */,
 				A30010 /* CloudASRClient.swift in Sources */,
+				A30011 /* FallbackPolicy.swift in Sources */,
 				A30008 /* AppIdentity.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
