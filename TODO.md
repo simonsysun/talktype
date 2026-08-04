@@ -3,7 +3,7 @@
 Single source of truth for what we're doing and what's done.
 Design rationale → `PLAN.md`. Shipped history → `CHANGELOG.md`. Don't duplicate them here.
 
-Last reviewed: 2026-08-02
+Last reviewed: 2026-08-03
 
 **Current focus: macOS, local-only ASR.** iOS is parked by decision (2026-08-02).
 
@@ -11,8 +11,8 @@ Last reviewed: 2026-08-02
 
 ## State of the project
 
-- **macOS app (`TalkType/`)** — v2.0.1, shipped. Local Qwen3-ASR sidecar, optional Groq polish,
-  first-run setup window, GitHub release with a downloadable build.
+- **macOS app (`TalkType/`)** — v2.0.2, shipped. Local Qwen3-ASR sidecar, optional Groq polish,
+  first-run setup window, signed releases, GitHub release with a downloadable build.
 - **iOS keyboard (`TalkTypeKeyboard/`) + companion app (`TalkTypeiOS/`)** — written 2026-04-07/08,
   then paused. **Never compiled, never run on a device.** Everything under "Parked: iOS" is a
   hypothesis until the targets build.
@@ -71,27 +71,146 @@ weights), `server.py`. Runs with `HF_HUB_OFFLINE=1`.
 
 ---
 
+## Open: playback stalls and the mouse freezes after a dictation (2026-08-02)
+
+Reported: with a video playing through AirPods, a dictation ends and ~1–2 s later the audio
+stalls and the Bluetooth mouse freezes for about a second. Two candidates, neither confirmed.
+
+**Candidate A — TalkType degrades the Bluetooth link.** Measured read-only on Simon's machine:
+
+- AirPods Pro are both the default input *and* the default output — one Bluetooth link doing both.
+  `config.json` has `input_device_uid: ""`, so `AudioRecorder` follows the system default and opens
+  the AirPods microphone on every dictation.
+- Opening it reconfigures the link: the AirPods **output** device drops from `48000 Hz / 2ch` to
+  `24000 Hz / 1ch`. Every app playing audio has to renegotiate against the new device format — that
+  is a gap in playback, not a fade.
+- It does not come back promptly. Last dictation 10:21:36; still 24 kHz mono at 10:27:28; back to
+  48 kHz stereo by 10:29:03. Six to eight minutes of degraded playback after one dictation.
+- MX Master 3 and MX KEYS S share the 2.4 GHz radio with the AirPods, so a link renegotiation
+  starves their HID reports — which is what a frozen cursor looks like.
+
+**Candidate B — the local inference burst.** 0.2–1.3 s of saturated GPU from a 4.1 GB-resident
+process, starting exactly when the freeze is reported. Fits the cursor symptom as well as A does.
+
+**What the evidence does not settle:** A explains the audio symptom better, but the one timing
+sample puts the restore *minutes* after the dictation, not the reported 1–2 s. B lands in the right
+window but should not stall an audio thread on its own. Do not pick one from the armchair.
+
+**The 30-second test that decides it** — same video playing, one dictation each:
+
+1. Microphone → AirPods Pro (today's behaviour). Freeze?
+2. Microphone → MacBook Pro Microphone (pin it in the menu). Freeze?
+
+Gone in (2) ⇒ Bluetooth ⇒ fix below. Still there in (2) ⇒ the inference burst ⇒ the cloud engine
+below is the fix, plus look at GPU priority in the sidecar.
+
+- [x] **Automatic input should skip Bluetooth.** When nothing is pinned, prefer a non-Bluetooth
+      input over the raw system default. Implemented 2026-08-03: `AudioDevices` reads
+      `kAudioDevicePropertyTransportType` and Automatic prefers a non-Bluetooth input (built-in
+      first). An explicit pick still wins — someone on a noisy train wants the headset mic. Costs
+      nothing in quality: the built-in array captures 48 kHz against the AirPods voice mic's 24 kHz.
+      Compiled, not field-verified — the 30-second test above still stands for the next run.
+- [x] **Show the reason in the Microphone menu.** "Automatic (MacBook Pro Microphone)" with a
+      tooltip saying a connected headset was passed over on purpose, or it reads as a bug.
+      Done 2026-08-03: the row shows the device actually used and the tooltip explains the pass-over.
+- [ ] Consider releasing the input node after each dictation rather than only `engine.stop()`.
+      Only matters for someone who pins a Bluetooth mic deliberately; check first whether it
+      shortens the degraded window or just adds a second renegotiation.
+
+---
+
+## Cloud ASR as a switchable engine (2026-08-02)
+
+Amends the ASR decision above: local Qwen3-ASR stays the default, but local-*only* no longer holds.
+The sidecar is 4.1 GB resident with weights loaded and 3.8 GB on disk. On a 16 GB machine that is a
+quarter of RAM for something used a few seconds at a time. Not only a small-Mac problem either —
+this 64 GB machine was carrying 17 GB of swap while idle.
+
+- [ ] **A chosen engine, not a fallback.** Menu: Speech engine → Local (Qwen3-ASR) / Cloud (…).
+      Local stays the default where the sidecar is installed. Whichever is chosen does all the work,
+      so the same sentence never transcribes differently depending on what happened to be up.
+- [ ] **Say what leaves the machine.** The Groq polish sends the transcript; a cloud ASR sends the
+      *audio*. That is a different promise from the one the README makes today, and the UI has to
+      state it plainly at the moment of choosing.
+- [ ] Pick the provider from the numbers in "ASR decision", then re-measure — that bake-off was one
+      clip. Soniox stt-async-v5 was the most accurate on Simon's Chinese-with-English but 2.9–4.6 s;
+      OpenAI gpt-4o-mini was 0.5–1.1 s but made a meaning error (财报 → 采访).
+      → Shortlist and recommendation in "Cloud engine research" below.
+- [ ] Recover rather than reinvent: `KeyStorage.swift`, `ASRProvider`, and the multipart body
+      building were deleted in the cut-over and are in git history.
+- [ ] Setup must stop assuming local. `SetupWindow` blocks on a missing venv today; with cloud
+      chosen there is nothing to install and the 3.8 GB download has to be skippable.
+- [ ] Vocabulary hints and `PostProcessor` must behave identically on both paths.
+
+---
+
+## Cloud engine research (2026-08-03)
+
+Re-derived from the "ASR decision" numbers against what is current today. Facts are from provider
+docs and public benchmarks; the deciding numbers still have to come from Simon's own clips.
+
+**Shortlist, in fit order for TalkType:**
+
+1. **Qwen3-ASR-Flash — recommended cloud engine.** Same model family as the local default, so
+   output and vocabulary behaviour are the closest thing to "the same sentence never transcribes
+   differently". Built for mixed-language audio with automatic detection — no language hint, which
+   is exactly the CN/EN use case. Public Chinese WER ~3.97% vs gpt-4o-transcribe ~15.7% (Alibaba
+   release tests, 2025-09) — the only cloud model whose Chinese is in the local model's league.
+   OpenAI-compatible on both OpenRouter (`qwen/qwen3-asr-flash-2026-02-10`, $0.000035/s ≈ $0.13/h,
+   so ~$1.9/month at 30 min/day) and DashScope (`qwen3-asr-flash`, Beijing/Singapore — OpenAI mode
+   unavailable in the US region). Accepts base64 WAV and context text for vocabulary. OpenRouter
+   key already exists from the bake-off; DashScope is the same API shape for Chinese-region hosting.
+   Open question: does cloud Flash also "complete the prompt" when given prose context (the local
+   bare-comma-list lesson)? Test vocab hints explicitly.
+
+2. **gpt-4o-transcribe** — fastest to integrate (native OpenAI), ~0.5–1.1 s, $0.006/min
+   (~$5.4/month). Public Chinese WER is ~4x Qwen's, and the old mini model made the 财报→采访
+   meaning error. Keep as the comparison arm, not the default.
+
+3. **Soniox stt-async-v5** — best measured accuracy on Simon's clip (the only one that heard
+   "Claude"), strong context/vocabulary support, ~$0.10–0.12/h. But 2.9–4.6 s async latency and
+   not OpenAI-compatible (own REST/WebSocket). Only wins if a re-measure shows accuracy far ahead
+   of Qwen at acceptable latency; their real-time v5 streams sub-200 ms but means a new WebSocket
+   integration.
+
+**Ruled out or parked:** Groq whisper-large-v3(-turbo) — free tier (2,000 req/day) and fast, but
+weak CN/EN code-switching and no Chinese punctuation (the refiner covers punctuation, and the
+hallucination guard exists; still, the Grok bake-off result and the Chinese Linux voice-input
+project's 17-pattern hallucination blacklist are warning signs). Deepgram Nova-3 and Google
+Chirp 3 now claim Chinese but measured unusable in the bake-off; NVIDIA Parakeet same. 讯飞/火山/
+腾讯/MiniMax are strong on Chinese but ship non-OpenAI-compatible SDKs with registration overhead —
+not a fit for a one-key personal app. AssemblyAI Universal-3.5 Pro ($0.21/h async) is async-first
+and not OpenAI-compatible; real-time is $0.45/h.
+
+**Next: re-bake-off** (plural clips — the 财报/Claude recordings plus a fresh mixed dictation),
+measuring latency, word accuracy, and vocabulary-hint behaviour per path:
+
+- [ ] Arms: Qwen3-ASR-Flash (OpenRouter + DashScope), gpt-4o-transcribe, Soniox stt-async-v5, and
+      Groq whisper-large-v3-turbo as the free arm.
+- [ ] Send vocab hints exactly the way the app does (bare comma list) and watch for prompt-completion
+      hallucination on cloud Qwen too.
+- [ ] Check provider retention/training terms before writing the privacy copy — audio leaving the
+      machine changes the README's promise regardless of which engine wins.
+
+---
+
 ## Now — macOS
 
-1. [ ] **Run `swift test`.** The suite in `Tests/TalkTypeCoreTests` is written but has never executed:
-       XCTest ships with Xcode, not with Command Line Tools. The same 94 assertions were verified
-       through a throwaway harness, so this is a format check, not a logic check.
-2. [ ] **Build and run the macOS app** — first build on this machine. Confirm the menu bar item,
-       hotkey, and a real dictation round trip.
-3. [ ] **Share the macOS scheme** (`TalkType.xcodeproj/xcshareddata/xcschemes/`) so
-       `xcodebuild -scheme TalkType` works from the CLI without opening the IDE.
+1. [x] **Run `swift test`** — 59 tests green (2026-08-02, re-verified 2026-08-03).
+2. [x] **Build and run the macOS app** — shipped as v2.0.0/v2.0.2; Release builds green.
+3. [x] **Share the macOS scheme** — added with the sidecar cut-over (bed5df5); `xcodebuild -scheme
+       TalkType` works from the CLI.
 4. [x] **ASR bake-off** — done, see "ASR decision" above. Local Qwen3-ASR chosen.
-5. [ ] **Cut over to the local sidecar.** Delete every cloud path (~580 lines):
+5. [x] **Cut over to the local sidecar.** Done (bed5df5). Delete every cloud path (~580 lines):
        `KeyStorage.swift` entirely, `ASRProvider`, the multipart/HTTPS body building in
        `Transcriber`, and the Provider / Model / API Key menus in `TalkTypeApp`. `Transcriber`
        becomes a POST of raw WAV bytes to `127.0.0.1:8756/transcribe` with an
        `X-TalkType-Context` header. Keep `WAVEncoder`, `PostProcessor`, `VocabularyStore`.
        **Removes the cloud fallback** — if the sidecar is down there is no dictation, by decision.
-6. [ ] **Sidecar lifecycle in Swift.** Spawn `~/.talktype/asr/venv/bin/python server.py` at launch
-       with `HF_HUB_OFFLINE=1`, poll `/health` until ready, terminate it on quit, and show a real
-       menu bar state when it is missing or still loading (weights take ~1 s cold).
-7. [ ] **Menu bar icon.** `statusItem.button?.title = "T"` is a literal letter while the project has
-       real icon art (`docs/assets/talktype-logo.png`, `Assets.xcassets`). Use a template image.
+6. [x] **Sidecar lifecycle in Swift.** Done — `SidecarManager` spawns
+       `~/.talktype/asr/venv/bin/python server.py` at launch with `HF_HUB_OFFLINE=1`, polls
+       `/health`, terminates on quit, and reports missing/loading state in the menu.
+7. [x] **Menu bar icon.** Done — template SF Symbol waveform, not a literal "T".
 8. [ ] Deferred: filler-word cleanup (呃/嗯/啊). No ASR model removes them. Decide after living with
        the raw output for a few days — do not build it speculatively.
 
@@ -168,7 +287,7 @@ Nice-to-have once it runs at all:
 
 ## Done
 
-Shipped work is in `CHANGELOG.md` (macOS v1.0.0 → v2.0.1). iOS has shipped nothing yet.
+Shipped work is in `CHANGELOG.md` (macOS v1.0.0 → v2.0.2). iOS has shipped nothing yet.
 
 - 2026-08-02 — **Released v2.0.2, signed with a self-signed certificate.** Ad-hoc signing
   makes the designated requirement a cdhash, so every update silently revoked the

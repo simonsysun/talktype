@@ -1,5 +1,10 @@
 # TalkType iOS — Custom Keyboard Extension
 
+> **Superseded 2026-08-03.** iOS is parked; the product is the macOS menu bar app with local-first
+> ASR (and, as of the 2026-08-02 decision, a cloud ASR engine as a switchable option). Live tracker:
+> `TODO.md`. Shipped history: `CHANGELOG.md`. This plan stays for provenance and for when iOS
+> resumes.
+
 ## Problem
 
 TalkType exists as a macOS menu bar dictation app. The same user (me) wants the same

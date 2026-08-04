@@ -70,7 +70,7 @@ fourteen cloud transcription services measured against it on the same recordings
 
 **Will it slow my Mac down?**
 The speech model uses about 4 GB of memory while it's loaded, and TalkType releases it after
-five minutes of not being used. Coming back takes a quarter of a second. Neither the app nor
+five minutes of not being used. Coming back takes about a second. Neither the app nor
 the engine grows with use.
 
 **It stopped pasting after I updated. What happened?**
