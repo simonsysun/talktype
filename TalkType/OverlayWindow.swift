@@ -29,8 +29,9 @@ final class OverlayWindow {
         panel.alphaValue = 1.0
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
         // Fixed dark, so the pill looks the same whichever appearance the desktop is in.
-        // Following the system meant white bars on a light pill in Light Mode.
-        panel.appearance = NSAppearance(named: .vibrantDark)
+        // A vibrant appearance is only valid inside a visual effect view; darkAqua is the
+        // supported way to give the whole panel a dark appearance.
+        panel.appearance = NSAppearance(named: .darkAqua)
 
         hostingView = OverlayHostingView(frame: frame)
         panel.contentView = hostingView
@@ -169,12 +170,10 @@ final class OverlayHostingView: NSView {
         return CAMediaTimingFunction(controlPoints: lead, 0, 0.7, 1)
     }
 
-    /// The pill's glow breathes with the voice: radius and opacity wander within these
-    /// small ranges. It should be felt, not seen.
-    private static let glowRadiusRest: CGFloat = 6.5
-    private static let glowRadiusPeak: CGFloat = 8.5
-    private static let glowOpacityRest: Float = 0.10
-    private static let glowOpacityPeak: Float = 0.14
+    /// A quiet, fixed lift. Animating a blur boundary next to Liquid Glass makes the edge
+    /// itself look unstable, so voice activity belongs to the bars alone.
+    private static let glowRadius: CGFloat = 6.5
+    private static let glowOpacity: Float = 0.10
 
     /// How far the glow ring reaches past the pill before the blur softens it.
     private static let glowSpread: CGFloat = 8
@@ -189,9 +188,9 @@ final class OverlayHostingView: NSView {
         wantsLayer = true
         layer?.backgroundColor = .clear
         layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = Self.glowOpacityRest
+        layer?.shadowOpacity = Self.glowOpacity
         layer?.shadowOffset = .zero
-        layer?.shadowRadius = Self.glowRadiusRest
+        layer?.shadowRadius = Self.glowRadius
         // Spelled out rather than derived from the layer's contents: the pill is a system
         // material composited outside our layer tree, so there is no reliable alpha for
         // Core Animation to infer a shape from, and inferring one every frame is expensive.
@@ -226,8 +225,8 @@ final class OverlayHostingView: NSView {
     func setState(_ newState: OverlayState) {
         state = newState
         level = 0
-        settleBars(animated: newState == .processing)
-        updateGlow(animated: newState == .processing)
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        settleBars(animated: newState == .processing && !reduceMotion)
 
         switch newState {
         case .recording:
@@ -243,24 +242,6 @@ final class OverlayHostingView: NSView {
     static let fadeOutDuration: TimeInterval = 0.12
 
     func appear() {
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        if !reduceMotion, let layer = layer {
-            // A hair of pop, so the pill arrives instead of just appearing. An NSView's
-            // backing layer anchors at its bottom-left corner rather than its centre, so
-            // the scale has to be built around the middle by hand — left to the anchor it
-            // shrinks toward the corner and the pill reads as sliding in from below.
-            let centre = CGPoint(x: bounds.midX, y: bounds.midY)
-            var shrunk = CATransform3DMakeTranslation(centre.x, centre.y, 0)
-            shrunk = CATransform3DScale(shrunk, 0.96, 0.96, 1)
-            shrunk = CATransform3DTranslate(shrunk, -centre.x, -centre.y, 0)
-
-            let pop = CABasicAnimation(keyPath: "transform")
-            pop.fromValue = shrunk
-            pop.toValue = CATransform3DIdentity
-            pop.duration = Self.fadeInDuration
-            pop.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            layer.add(pop, forKey: "appear")
-        }
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = Self.fadeInDuration
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
@@ -316,7 +297,6 @@ final class OverlayHostingView: NSView {
             CATransaction.commit()
         }
 
-        updateGlow(animated: !reduceMotion)
     }
 
     private func scale(forBar i: Int, at level: Float) -> Float {
@@ -356,33 +336,17 @@ final class OverlayHostingView: NSView {
         path.addRoundedRect(in: outer,
                             cornerWidth: radius + glowSpread, cornerHeight: radius + glowSpread)
         // A capsule is symmetric about its vertical centre, so mirroring it leaves the shape
-        // untouched while reversing its winding — which is what makes this subpath a hole
-        // rather than more fill, under either fill rule.
+        // untouched while reversing its winding. That makes this subpath a hole under the
+        // non-zero winding rule used by CALayer.shadowPath.
         let mirrored = CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: 2 * pill.midX, ty: 0)
         path.addRoundedRect(in: pill, cornerWidth: radius, cornerHeight: radius,
                             transform: mirrored)
         return path
     }
 
-    // MARK: - Glow
-
-    /// The glow follows the same smoothed level as the bars, drifting between a faint halo
-    /// and a slightly fuller one. Deliberately tiny range.
-    private func updateGlow(animated: Bool) {
-        guard let layer = layer else { return }
-        CATransaction.begin()
-        CATransaction.setDisableActions(!animated)
-        if animated { CATransaction.setAnimationDuration(0.12) }
-        layer.shadowRadius = Self.glowRadiusRest
-            + (Self.glowRadiusPeak - Self.glowRadiusRest) * CGFloat(level)
-        layer.shadowOpacity = Self.glowOpacityRest
-            + (Self.glowOpacityPeak - Self.glowOpacityRest) * level
-        CATransaction.commit()
-    }
-
     // MARK: - Processing
 
-    /// One slow breath of the whole pill. Transcribing takes well under a second, so this
+    /// One slow breath of the bars. Transcribing takes well under a second, so this
     /// only has to say "still here" — a second distinct animation would be noise.
     /// Held opacity under Reduce Motion. Dropping the breath entirely would leave the pill
     /// looking exactly as it does while recording, which reads as a hang rather than as
@@ -391,7 +355,7 @@ final class OverlayHostingView: NSView {
 
     private func startBreathing() {
         guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
-            setMaterialOpacity(Self.processingDimmed)
+            setBarOpacity(Self.processingDimmed)
             return
         }
         let pulse = CABasicAnimation(keyPath: "opacity")
@@ -401,18 +365,18 @@ final class OverlayHostingView: NSView {
         pulse.autoreverses = true
         pulse.repeatCount = .infinity
         pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        pill.materialLayer?.add(pulse, forKey: "breathe")
+        barLayers.forEach { $0.add(pulse, forKey: "breathe") }
     }
 
     private func stopBreathing() {
-        pill.materialLayer?.removeAnimation(forKey: "breathe")
-        setMaterialOpacity(1)
+        barLayers.forEach { $0.removeAnimation(forKey: "breathe") }
+        setBarOpacity(1)
     }
 
-    private func setMaterialOpacity(_ value: Float) {
+    private func setBarOpacity(_ value: Float) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        pill.materialLayer?.opacity = value
+        barLayers.forEach { $0.opacity = value }
         CATransaction.commit()
     }
 }
@@ -498,7 +462,4 @@ private final class PillView: NSView {
         }
         return material.layer
     }
-
-    /// The material layer, for whole-pill effects like the processing breath.
-    var materialLayer: CALayer? { material.layer }
 }
