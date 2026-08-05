@@ -409,6 +409,9 @@ final class DictationManager {
         // Give feedback before the audio engine warms up — a Bluetooth device can take
         // a moment to settle, and the user should see the pill instead of silence.
         overlay.show()
+        // The main thread is about to busy-wait for the input format; commit the panel
+        // now so it is actually drawn instead of queued behind the wait.
+        CATransaction.flush()
         trayDelegate?.setRecording(true)
         do {
             try recorder.start()
@@ -417,11 +420,15 @@ final class DictationManager {
             state = .idle
             trayDelegate?.setRecording(false)
             trayDelegate?.setProcessing(false)
-            trayDelegate?.notifyError("Microphone unavailable. Check Microphone permission.")
+            let nsError = error as NSError
+            let bluetoothSwitching = nsError.domain == "AudioRecorder" && nsError.code == 2
+            trayDelegate?.notifyError(bluetoothSwitching
+                ? error.localizedDescription
+                : "Microphone unavailable. Check Microphone permission.")
             if overlay.isVisible { overlay.hide() }
             print("[audio] failed to start microphone: \(error)")
             Log.write("[mic] start failed: \(error.localizedDescription) device=\(recorder.captureDeviceName ?? "?")")
-            openMicSettings()
+            if !bluetoothSwitching { openMicSettings() }
             return
         }
     }

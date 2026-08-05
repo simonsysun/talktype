@@ -21,11 +21,20 @@ final class TextInserterTests: XCTestCase {
         XCTAssertTrue(TextInserter.roleAcceptsText("AXSplitGroup"))
     }
 
+    /// Window/table/outline/list roles look non-textual but many apps (games, Qt/Java,
+    /// spreadsheets with a selected cell) accept keys while focused there — pasting must
+    /// not be skipped for them.
+    func testBorderlineRolesAccept() {
+        XCTAssertTrue(TextInserter.roleAcceptsText("AXWindow"))
+        XCTAssertTrue(TextInserter.roleAcceptsText("AXTable"))
+        XCTAssertTrue(TextInserter.roleAcceptsText("AXOutline"))
+        XCTAssertTrue(TextInserter.roleAcceptsText("AXList"))
+    }
+
     func testKnownNonTextRolesReject() {
         XCTAssertFalse(TextInserter.roleAcceptsText("AXButton"))
         XCTAssertFalse(TextInserter.roleAcceptsText("AXStaticText"))
         XCTAssertFalse(TextInserter.roleAcceptsText("AXMenuItem"))
-        XCTAssertFalse(TextInserter.roleAcceptsText("AXWindow"))
         XCTAssertFalse(TextInserter.roleAcceptsText("AXCheckBox"))
     }
 }

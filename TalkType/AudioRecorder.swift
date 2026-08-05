@@ -66,6 +66,10 @@ final class AudioRecorder {
         } else {
             captureDevice = AudioDevices.automaticInput()
         }
+        // Only a device we actually pinned has a trustworthy nominal rate; if the pin
+        // failed, capture falls back to the system default and we must not compare
+        // against the intended device's rate.
+        var pinnedRate: Double?
         if let device = captureDevice,
            device.id != appliedDeviceID,
            let unit = inputNode.audioUnit {
@@ -76,6 +80,7 @@ final class AudioRecorder {
             if status == noErr {
                 appliedDeviceID = device.id
                 captureDeviceName = device.name
+                pinnedRate = AudioDevices.nominalSampleRate(device.id)
                 Log.write("[mic] input device: \(device.name)")
             } else {
                 captureDeviceName = nil
@@ -91,29 +96,34 @@ final class AudioRecorder {
         // so non-zero alone is not "settled". Short cap: beyond this the device is not
         // coming up, and blocking the main thread longer just loses the user's first words.
         var format = inputNode.outputFormat(forBus: 0)
-        let nominal = captureDevice.flatMap { AudioDevices.nominalSampleRate($0.id) }
         let deadline = Date().addingTimeInterval(0.8)
+        var settled = false
         while Date() < deadline {
             if format.channelCount > 0, format.sampleRate > 0 {
-                if let nominal = nominal, nominal > 0 {
-                    if Int(format.sampleRate) == Int(nominal) { break }
+                if let pinnedRate = pinnedRate, pinnedRate > 0 {
+                    if abs(Double(format.sampleRate) - pinnedRate) < 1 {
+                        settled = true
+                        break
+                    }
                 } else {
+                    settled = true
                     break
                 }
             }
             usleep(100_000)
             format = inputNode.outputFormat(forBus: 0)
         }
+        let nominalText = pinnedRate.map { "\($0)" } ?? "unknown"
+        Log.write("[mic] format: \(Int(format.sampleRate)) Hz x\(format.channelCount) "
+                  + "settled=\(settled) nominal=\(nominalText) device=\(captureDevice?.name ?? "automatic")")
         guard format.channelCount > 0, format.sampleRate > 0 else {
             // Do not cache a bad format: reset so the next attempt re-pins and re-reads.
             appliedDeviceID = nil
-            let nominalText = nominal.map { "\($0)" } ?? "?"
             Log.write("[mic] input format never became valid (device=\(captureDevice?.name ?? "?") nominal=\(nominalText))")
             throw NSError(domain: "AudioRecorder", code: 2,
                           userInfo: [NSLocalizedDescriptionKey: "Input not ready — Bluetooth device still switching."])
         }
         hwSampleRate = Int(format.sampleRate)
-        Log.write("[mic] format: \(hwSampleRate) Hz, \(format.channelCount) ch, device=\(captureDevice?.name ?? "automatic")")
 
         lock.lock()
         if recording {
@@ -129,7 +139,10 @@ final class AudioRecorder {
             tapInstalled = false
         }
 
-        inputNode.installTap(onBus: 0, bufferSize: 4800, format: format) { [weak self] pcmBuffer, _ in
+        // format: nil lets the bus's live format decide — a Bluetooth device can still
+        // be settling here, and installing an explicit stale format can raise an ObjC
+        // exception that Swift cannot catch.
+        inputNode.installTap(onBus: 0, bufferSize: 4800, format: nil) { [weak self] pcmBuffer, _ in
             self?.tapCallback(pcmBuffer)
         }
         tapInstalled = true
@@ -186,6 +199,13 @@ final class AudioRecorder {
         guard let channelData = pcmBuffer.floatChannelData else { return }
         let frameLength = Int(pcmBuffer.frameLength)
         guard frameLength > 0 else { return }
+
+        // The buffer's format is the truth: a Bluetooth device can settle after the tap
+        // is installed, and resampling with the stale rate would pitch-shift the audio.
+        let bufferRate = Int(pcmBuffer.format.sampleRate)
+        if bufferRate != hwSampleRate {
+            hwSampleRate = bufferRate
+        }
 
         let ptr = channelData[0]
         let arr = Array(UnsafeBufferPointer(start: ptr, count: frameLength))

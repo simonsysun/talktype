@@ -68,6 +68,9 @@ enum TextInserter {
                                             &focused) == .success,
               let element = focused,
               CFGetTypeID(element) == AXUIElementGetTypeID() else { return true }
+        // The timeout is per-object; set it on the focused element too, or its own
+        // attribute queries can still hang the main thread on a busy app.
+        AXUIElementSetMessagingTimeout(element as! AXUIElement, 0.2)
 
         var role: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element as! AXUIElement,
@@ -75,6 +78,9 @@ enum TextInserter {
                                             &role) == .success,
               let roleString = role as? String else { return true }
 
+        if !roleAcceptsText(roleString) {
+            Log.write("[insert] skipped paste: role=\(roleString)")
+        }
         return roleAcceptsText(roleString)
     }
 
@@ -86,9 +92,8 @@ enum TextInserter {
         let nonTextRoles: Set<String> = [
             "AXButton", "AXCheckBox", "AXRadioButton",
             "AXMenuItem", "AXMenuBarItem",
-            "AXTable", "AXOutline", "AXList",
             "AXImage", "AXStaticText", "AXLink",
-            "AXSlider", "AXScrollBar", "AXWindow",
+            "AXSlider", "AXScrollBar",
         ]
         return !nonTextRoles.contains(role)
     }
