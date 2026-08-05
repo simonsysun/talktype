@@ -27,19 +27,19 @@ Collect real usage issues for at least a week and ship them as one tested batch.
 release for each small improvement; exceptions are crashes, security/privacy issues, data loss,
 or an upstream service breaking production.
 
-1. [ ] **First overlay appearance still has a brief disturbed edge.** On the first appearance
+1. [x] **First overlay appearance still has a brief disturbed edge.** On the first appearance
        after the app loads, nearby pixels still move slightly, then settle quickly; later use is
        good enough. Reproduce cold-start versus subsequent appearances and separate Liquid Glass
        warm-up from the remaining fade before changing anything.
        Candidate installed 2026-08-05: the glass is fully materialized before the panel appears;
-       the whole-glass fade-in is gone. Awaiting Simon's cold-start visual check.
-2. [ ] **Manual stop can lose the final spoken character.** Even when the hotkey is pressed just
+       the whole-glass fade-in is gone. Simon's field check found no remaining pixel disturbance.
+2. [x] **Manual stop can lose the final spoken character.** Even when the hotkey is pressed just
        after speaking ends, the last character is often absent. Reproduce with fixed phrases and
        measured pauses, then verify whether stopping the audio tap fails to drain its final buffer.
        Do not hide the loss by guessing text in post-processing.
        Candidate installed 2026-08-05: manual stop keeps one measured tap quantum, then drains any
-       callback already in flight before snapshotting. The deterministic race test is green;
-       awaiting repeated real-speech checks on built-in and Bluetooth microphones.
+       callback already in flight before snapshotting. The deterministic race test is green, and
+       Simon confirmed the final spoken character is now captured clearly.
 3. [ ] **Optional support link.** Choose and configure a donation provider, then add one quiet
        “Support TalkType” link to the README/GitHub page. Keep the app free and open source; make
        payment clearly voluntary. Decide separately whether to offer a crypto-wallet address.
@@ -56,7 +56,9 @@ or an upstream service breaking production.
        Candidate installed 2026-08-05: active terms are structured as optional approved spellings
        in Polish. Six live Groq acceptance cases passed, including `cloud code` → `Claude Code`
        and a negative case that did not insert either saved term. A deterministic guard also
-       rejects an English product name if no matching spoken form exists; keep open for real usage.
+       rejects an English product name if no matching spoken form exists. Early field use looks
+       good; keep open because `cloud` / `Claude` is a genuine contextual homophone, and do not
+       tune it without repeated real failures.
 6. [ ] **Improve the polish prompt without regressing a 95/100 experience.** Build a small
        regression set from Simon's real corrections, compare the current prompt with candidates,
        and ship only if meaning preservation, completeness, mixed-language text, and punctuation
