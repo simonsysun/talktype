@@ -20,7 +20,6 @@ final class AudioRecorder {
 
     private var engine: AVAudioEngine?
     private var hwSampleRate: Int = 48000
-    private var hwFormat: AVAudioFormat?
     private var buffer: [[Float]] = []
     private var recording = false
     private var tapInstalled = false
@@ -76,30 +75,45 @@ final class AudioRecorder {
                 &deviceID, UInt32(MemoryLayout<AudioDeviceID>.size))
             if status == noErr {
                 appliedDeviceID = device.id
-                hwFormat = nil          // the new device may run at a different rate
                 captureDeviceName = device.name
-                print("[audio] input device: \(device.name)")
+                Log.write("[mic] input device: \(device.name)")
             } else {
                 captureDeviceName = nil
-                print("[audio] could not select \(device.name) (OSStatus \(status)) — using system default")
+                Log.write("[mic] could not select \(device.name) (OSStatus \(status)) — using system default")
             }
         }
         #endif
 
-        if hwFormat == nil {
-            // A Bluetooth (HFP) device renegotiates asynchronously after being pinned:
-            // the node format can briefly read as zero channels, and installing a tap
-            // with that format never renders. Poll until it settles (or give up).
-            var format = inputNode.outputFormat(forBus: 0)
-            let deadline = Date().addingTimeInterval(2.0)
-            while (format.channelCount == 0 || format.sampleRate == 0) && Date() < deadline {
-                usleep(100_000)
-                format = inputNode.outputFormat(forBus: 0)
+        // Always re-read the format: Bluetooth (HFP) renegotiates asynchronously after
+        // being pinned, and the value is not safe to cache across sessions (a headset
+        // drops back to A2DP once recording stops). Poll until the node format matches
+        // the device's nominal rate — the switch can go "old valid format → new format",
+        // so non-zero alone is not "settled". Short cap: beyond this the device is not
+        // coming up, and blocking the main thread longer just loses the user's first words.
+        var format = inputNode.outputFormat(forBus: 0)
+        let nominal = captureDevice.flatMap { AudioDevices.nominalSampleRate($0.id) }
+        let deadline = Date().addingTimeInterval(0.8)
+        while Date() < deadline {
+            if format.channelCount > 0, format.sampleRate > 0 {
+                if let nominal = nominal, nominal > 0 {
+                    if Int(format.sampleRate) == Int(nominal) { break }
+                } else {
+                    break
+                }
             }
-            hwFormat = format
-            hwSampleRate = Int(format.sampleRate)
-            print("[audio] hardware format: \(hwSampleRate) Hz, \(format.channelCount) ch")
+            usleep(100_000)
+            format = inputNode.outputFormat(forBus: 0)
         }
+        guard format.channelCount > 0, format.sampleRate > 0 else {
+            // Do not cache a bad format: reset so the next attempt re-pins and re-reads.
+            appliedDeviceID = nil
+            let nominalText = nominal.map { "\($0)" } ?? "?"
+            Log.write("[mic] input format never became valid (device=\(captureDevice?.name ?? "?") nominal=\(nominalText))")
+            throw NSError(domain: "AudioRecorder", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "Input not ready — Bluetooth device still switching."])
+        }
+        hwSampleRate = Int(format.sampleRate)
+        Log.write("[mic] format: \(hwSampleRate) Hz, \(format.channelCount) ch, device=\(captureDevice?.name ?? "automatic")")
 
         lock.lock()
         if recording {
@@ -115,7 +129,7 @@ final class AudioRecorder {
             tapInstalled = false
         }
 
-        inputNode.installTap(onBus: 0, bufferSize: 4800, format: hwFormat) { [weak self] pcmBuffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: 4800, format: format) { [weak self] pcmBuffer, _ in
             self?.tapCallback(pcmBuffer)
         }
         tapInstalled = true

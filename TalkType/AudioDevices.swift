@@ -119,6 +119,22 @@ enum AudioDevices {
         return value
     }
 
+    /// The device's nominal input sample rate (e.g. 24000 for a Bluetooth headset in
+    /// HFP mode, 48000 for the built-in array). Used to tell when the node format has
+    /// actually settled on the new device after a switch.
+    static func nominalSampleRate(_ id: AudioDeviceID) -> Double? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyNominalSampleRate,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var value = Float64(0)
+        var size = UInt32(MemoryLayout<Float64>.size)
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr else {
+            return nil
+        }
+        return value
+    }
+
     private static func stringProperty(_ id: AudioDeviceID, _ selector: AudioObjectPropertySelector) -> String? {
         var address = AudioObjectPropertyAddress(
             mSelector: selector,

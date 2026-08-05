@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.3.1 — 2026-08-04
+
+Bluetooth headset capture and paste feedback fixes.
+
+### Fixed
+
+- **Bluetooth (HFP) capture race**: the input format is re-read at every recording start
+  and waited for to match the device's nominal rate (up to 0.8 s), so AirPods connect and
+  work without a restart; a device that never settles now fails loudly instead of caching
+  a bad format or crashing.
+- **No beep when there is no text field**: pasting now checks the focused element and
+  skips the synthesized ⌘V when nothing can receive text — the text goes to the clipboard
+  with a hint instead of macOS playing the "can't do that" sound. The check is a
+  blacklist, so self-drawn terminals keep working.
+- **Failure paths now land in `~/.talktype/talktype.log`** (mic start, device/format,
+  no-speech, transcription errors) — previously invisible when launched from Finder.
+
 ## v2.3.0 — 2026-08-04
 
 Groq polish is back — the transcript (never the audio) is tidied by Qwen on Groq before

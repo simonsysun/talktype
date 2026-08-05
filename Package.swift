@@ -25,10 +25,8 @@ let package = Package(
                 "OverlayWindow.swift",
                 "SidecarManager.swift",
                 "SetupWindow.swift",
-                "Log.swift",
                 "TalkType.entitlements",
                 "TalkTypeApp.swift",
-                "TextInserter.swift",
             ],
             sources: [
                 "AppIdentity.swift",
@@ -37,8 +35,10 @@ let package = Package(
                 "CloudASRClient.swift",
                 "Config.swift",
                 "FallbackPolicy.swift",
+                "Log.swift",
                 "PostProcessor.swift",
                 "TextRefiner.swift",
+                "TextInserter.swift",
                 "Transcriber.swift",
                 "VocabularyStore.swift",
             ]

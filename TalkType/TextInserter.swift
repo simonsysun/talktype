@@ -53,17 +53,21 @@ enum TextInserter {
 
     /// Whether the frontmost app currently has a focused element that accepts typed text.
     /// Fail-open: any AX hiccup means "yes", so terminals and unusual apps keep working —
-    /// the worst case of failing open is today's behaviour (a beep), not a missed paste.
+    /// the worst case of failing open is today's behaviour (a beep), not a swallowed paste.
     static func focusedElementAcceptsText() -> Bool {
         guard accessibilityGranted(prompt: false),
               let app = NSWorkspace.shared.frontmostApplication else { return true }
 
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
+        // AX queries are cross-process and can hang on a busy app; cap the wait so the
+        // main thread never stalls behind one.
+        AXUIElementSetMessagingTimeout(axApp, 0.2)
         var focused: CFTypeRef?
         guard AXUIElementCopyAttributeValue(axApp,
                                             kAXFocusedUIElementAttribute as CFString,
                                             &focused) == .success,
-              let element = focused else { return true }
+              let element = focused,
+              CFGetTypeID(element) == AXUIElementGetTypeID() else { return true }
 
         var role: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element as! AXUIElement,
@@ -71,14 +75,22 @@ enum TextInserter {
                                             &role) == .success,
               let roleString = role as? String else { return true }
 
-        let textRoles: Set<String> = [
-            kAXTextFieldRole as String,
-            kAXTextAreaRole as String,
-            kAXComboBoxRole as String,
-            "AXSearchField",
-            "AXWebArea",
+        return roleAcceptsText(roleString)
+    }
+
+    /// Blacklist, not whitelist: only roles that definitively cannot take typed text are
+    /// skipped. Anything unknown — self-drawn terminals (Ghostty, kitty, Alacritty,
+    /// WezTerm), Emacs, future apps — still pastes, so a wrong guess costs a beep at
+    /// worst, never the transcript.
+    static func roleAcceptsText(_ role: String) -> Bool {
+        let nonTextRoles: Set<String> = [
+            "AXButton", "AXCheckBox", "AXRadioButton",
+            "AXMenuItem", "AXMenuBarItem",
+            "AXTable", "AXOutline", "AXList",
+            "AXImage", "AXStaticText", "AXLink",
+            "AXSlider", "AXScrollBar", "AXWindow",
         ]
-        return textRoles.contains(roleString)
+        return !nonTextRoles.contains(role)
     }
 
     /// Forget any existing Accessibility decision for TalkType, then ask again.

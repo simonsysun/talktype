@@ -406,6 +406,10 @@ final class DictationManager {
             originApp = nil
         }
 
+        // Give feedback before the audio engine warms up — a Bluetooth device can take
+        // a moment to settle, and the user should see the pill instead of silence.
+        overlay.show()
+        trayDelegate?.setRecording(true)
         do {
             try recorder.start()
             sessionID += 1
@@ -420,9 +424,6 @@ final class DictationManager {
             openMicSettings()
             return
         }
-
-        overlay.show()
-        trayDelegate?.setRecording(true)
     }
 
     // MARK: - Stop dictation
@@ -516,6 +517,7 @@ final class DictationManager {
                 // tidy pass on something that is about to be thrown away.
                 if PostProcessor.isLikelyHallucination(text, audioRMS: rms, vocabEntries: vocabEntries) {
                     print("[asr] hallucination detected: \"\(text)\" with rms=\(String(format: "%.5f", rms))")
+                    Log.write("[asr] hallucination discarded: \"\(text)\" rms=\(String(format: "%.5f", rms))")
                     self.trayDelegate?.notifyInfo("No speech detected (transcription discarded).")
                     return
                 }
@@ -527,6 +529,7 @@ final class DictationManager {
                 let processed = PostProcessor.postProcess(text: refined, vocabEntries: vocabEntries)
 
                 guard !processed.isEmpty else {
+                    Log.write("[dict] empty after post-process (raw: \"\(text)\")")
                     self.trayDelegate?.notifyInfo("No text recognized. Try speaking more clearly.")
                     return
                 }
