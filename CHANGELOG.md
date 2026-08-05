@@ -15,8 +15,8 @@ typing, with the deterministic local tidy as the always-on fallback.
 
 - **Automatic microphone follows the system default**, including a connected Bluetooth
   headset (AirPods). Recording through a Bluetooth mic switches the link into headset
-  mode, so audio output drops to 24 kHz mono for the duration — the accepted price of
-  "system default".
+  mode, so audio output drops to 24 kHz mono — measured to last several minutes after
+  dictation ends, not just during it. The accepted price of "system default".
 
 ### Notes
 

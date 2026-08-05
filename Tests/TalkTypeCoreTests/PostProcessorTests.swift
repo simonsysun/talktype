@@ -24,8 +24,21 @@ final class PostProcessorTests: XCTestCase {
     }
 
     func testNormalizeAppliesCompatibilityMapping() {
-        // Fullwidth Latin normalizes to ASCII under NFKC.
+        // Fullwidth Latin normalizes to ASCII (the useful part of NFKC, kept).
         XCTAssertEqual(PostProcessor.safeNormalize("\u{FF21}\u{FF22}"), "AB")
+    }
+
+    /// Regression: NFKC used to flatten full-width punctuation back to half-width,
+    /// undoing the typography pass — every Chinese sentence lost its ，？！.
+    func testNormalizeKeepsFullWidthPunctuation() {
+        XCTAssertEqual(PostProcessor.safeNormalize("这样好吗？"), "这样好吗？")
+        XCTAssertEqual(PostProcessor.safeNormalize("你好，世界！"), "你好，世界！")
+    }
+
+    func testPostProcessPipelineKeepsFullWidthPunctuation() {
+        let tidied = PostProcessor.tidySpeech("这样好吗?")
+        let processed = PostProcessor.postProcess(text: tidied, vocabEntries: [])
+        XCTAssertEqual(processed, "这样好吗？")
     }
 
     // MARK: - isSafeForAutoReplace

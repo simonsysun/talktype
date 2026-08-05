@@ -3,17 +3,18 @@
 Single source of truth for what we're doing and what's done.
 Design rationale → `PLAN.md`. Shipped history → `CHANGELOG.md`. Don't duplicate them here.
 
-Last reviewed: 2026-08-03
+Last reviewed: 2026-08-04
 
-**Current focus: macOS, local-only ASR.** iOS is parked by decision (2026-08-02).
+**Current focus: macOS, Qwen3-ASR via OpenRouter cloud or local, with optional Groq polish.**
+iOS is parked by decision (2026-08-02).
 
 ---
 
 ## State of the project
 
-- **macOS app (`TalkType/`)** — v2.2.0, shipped. One model (Qwen3-ASR) via OpenRouter cloud or
-  local MLX sidecar with automatic offline fallback; no Groq polish; a two-item Setup window
-  (OpenRouter key + local engine install); signed releases.
+- **macOS app (`TalkType/`)** — v2.3.0, shipped. One model (Qwen3-ASR) via OpenRouter cloud or
+  local MLX sidecar with automatic offline fallback; Groq polish restored (text only, optional);
+  Setup has two keys (OpenRouter + Groq) and the local engine install; signed releases.
 - **iOS keyboard (`TalkTypeKeyboard/`) + companion app (`TalkTypeiOS/`)** — written 2026-04-07/08,
   then paused. **Never compiled, never run on a device.** Everything under "Parked: iOS" is a
   hypothesis until the targets build.
@@ -25,8 +26,9 @@ Last reviewed: 2026-08-03
 1. [ ] Deferred: overlay draggability. It is `ignoresMouseEvents = true` and fixed
        bottom-centre. Simon asked for it to move to the bottom (done) but has not said
        whether he wants to drag it.
-2. [ ] Deferred: filler-word cleanup is `PostProcessor.tidySpeech`, always on (the Groq polish
-       was removed in 2.2.0). Revisit only if the tidy proves weak.
+2. [ ] Deferred: filler-word cleanup is `PostProcessor.tidySpeech`, the fallback when Groq
+       polish is off or unreachable (polish was restored in 2.3.0). Revisit only if the tidy
+       proves weak.
 3. The signing certificate's backup lives in `secrets/`, which `.gitignore` covers — verified
    that `git add -A` cannot stage it. Do not move it anywhere `.gitignore` does not reach.
    Losing it costs one extra grant for everyone, once, and nothing else.
@@ -105,15 +107,12 @@ window but should not stall an audio thread on its own. Do not pick one from the
 Gone in (2) ⇒ Bluetooth ⇒ fix below. Still there in (2) ⇒ the inference burst ⇒ the cloud engine
 below is the fix, plus look at GPU priority in the sidecar.
 
-- [x] **Automatic input should skip Bluetooth.** When nothing is pinned, prefer a non-Bluetooth
-      input over the raw system default. Implemented 2026-08-03: `AudioDevices` reads
-      `kAudioDevicePropertyTransportType` and Automatic prefers a non-Bluetooth input (built-in
-      first). An explicit pick still wins — someone on a noisy train wants the headset mic. Costs
-      nothing in quality: the built-in array captures 48 kHz against the AirPods voice mic's 24 kHz.
-      Compiled, not field-verified — the 30-second test above still stands for the next run.
+- [x] ~~**Automatic input should skip Bluetooth.**~~ Superseded 2026-08-04 (2.3.0): Automatic now
+      follows the system default, including Bluetooth — Simon chose "system default" over the
+      headset-mode tradeoff (playback drops to 24 kHz mono, measured to last minutes after a
+      dictation). The skip logic was removed from `AudioDevices`.
 - [x] **Show the reason in the Microphone menu.** "Automatic (MacBook Pro Microphone)" with a
-      tooltip saying a connected headset was passed over on purpose, or it reads as a bug.
-      Done 2026-08-03: the row shows the device actually used and the tooltip explains the pass-over.
+      tooltip explaining what the system default is. Done 2026-08-03.
 - [ ] Consider releasing the input node after each dictation rather than only `engine.stop()`.
       Only matters for someone who pins a Bluetooth mic deliberately; check first whether it
       shortens the degraded window or just adds a second renegotiation.
@@ -269,7 +268,7 @@ Grill 后确定的设计（README 已按此写）:
   （仅本地已装时启用）。
 - 本地 sidecar 生命周期: 按需启动, 断网期间常驻, 网络恢复后停止。
 - 云端失败提示分三类: 没网 / key 无效或额度用完 / 服务故障——人话 + 下一步。
-- 润色已移除（2.2.0）——文字 = 引擎输出 + 本地规则清理，不再有云端改写步骤。
+- 润色已恢复（2.3.0）——Groq 上的 Qwen 只收文字做优化，失败/离线时本地规则兜底。
 - 词库: OpenRouter 不透传（见上）, 客户端纠错兜底。
 
 ---

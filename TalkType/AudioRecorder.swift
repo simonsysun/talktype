@@ -54,10 +54,18 @@ final class AudioRecorder {
         let inputNode = engine.inputNode
 
         #if os(macOS)
-        // Pin the capture device before the format is read. A pinned device that is no
-        // longer connected resolves to nil, and CoreAudio picks the system default —
-        // unplugging the chosen mic should not stop dictation working.
-        if let device = AudioDevices.device(forUID: preferredDeviceUID),
+        // Pin the capture device before the format is read. An empty UID means
+        // Automatic: resolve the system default *now*, at capture time, so a headset
+        // connected since launch is picked up without a restart. A pinned device that
+        // is no longer connected resolves to nil, and CoreAudio picks the system
+        // default — unplugging the chosen mic should not stop dictation working.
+        let captureDevice: AudioDevices.Device?
+        if let uid = preferredDeviceUID, !uid.isEmpty {
+            captureDevice = AudioDevices.device(forUID: uid)
+        } else {
+            captureDevice = AudioDevices.automaticInput()
+        }
+        if let device = captureDevice,
            device.id != appliedDeviceID,
            let unit = inputNode.audioUnit {
             var deviceID = device.id

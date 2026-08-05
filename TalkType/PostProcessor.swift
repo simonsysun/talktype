@@ -73,7 +73,23 @@ enum PostProcessor {
 
     /// Normalize unicode and clean up whitespace.
     static func safeNormalize(_ text: String) -> String {
-        var result = text.precomposedStringWithCompatibilityMapping // NFKC
+        // NFC, not NFKC: compatibility mapping flattens full-width punctuation (，？！)
+        // back to half-width, undoing the typography pass that just ran.
+        var result = text.precomposedStringWithCanonicalMapping
+
+        // The one useful part of NFKC, applied deliberately: full-width Latin letters
+        // and digits become ASCII ("ＡＢ" → "AB"). Punctuation stays full-width.
+        var scalars = Array(result.unicodeScalars)
+        for i in scalars.indices {
+            let v = scalars[i].value
+            if (0xFF10...0xFF19).contains(v)      // ０-９
+                || (0xFF21...0xFF3A).contains(v)  // Ａ-Ｚ
+                || (0xFF41...0xFF5A).contains(v) { // ａ-ｚ
+                scalars[i] = UnicodeScalar(v - 0xFEE0)!
+            }
+        }
+        result = String(String.UnicodeScalarView(scalars))
+
         // Remove zero-width characters
         result = result.replacingOccurrences(
             of: "[\u{200B}\u{200C}\u{200D}\u{FEFF}]",
@@ -133,7 +149,7 @@ enum PostProcessor {
         // Check if entire text matches a single vocab entry
         if vocabWords.contains(trimmed.lowercased()) { return true }
 
-        // Check CJK concatenation (e.g. "做爱做爱" from vocab word "做爱")
+        // Check CJK concatenation (e.g. "语音语音" from vocab word "语音")
         let cjkVocab = vocabEntries
             .map { $0.canonical.trimmingCharacters(in: .whitespaces) }
             .filter { $0.contains(where: { c in c.unicodeScalars.allSatisfy { s in

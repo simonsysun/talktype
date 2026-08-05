@@ -293,9 +293,9 @@ final class DictationManager {
     /// Empty config UID means Automatic: follow the system default, including a
     /// Bluetooth headset — see `AudioDevices.automaticInput`. An explicit pick wins.
     private func applyInputSelection() {
-        recorder.preferredDeviceUID = config.inputDeviceUID.isEmpty
-            ? AudioDevices.automaticInput()?.uid
-            : config.inputDeviceUID
+        // Leave the UID empty for Automatic; the recorder resolves the system default
+        // at capture time so a device change does not wait for a restart.
+        recorder.preferredDeviceUID = config.inputDeviceUID
     }
 
     // MARK: - Refinement
@@ -304,8 +304,7 @@ final class DictationManager {
     /// floor. Whatever happens — disabled, no key, offline, slow, or output that failed
     /// the plausibility check — the caller still gets usable text.
     private func refine(_ text: String, config cfg: AppConfig) -> String {
-        let fallback = PostProcessor.tidySpeech(text)
-        guard cfg.refineEnabled, !isOffline else { return fallback }
+        guard cfg.refineEnabled, !isOffline else { return PostProcessor.tidySpeech(text) }
 
         transcriberLock.lock()
         let refiner = self.refiner
@@ -319,7 +318,7 @@ final class DictationManager {
             if consecutiveRefineFailures == 3 {
                 trayDelegate?.notifyInfo("润色暂时不可用，已用本地清理。检查 Groq key 或额度。")
             }
-            return fallback
+            return PostProcessor.tidySpeech(text)
         }
         consecutiveRefineFailures = 0
         print("[refine] \(String(format: "%.2f", Date().timeIntervalSince(started)))s")

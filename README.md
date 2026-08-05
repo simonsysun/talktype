@@ -69,12 +69,14 @@ Press **⌘⇧Space** and start talking.
 ## Manual
 
 - **Hotkey** — default ⌘⇧Space; change it from the menu bar (Change Hotkey…).
-- **Microphone** — pick one, or Automatic (Automatic passes over Bluetooth mics on purpose, so a
-  headset doesn't stall your playback).
+- **Microphone** — pick one, or Automatic (follows the system default, including a Bluetooth
+  headset; recording through a Bluetooth mic switches the link into headset mode, so playback
+  drops to 24 kHz mono for a while).
 - **Vocabulary** — add names and terms the model keeps mishearing. Only distinctive spellings are
   auto-corrected: `TestFlight` is recoverable from "test flight"; `xAI` is not recoverable from
-  "what's a ship" — those sound nearly identical, and no vocabulary fixes that. On the cloud
-  engine the hints never reach the model — only this conservative client-side correction applies.
+  "what's a ship" — those sound nearly identical, and no vocabulary fixes that. The hints are
+  sent with the request, but OpenRouter does not forward them to the model (verified) — the
+  conservative client-side correction is what applies.
 - **Engine** — menu bar ▸ Speech engine ▸ Cloud / Local. Cloud is the default; the menu shows
   which one is active.
 - **Local engine** — install or reinstall it from Setup; the red "Delete local engine…" button
@@ -91,10 +93,10 @@ Press **⌘⇧Space** and start talking.
   TalkType isn't signed with a paid certificate — so a new version looks like a different app.
   TalkType spots this and offers a **Fix This** button; click it and switch TalkType back on when
   macOS asks. *(Releases from v2.0.2 share one certificate, so this shouldn't recur.)*
-- **"Cloud speech engine has no API key"?** Add an OpenRouter key in Setup.
+- **Told "云端语音引擎没有 API key"?** Add an OpenRouter key in Setup.
 - **Cloud feels slow?** Cloud adds ~2 s per dictation. If speed or privacy matters more than RAM,
   switch to Local.
-- **"Cloud model unavailable"?** TalkType uses a fixed Qwen snapshot on OpenRouter. If OpenRouter
+- **Told "云端模型不可用"?** TalkType uses a fixed Qwen snapshot on OpenRouter. If OpenRouter
   ever retires it, set `"cloud_model_override": "new/model"` in `~/.talktype/config.json` and
   restart — or update TalkType for the new default.
 
@@ -117,7 +119,8 @@ Press **⌘⇧Space** and start talking.
 - **Local:** Qwen3-ASR via [MLX](https://github.com/ml-explore/mlx) in a small loopback-only Python
   helper that exits with the app. ~4 GB resident only while running.
 - **Polish:** Qwen on [Groq](https://groq.com) — ~0.3 s, transcript only, with strict guards
-  against rewriting or translating what you said. The local tidy is the always-on floor.
+  against rewriting or translating what you said. The deterministic local tidy is the fallback
+  when polish is off or unreachable.
 
 ## Building from source
 

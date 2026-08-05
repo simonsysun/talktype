@@ -29,8 +29,13 @@ _Avoid_: fallback engine, failover (implies a downgrade; this is a deliberate sw
 
 **Tidy** (formerly "Refinement"):
 Deterministic local rules that tidy the transcript — filler words (呃/嗯), stutters, punctuation
-width. Always on, never leaves the machine. The Groq polish step was removed in 2.2.0.
-_Avoid_: refinement (implies a cloud step that no longer exists)
+width. Never leaves the machine. It is the fallback when the Groq polish is off or unreachable.
+
+**Polish**:
+Qwen on Groq tidies the transcript (removes filler, fixes punctuation) — text only, never audio,
+~0.3 s, restored in 2.3.0 after being removed in 2.2.0. Strict guards reject translations,
+summaries, and truncation; failures fall back to Tidy.
+_Avoid_: cleanup (ambiguous with the local Tidy)
 
 **Vocabulary**:
 The user-maintained word list that biases transcription spelling.

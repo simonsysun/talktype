@@ -44,6 +44,18 @@ final class SidecarManager {
         ] where !fm.fileExists(atPath: path.path) {
             return .missing("\(label) at \(path.path)")
         }
+        // `hf` exists from the first downloaded chunk, so mere existence is not
+        // "ready": a paused/resumed or reinstalled engine would report installed while
+        // weights are still landing, and a fallback would then try a broken sidecar.
+        guard let files = fm.enumerator(at: Self.huggingFaceHome,
+                                        includingPropertiesForKeys: nil)?.allObjects as? [URL] else {
+            return .missing("model weights (hf) at \(Self.huggingFaceHome.path)")
+        }
+        let hasWeights = files.contains { $0.pathExtension == "safetensors" }
+        let hasIncomplete = files.contains { $0.lastPathComponent.hasSuffix(".incomplete") }
+        guard hasWeights, !hasIncomplete else {
+            return .missing("model weights not fully downloaded")
+        }
         return .ready
     }
 
