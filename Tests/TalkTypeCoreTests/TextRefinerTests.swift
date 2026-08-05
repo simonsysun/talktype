@@ -70,6 +70,16 @@ final class TextRefinerTests: XCTestCase {
         XCTAssertNil(makeRefiner().refine("今天天气不错", vocabularyHints: ["TalkType"]))
     }
 
+    /// A Latin transcript reaches the edit-distance branch instead of being rejected
+    /// earlier by the language-ratio check. An unrelated saved term must stay out.
+    func testRejectsUnspokenVocabularyInLatinTranscript() {
+        XCTAssertFalse(TextRefiner.isPlausibleRefinement(
+            original: "please open the project in vs code",
+            refined: "please open the project in TalkType",
+            vocabularyHints: ["TalkType"]
+        ))
+    }
+
     func testAllowsPlausibleVocabularySpellingCorrection() {
         XCTAssertTrue(TextRefiner.isPlausibleRefinement(
             original: "请用 cloud code 打开项目",

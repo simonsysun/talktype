@@ -337,8 +337,8 @@ final class AudioRecorder {
     }
 
     /// Low-pass FIR (Blackman-windowed sinc) with the cutoff at the target Nyquist —
-    /// 0.5/ratio of the original rate. 33 taps is cheap (a 30 s clip is well under a
-    /// millisecond of work) and gives a clean stopband for speech purposes.
+    /// 0.5/ratio of the original rate. 33 taps gives a clean stopband for speech; its
+    /// work scales linearly with recording length, so long clips need profiling at stop.
     private static func antiAliasFilter(_ audio: [Float], decimation: Int) -> [Float] {
         let taps = 33
         let half = (taps - 1) / 2

@@ -73,6 +73,10 @@ or an upstream service breaking production.
 9. The signing certificate's backup lives in `secrets/`, which `.gitignore` covers — verified
    that `git add -A` cannot stage it. Do not move it anywhere `.gitignore` does not reach.
    Losing it costs one extra grant for everyone, once, and nothing else.
+10. [ ] **Measure long-recording stop latency before changing the audio thread model.** The
+        33-tap resampler currently runs during `recorder.stop()` on the main thread. Profile
+        Release builds with 60 s and 180 s recordings; move only flattening/resampling off-main
+        if the UI blocks for more than 50 ms, while keeping AVAudioEngine shutdown on main.
 
 ---
 
@@ -314,7 +318,7 @@ Grill 后确定的设计（README 已按此写）:
 
 ---
 
-## Now — macOS
+## Historical macOS bring-up plan (2026-08-02)
 
 1. [x] **Run `swift test`** — 59 tests green (2026-08-02, re-verified 2026-08-03).
 2. [x] **Build and run the macOS app** — shipped as v2.0.0/v2.0.2; Release builds green.

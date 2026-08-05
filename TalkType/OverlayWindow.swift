@@ -244,7 +244,14 @@ final class OverlayHostingView: NSView {
     static let fadeOutDuration: TimeInterval = 0.12
 
     func appear() {
-        alphaValue = 1
+        // A new recording can begin while disappear() is still fading this view out.
+        // Cancel by layer rather than relying on AppKit's undocumented animation key.
+        // Bar animations live on child layers, so they are unaffected.
+        layer?.removeAllAnimations()
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0
+            self.animator().alphaValue = 1
+        }
     }
 
     func disappear() {
