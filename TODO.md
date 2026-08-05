@@ -209,18 +209,19 @@ measuring latency, word accuracy, and vocabulary-hint behaviour per path:
 
 ## Cloud engine — implementation (2026-08-03)
 
-Architecture and current state, so the next session can pick up without re-deriving it:
+Architecture and current state (as of 2.2.0), so the next session can pick up without
+re-deriving it:
 
-- `config.json` gains `asr_engine` (`local` | `cloud`), `cloud_provider`, `cloud_model`,
-  `cloud_base_url`. All decode with defaults, so old configs keep working.
-- Cloud keys live in the login keychain, one slot per provider
-  (`talktype-asr-<provider>`, `CloudKeyStore`). Provider is auto-detected from the pasted base
-  URL (OpenRouter / OpenAI / DashScope / Groq / custom); key prefix `sk-or-` is a secondary hint.
-  The Setup window fills model + URL from the detected provider and validates the key against
-  `{base}/models` before saving.
-- `CloudASRClient` speaks the three dialects: OpenRouter base64 JSON (`/audio/transcriptions`),
-  OpenAI/Groq multipart, DashScope chat-completions `input_audio`. Vocabulary is a bare comma
-  list on every path (`buildPrompt`), same rule as the local sidecar's `X-TalkType-Context`.
+- One model, one provider, by design: cloud is Qwen3-ASR-Flash through OpenRouter
+  (`CloudDefaults`), local is the same Qwen3-ASR via MLX. The provider dropdown, base URL
+  and model fields are gone. A hidden `cloud_model_override` in config.json is the escape
+  hatch if OpenRouter retires the default snapshot.
+- The one key lives in the login keychain (`talktype-asr-openrouter`, `CloudKeyStore`);
+  legacy per-provider and Groq slots are cleared at launch. Setup validates it against
+  OpenRouter's `/auth/key` (never `/models`, which is public).
+- `CloudASRClient` speaks exactly one dialect: OpenRouter base64 JSON
+  (`/audio/transcriptions`). Vocabulary is a bare comma list (`buildPrompt`), same rule
+  as the local sidecar's `X-TalkType-Context`.
 - Engine switch stops the sidecar when going cloud (frees ~4 GB) and starts it when going local.
   Launch only spawns the sidecar for local; cloud with no key opens Setup instead of blocking.
 - Local install (`asr/install.sh`) now emits `[progress] NN` while the weights download, and the

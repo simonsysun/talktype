@@ -46,6 +46,14 @@ final class FallbackPolicyTests: XCTestCase {
         XCTAssertEqual(policy.fallbackPlan(failure: .limitOrRate), .local(reason: "云端额度用完或请求太频繁，已用本地。"))
     }
 
+    func testModelUnavailableFallsBackToLocalWithUpdateHint() {
+        let policy = FallbackPolicy(localInstalled: true)
+        guard case .local(let reason) = policy.fallbackPlan(failure: .modelUnavailable) else {
+            return XCTFail("expected local fallback")
+        }
+        XCTAssertTrue(reason.contains("更新"))
+    }
+
     func testServiceErrorFallsBackToLocal() {
         let policy = FallbackPolicy(localInstalled: true)
         for failure in [CloudFailure.timeout, .offline, .serviceError, .unknown] {
@@ -71,6 +79,14 @@ final class FallbackPolicyTests: XCTestCase {
             return XCTFail("expected blocked")
         }
         XCTAssertTrue(message.contains("额度"))
+    }
+
+    func testModelUnavailableWithoutLocalBlocksWithUpdateHint() {
+        let policy = FallbackPolicy(localInstalled: false)
+        guard case .blocked(let message) = policy.fallbackPlan(failure: .modelUnavailable) else {
+            return XCTFail("expected blocked")
+        }
+        XCTAssertTrue(message.contains("更新"))
     }
 
     func testServiceErrorWithoutLocalBlocks() {

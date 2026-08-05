@@ -7,6 +7,8 @@ enum CloudFailure: Equatable {
     case invalidKey
     case limitOrRate
     case timeout
+    /// The provider answered 404 — the model id no longer exists there.
+    case modelUnavailable
     case serviceError
     case unknown
 }
@@ -53,6 +55,8 @@ struct FallbackPolicy {
                 return .local(reason: "云端 key 无效或额度用完，已用本地。去设置换 key。")
             case .limitOrRate:
                 return .local(reason: "云端额度用完或请求太频繁，已用本地。")
+            case .modelUnavailable:
+                return .local(reason: "云端模型不可用，已用本地。请更新 TalkType。")
             case .offline, .timeout, .serviceError, .unknown:
                 return .local(reason: "云端暂时不可用，已用本地。")
             }
@@ -62,6 +66,8 @@ struct FallbackPolicy {
             return .blocked(message: "云端 key 无效或额度用完。去设置里更换 OpenRouter key。")
         case .limitOrRate:
             return .blocked(message: "云端额度用完或请求太频繁。去 OpenRouter 查看额度。")
+        case .modelUnavailable:
+            return .blocked(message: "云端模型不可用。请更新 TalkType，或稍后再试。")
         case .offline, .timeout, .serviceError, .unknown:
             return .blocked(message: "云端暂时不可用。检查网络后重试，或到设置里安装本地引擎。")
         }

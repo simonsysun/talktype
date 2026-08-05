@@ -83,6 +83,10 @@ final class CloudASRClientTests: XCTestCase {
         XCTAssertEqual(CloudASRError.badStatus(statusCode: 429, body: "").classification, .limitOrRate)
     }
 
+    func testClassificationModelUnavailable() {
+        XCTAssertEqual(CloudASRError.badStatus(statusCode: 404, body: "").classification, .modelUnavailable)
+    }
+
     func testClassificationTimeout() {
         XCTAssertEqual(CloudASRError.timedOut.classification, .timeout)
         XCTAssertEqual(CloudASRError.badStatus(statusCode: 408, body: "").classification, .timeout)
@@ -186,6 +190,21 @@ final class CloudASRClientTests: XCTestCase {
             return (response, Data())
         }
         XCTAssertEqual(CloudASRClient.validate(apiKey: "sk-or-bad"), .rejected)
+    }
+
+    /// A 5xx/429 is OpenRouter having a bad moment, not a wrong key — it must not read
+    /// as "rejected", which would lock a good key out of Setup.
+    func testValidateServerErrorsAreUnreachableNotRejected() {
+        for code in [429, 500, 503] {
+            MockURLProtocol.handler = { request in
+                let response = HTTPURLResponse(url: request.url!, statusCode: code,
+                                               httpVersion: nil, headerFields: nil)!
+                return (response, Data())
+            }
+            guard case .unreachable = CloudASRClient.validate(apiKey: "sk-or-x") else {
+                return XCTFail("HTTP \(code) should be .unreachable, not .rejected")
+            }
+        }
     }
 
     /// Offline must not read as "the key was rejected" — the fixes are different.

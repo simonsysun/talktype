@@ -13,9 +13,9 @@ enum PostProcessor {
     private static let cjk = "\\u4E00-\\u9FFF\\u3400-\\u4DBF"
 
     /// Deterministic tidy-up of dictated text: hesitations, stutters, punctuation width,
-    /// and spacing between scripts. Runs in microseconds and can only delete or respace,
-    /// never reword — it is the fallback when cloud refinement is off or unreachable, and
-    /// the floor below which output never drops.
+    /// spacing between scripts, and stray punctuation at the edges. Runs in microseconds
+    /// and can only delete or respace, never reword — it is the always-on tidy, and the
+    /// floor below which output never drops.
     static func tidySpeech(_ text: String) -> String {
         var s = text
 
@@ -46,6 +46,12 @@ enum PostProcessor {
         s = replacing(s, "([A-Za-z0-9])([\(cjk)])", with: "$1 $2")
         s = replacing(s, "[ \\t]{2,}", with: " ")
         s = replacing(s, "\\s+([，。？！、；：])", with: "$1")
+
+        // The engine occasionally starts a transcript with a stray comma (observed in
+        // bakeoff); a sentence never starts with punctuation, and never ends with a
+        // comma/顿号, so those edge runs are noise.
+        s = replacing(s, "^[\\s,，、。；：!！?？]+", with: "")
+        s = replacing(s, "[、，,]+$", with: "")
 
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }

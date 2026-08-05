@@ -141,7 +141,8 @@ final class DictationManager {
 
     private static func makeCloudClient(_ config: AppConfig) -> CloudASRClient? {
         guard let key = CloudKeyStore.apiKey() else { return nil }
-        return CloudASRClient(apiKey: key, timeout: config.asrTimeoutSeconds)
+        let model = config.cloudModelOverride.isEmpty ? CloudDefaults.model : config.cloudModelOverride
+        return CloudASRClient(apiKey: key, model: model, timeout: config.asrTimeoutSeconds)
     }
 
     // MARK: - Engine selection (cloud-first, automatic local fallback)
@@ -460,8 +461,8 @@ final class DictationManager {
 
                 let vocabEntries = self.vocabularyStore.listEntries()
 
-                // Check for hallucination on the raw transcript, before spending a network
-                // round trip refining something that is about to be thrown away.
+                // Check for hallucination on the raw transcript before paying for the
+                // tidy pass on something that is about to be thrown away.
                 if PostProcessor.isLikelyHallucination(text, audioRMS: rms, vocabEntries: vocabEntries) {
                     print("[asr] hallucination detected: \"\(text)\" with rms=\(String(format: "%.5f", rms))")
                     self.trayDelegate?.notifyInfo("No speech detected (transcription discarded).")

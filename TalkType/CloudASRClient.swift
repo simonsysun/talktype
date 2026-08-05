@@ -38,7 +38,6 @@ final class CloudASRClient {
         } else {
             let config = URLSessionConfiguration.default
             config.timeoutIntervalForRequest = timeout
-            config.timeoutIntervalForResource = timeout
             self.session = URLSession(configuration: config)
         }
     }
@@ -116,7 +115,16 @@ final class CloudASRClient {
         let task = URLSession.shared.dataTask(with: request) { _, response, error in
             defer { semaphore.signal() }
             if let http = response as? HTTPURLResponse {
-                result = http.statusCode == 200 ? .valid : .rejected
+                switch http.statusCode {
+                case 200:
+                    result = .valid
+                case 401, 403:
+                    result = .rejected
+                default:
+                    // A 5xx/429 is OpenRouter having a bad moment, not a wrong key —
+                    // reporting it as rejection would lock a good key out of Setup.
+                    result = .unreachable("HTTP \(http.statusCode)")
+                }
                 return
             }
             if let transportError = error {
@@ -220,6 +228,7 @@ enum CloudASRError: LocalizedError {
             switch code {
             case 401, 403: return .invalidKey
             case 402: return .limitOrRate
+            case 404: return .modelUnavailable
             case 408: return .timeout
             case 429: return .limitOrRate
             default: return .serviceError

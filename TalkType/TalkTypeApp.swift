@@ -80,6 +80,9 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         // Load config
         config = ConfigManager.load()
         ConfigManager.save(config)
+        // Providers other than OpenRouter were removed in 2.2.0; drop their stale
+        // keychain slots in one pass.
+        CloudKeyStore.removeLegacyKeys()
 
         // Start the speech engine early. Local weights take about a second to load, and
         // the socket is up before then so the first dictation rarely waits. Cloud means
@@ -392,7 +395,12 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
                 self.dictationManager.reloadConfig(self.config)
                 self.engineLocalItem?.state = .off
                 self.engineCloudItem?.state = .on
-                self.notifyInfo("本地引擎已删除，语音引擎已切到云端。")
+                if CloudKeyStore.apiKey() == nil {
+                    self.notifyInfo("本地引擎已删除，语音引擎已切到云端，但还没有 OpenRouter key——已打开设置。")
+                    self.openSetup()
+                } else {
+                    self.notifyInfo("本地引擎已删除，语音引擎已切到云端。")
+                }
             } else {
                 self.notifyInfo("本地引擎已删除，约 4 GB 已释放。")
             }

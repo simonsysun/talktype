@@ -180,4 +180,17 @@ final class PostProcessorTests: XCTestCase {
             PostProcessor.tidySpeech("它的问题在于,嗯,就是说它太慢了"),
             "它的问题在于，就是说它太慢了")
     }
+
+    /// Regression: the engine sometimes emits a leading comma (seen in bakeoff); a
+    /// sentence never starts with punctuation or ends with a comma/顿号.
+    func testTidyStripsLeadingPunctuation() {
+        XCTAssertEqual(PostProcessor.tidySpeech("，明天下午三点。"), "明天下午三点。")
+        XCTAssertEqual(PostProcessor.tidySpeech("、hello"), "hello")
+    }
+
+    func testTidyStripsTrailingCommaButKeepsSentenceEnd() {
+        XCTAssertEqual(PostProcessor.tidySpeech("好的，"), "好的")
+        XCTAssertEqual(PostProcessor.tidySpeech("好的。"), "好的。")
+        XCTAssertEqual(PostProcessor.tidySpeech("是吗？"), "是吗？")
+    }
 }

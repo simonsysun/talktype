@@ -1,8 +1,8 @@
 import Cocoa
 
 /// Setup window. One page, in the order things have to happen: choose the speech engine,
-/// configure it (download the local model, or point the cloud engine at a provider),
-/// then the two system permissions macOS will not grant on our behalf.
+/// configure it (install the local model, or add the OpenRouter key), then the two
+/// system permissions macOS will not grant on our behalf.
 ///
 /// It opens by itself when something is missing, and from the menu bar afterwards.
 final class SetupWindow: NSObject, NSWindowDelegate {
@@ -113,12 +113,19 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         root.addArrangedSubview(heading("Speech engine",
             "Both engines are the same Qwen3-ASR model. Local runs on this Mac "
             + "(voice never leaves, ~4 GB once); Cloud goes through OpenRouter "
-            + "(faster to start, pay per use). Offline, dictation falls back to Local."))
+            + "(faster to start, pay per use). With the local engine installed, "
+            + "offline dictation keeps working."))
 
+        // The window is rebuilt each time it opens (windowWillClose nils the window), so
+        // clear first — addItems without removeAllItems would double the list on the
+        // second open and silently shift which item is "Cloud".
+        enginePopup.removeAllItems()
         enginePopup.addItems(withTitles: [
             "Local — Qwen3-ASR on this Mac",
             "Cloud — OpenRouter (Qwen3-ASR-Flash)",
         ])
+        enginePopup.item(at: 0)?.representedObject = ASREngine.local.rawValue
+        enginePopup.item(at: 1)?.representedObject = ASREngine.cloud.rawValue
         enginePopup.target = self
         enginePopup.action = #selector(engineChanged)
         enginePopup.setContentHuggingPriority(.required, for: .horizontal)
@@ -198,6 +205,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         root.addArrangedSubview(logScroll)
 
         // MARK: Cloud configuration
+        cloudRows.removeAll()
         keyField.placeholderString = "sk-or-…"
         keyField.onChange = { [weak self] in self?.syncKeyButtons() }
         cloudRows.append(formRow(label: "OpenRouter API key", view: keyRow(
@@ -279,9 +287,9 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         return stack
     }
 
-    /// Both API keys are entered the same way: type or paste, Save, and Remove once one is
-    /// stored. Save stays disabled until the field holds something, so the button always
-    /// tells the truth about whether pressing it will do anything.
+    /// The one API key: type or paste, Save, and Remove once it is stored. Save stays
+    /// disabled until the field holds something, so the button always tells the truth
+    /// about whether pressing it will do anything.
     private func keyRow(field: SecretField, save: NSButton, saveAction: Selector,
                         remove: NSButton, removeAction: Selector) -> NSView {
         save.title = "Save"
@@ -393,7 +401,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
             cloudStatus.stringValue = "Key saved (\(Self.masked(cloudKey)))"
             cloudStatus.textColor = .systemGreen
         } else {
-            cloudStatus.stringValue = "No key saved"
+            cloudStatus.stringValue = "No key saved — TalkType now uses OpenRouter only"
             cloudStatus.textColor = .secondaryLabelColor
         }
         keyRemoveButton.isHidden = cloudKey == nil
@@ -422,7 +430,9 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     // MARK: - Actions
 
     @objc private func engineChanged() {
-        let engine: ASREngine = enginePopup.indexOfSelectedItem == 1 ? .cloud : .local
+        guard let raw = enginePopup.selectedItem?.representedObject as? String,
+              let engine = ASREngine(rawValue: raw)
+        else { return }
         guard engine != config.asrEngine else { return }
         config.asrEngine = engine
         onConfigChanged?(config)

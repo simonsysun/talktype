@@ -1,8 +1,8 @@
 import Foundation
 
 /// Which engine turns audio into words. Local runs Qwen3-ASR through the sidecar; cloud
-/// sends the WAV to the configured provider. Cloud is cloud-first with an automatic local
-/// fallback when the cloud is unreachable (the switch is notified); Local is on-device only.
+/// sends the WAV to OpenRouter. Cloud is cloud-first with an automatic local fallback
+/// when the cloud is unreachable (the switch is notified); Local is on-device only.
 enum ASREngine: String, Codable {
     case local
     case cloud
@@ -26,6 +26,10 @@ struct AppConfig: Codable {
     var minTranscribeRms: Double = 0.012
     /// UID of the microphone to record from. Empty means follow the system default.
     var inputDeviceUID: String = ""
+    /// Hidden escape hatch, not exposed in the UI: if OpenRouter ever retires the default
+    /// model snapshot, this lets a user point at the replacement by editing config.json.
+    /// Empty means use `CloudDefaults.model`.
+    var cloudModelOverride: String = ""
 
     enum CodingKeys: String, CodingKey {
         case sampleRate = "sample_rate"
@@ -38,6 +42,7 @@ struct AppConfig: Codable {
         case silenceRmsThreshold = "silence_rms_threshold"
         case minTranscribeRms = "min_transcribe_rms"
         case inputDeviceUID = "input_device_uid"
+        case cloudModelOverride = "cloud_model_override"
     }
 
     init() {}
@@ -58,6 +63,7 @@ struct AppConfig: Codable {
         silenceRmsThreshold = try c.decodeIfPresent(Double.self, forKey: .silenceRmsThreshold) ?? d.silenceRmsThreshold
         minTranscribeRms = try c.decodeIfPresent(Double.self, forKey: .minTranscribeRms) ?? d.minTranscribeRms
         inputDeviceUID = try c.decodeIfPresent(String.self, forKey: .inputDeviceUID) ?? d.inputDeviceUID
+        cloudModelOverride = try c.decodeIfPresent(String.self, forKey: .cloudModelOverride) ?? d.cloudModelOverride
     }
 }
 
