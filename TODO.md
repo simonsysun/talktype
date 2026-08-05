@@ -3,7 +3,7 @@
 Single source of truth for what we're doing and what's done.
 Design rationale → `PLAN.md`. Shipped history → `CHANGELOG.md`. Don't duplicate them here.
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-05
 
 **Current focus: macOS, Qwen3-ASR via OpenRouter cloud or local, with optional Groq polish.**
 iOS is parked by decision (2026-08-02).
@@ -12,7 +12,7 @@ iOS is parked by decision (2026-08-02).
 
 ## State of the project
 
-- **macOS app (`TalkType/`)** — v2.3.0, shipped. One model (Qwen3-ASR) via OpenRouter cloud or
+- **macOS app (`TalkType/`)** — v2.3.2, shipped. One model (Qwen3-ASR) via OpenRouter cloud or
   local MLX sidecar with automatic offline fallback; Groq polish restored (text only, optional);
   Setup has two keys (OpenRouter + Groq) and the local engine install; signed releases.
 - **iOS keyboard (`TalkTypeKeyboard/`) + companion app (`TalkTypeiOS/`)** — written 2026-04-07/08,
@@ -23,13 +23,34 @@ iOS is parked by decision (2026-08-02).
 
 ## Now — macOS
 
-1. [ ] Deferred: overlay draggability. It is `ignoresMouseEvents = true` and fixed
+Collect real usage issues for at least a week and ship them as one tested batch. Do not cut a
+release for each small improvement; exceptions are crashes, security/privacy issues, data loss,
+or an upstream service breaking production.
+
+1. [ ] **Optional support link.** Choose and configure a donation provider, then add one quiet
+       “Support TalkType” link to the README/GitHub page. Keep the app free and open source; make
+       payment clearly voluntary. Decide separately whether to offer a crypto-wallet address.
+2. [ ] **Resolve the TalkType name collision before wider promotion.** CareScribe already ships an
+       active commercial dictation product named TalkType for Mac, Windows, web, and mobile
+       (`talk-type.com`), with overlapping vocabulary and polish features. Open source plus
+       voluntary donations does not itself require a rename, but this same-market collision is a
+       real discoverability and possible trademark risk. Research a distinct name before putting
+       meaningful promotion behind the project; do not rush-rename the current installed app.
+3. [ ] **Verify vocabulary through the polish stage.** Current order is ASR → optional Groq polish
+       → conservative client-side vocabulary correction; saved terms are not included in the
+       polish prompt. Test whether a compact canonical-term list helps preserve spelling without
+       making the model insert terms that were never spoken.
+4. [ ] **Improve the polish prompt without regressing a 95/100 experience.** Build a small
+       regression set from Simon's real corrections, compare the current prompt with candidates,
+       and ship only if meaning preservation, completeness, mixed-language text, and punctuation
+       are all no worse. Prefer no change over an unmeasured “smarter” prompt.
+5. [ ] Deferred: overlay draggability. It is `ignoresMouseEvents = true` and fixed
        bottom-centre. Simon asked for it to move to the bottom (done) but has not said
        whether he wants to drag it.
-2. [ ] Deferred: filler-word cleanup is `PostProcessor.tidySpeech`, the fallback when Groq
+6. [ ] Deferred: filler-word cleanup is `PostProcessor.tidySpeech`, the fallback when Groq
        polish is off or unreachable (polish was restored in 2.3.0). Revisit only if the tidy
        proves weak.
-3. The signing certificate's backup lives in `secrets/`, which `.gitignore` covers — verified
+7. The signing certificate's backup lives in `secrets/`, which `.gitignore` covers — verified
    that `git add -A` cannot stage it. Do not move it anywhere `.gitignore` does not reach.
    Losing it costs one extra grant for everyone, once, and nothing else.
 
