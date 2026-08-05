@@ -201,9 +201,9 @@ final class CloudASRClientTests: XCTestCase {
                                                httpVersion: nil, headerFields: nil)!
                 return (response, Data())
             }
-            guard case .unreachable = CloudASRClient.validate(apiKey: "sk-or-x") else {
-                return XCTFail("HTTP \(code) should be .unreachable, not .rejected")
-            }
+            let result = CloudASRClient.validate(apiKey: "sk-or-x")
+            if case .unreachable = result { continue }
+            XCTFail("HTTP \(code) should be .unreachable, got \(result)")
         }
     }
 

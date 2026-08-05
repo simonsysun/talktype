@@ -186,10 +186,12 @@ final class PostProcessorTests: XCTestCase {
     func testTidyStripsLeadingPunctuation() {
         XCTAssertEqual(PostProcessor.tidySpeech("，明天下午三点。"), "明天下午三点。")
         XCTAssertEqual(PostProcessor.tidySpeech("、hello"), "hello")
+        XCTAssertEqual(PostProcessor.tidySpeech(".hello"), "hello")
     }
 
     func testTidyStripsTrailingCommaButKeepsSentenceEnd() {
         XCTAssertEqual(PostProcessor.tidySpeech("好的，"), "好的")
+        XCTAssertEqual(PostProcessor.tidySpeech("好的， "), "好的", "comma followed by whitespace must still go")
         XCTAssertEqual(PostProcessor.tidySpeech("好的。"), "好的。")
         XCTAssertEqual(PostProcessor.tidySpeech("是吗？"), "是吗？")
     }

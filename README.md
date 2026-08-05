@@ -90,6 +90,9 @@ Press **⌘⇧Space** and start talking.
 - **"Cloud speech engine has no API key"?** Add an OpenRouter key in Setup.
 - **Cloud feels slow?** Cloud adds ~2 s per dictation. If speed or privacy matters more than RAM,
   switch to Local.
+- **"Cloud model unavailable"?** TalkType uses a fixed Qwen snapshot on OpenRouter. If OpenRouter
+  ever retires it, set `"cloud_model_override": "new/model"` in `~/.talktype/config.json` and
+  restart — or update TalkType for the new default.
 
 ## How it compares
 

@@ -179,7 +179,11 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         progressBar.maxValue = 100
         progressBar.isHidden = true
         progressBar.translatesAutoresizingMaskIntoConstraints = false
-        progressBar.widthAnchor.constraint(equalToConstant: 300).isActive = true
+        // The window rebuilds on every open; drop stale constraints so they do not
+        // accumulate one identical pair per open.
+        if !progressBar.constraints.contains(where: { $0.firstAttribute == .width }) {
+            progressBar.widthAnchor.constraint(equalToConstant: 300).isActive = true
+        }
         progressLabel.font = .systemFont(ofSize: 11)
         progressLabel.textColor = .secondaryLabelColor
         progressLabel.isHidden = true
@@ -200,8 +204,12 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         logScroll.drawsBackground = false
         logScroll.isHidden = true
         logScroll.translatesAutoresizingMaskIntoConstraints = false
-        logScroll.heightAnchor.constraint(equalToConstant: 96).isActive = true
-        logScroll.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
+        if !logScroll.constraints.contains(where: { $0.firstAttribute == .height }) {
+            logScroll.heightAnchor.constraint(equalToConstant: 96).isActive = true
+        }
+        if !logScroll.constraints.contains(where: { $0.firstAttribute == .width }) {
+            logScroll.widthAnchor.constraint(equalToConstant: Self.contentWidth).isActive = true
+        }
         root.addArrangedSubview(logScroll)
 
         // MARK: Cloud configuration
@@ -347,7 +355,11 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     func refresh() {
         let installing = installTask?.isRunning ?? false
 
-        enginePopup.selectItem(at: config.asrEngine == .cloud ? 1 : 0)
+        if let idx = enginePopup.itemArray.firstIndex(where: {
+            ($0.representedObject as? String) == config.asrEngine.rawValue
+        }) {
+            enginePopup.selectItem(at: idx)
+        }
 
         switch SidecarManager.installState() {
         case .ready:
@@ -473,8 +485,10 @@ final class SetupWindow: NSObject, NSWindowDelegate {
                     self.syncKeyButtons()
                     return
                 case .unreachable(let message):
-                    self.cloudStatus.stringValue =
-                        "Could not reach OpenRouter (\(message)). Nothing was saved — check your network."
+                    let hint = message.hasPrefix("HTTP ")
+                        ? "OpenRouter is having a bad moment (\(message)). Nothing was saved — try again shortly."
+                        : "Could not reach OpenRouter (\(message)). Nothing was saved — check your network."
+                    self.cloudStatus.stringValue = hint
                     self.cloudStatus.textColor = .systemOrange
                     self.syncKeyButtons()
                     return

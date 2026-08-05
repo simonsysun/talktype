@@ -31,6 +31,12 @@ struct AppConfig: Codable {
     /// Empty means use `CloudDefaults.model`.
     var cloudModelOverride: String = ""
 
+    /// The model the cloud engine actually uses, honoring (and trimming) the override.
+    var effectiveCloudModel: String {
+        let trimmed = cloudModelOverride.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? CloudDefaults.model : trimmed
+    }
+
     enum CodingKeys: String, CodingKey {
         case sampleRate = "sample_rate"
         case launchAtLogin = "launch_at_login"

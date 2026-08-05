@@ -154,7 +154,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         print("Ready!")
         print("  \(hotkeyDisplayString()) -> Dictation (speak -> type)")
         print("  Hotkey capture: \(mode)")
-        print("  Speech engine: \(config.asrEngine == .local ? "local, 127.0.0.1:\(config.asrPort)" : "cloud, \(CloudDefaults.model)")")
+        print("  Speech engine: \(config.asrEngine == .local ? "local, 127.0.0.1:\(config.asrPort)" : "cloud, \(config.effectiveCloudModel)")")
         if config.silenceAutoStopEnabled {
             print("  Silence auto-stop: \(config.silenceAutoStopSeconds)s")
         }
@@ -459,6 +459,10 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             // Free the ~4 GB resident model — the whole point of choosing cloud.
             sidecar.stop()
             healthTimer?.invalidate()
+            if CloudKeyStore.apiKey() == nil {
+                notifyInfo("已切到云端，但还没有 OpenRouter key——已打开设置。")
+                openSetup()
+            }
         } else {
             startSidecar()
         }
@@ -467,7 +471,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         engineCloudItem.state = engine == .cloud ? .on : .off
         refreshEngineStatus()
         notifyInfo(engine == .cloud
-            ? "Speech engine: cloud (\(CloudDefaults.model)). Audio now leaves your Mac."
+            ? "Speech engine: cloud (\(config.effectiveCloudModel)). Audio now leaves your Mac."
             : "Speech engine: local (Qwen3-ASR). Voice stays on this Mac.")
     }
 
@@ -515,9 +519,9 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
                 engineStatusItem?.title = "Local · fallback (cloud unavailable)"
                 engineItem?.title = "Speech engine: local (cloud fallback)"
             } else {
-                engineStatusItem?.title = "Cloud · OpenRouter · \(CloudDefaults.model)"
+                engineStatusItem?.title = "Cloud · OpenRouter · \(config.effectiveCloudModel)"
                 engineItem?.title = configured
-                    ? "Speech engine: cloud (\(CloudDefaults.model))"
+                    ? "Speech engine: cloud (\(config.effectiveCloudModel))"
                     : "Speech engine: cloud (no API key)"
             }
             completion?(nil)

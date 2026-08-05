@@ -65,6 +65,8 @@ TalkType 有两种把你的声音变成文字的方式，并且自动帮你选�
 - **更新之后不粘贴了？** macOS 把"允许粘贴"权限绑定在具体版本上，TalkType 没有付费证书，所以新版本在 macOS 眼里是另一个 App。TalkType 会自己发现并给你 **Fix This** 按钮；点它，然后在 macOS 询问时重新打开 TalkType。（v2.0.2 起共用一张证书签名，以后更新不会再这样。）
 - **提示"云端语音引擎没有 API key"？** 去设置里填 OpenRouter key。
 - **云端感觉慢？** 云端每次听写大约多 2 秒。如果你更在乎速度和隐私、不在乎内存，就切到本地引擎。
+- **提示"云端模型不可用"？** TalkType 用的是 OpenRouter 上的固定 Qwen 快照。万一 OpenRouter 下线了它，
+  可以在 `~/.talktype/config.json` 里设置 `"cloud_model_override": "新模型名"` 然后重启，或更新 TalkType 获取新默认。
 
 ## 和别的方案比
 

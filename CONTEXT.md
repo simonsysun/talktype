@@ -27,10 +27,10 @@ When the Cloud Engine cannot be reached, a dictation is handled by the Local Eng
 and the user is notified of every switch.
 _Avoid_: fallback engine, failover (implies a downgrade; this is a deliberate switch)
 
-**Refinement**:
-Optional step that tidies the transcript (removes filler words, fixes punctuation) via Groq.
-Only the text leaves the machine, never the audio.
-_Avoid_: cleanup (ambiguous with the local tidy)
+**Tidy** (formerly "Refinement"):
+Deterministic local rules that tidy the transcript — filler words (呃/嗯), stutters, punctuation
+width. Always on, never leaves the machine. The Groq polish step was removed in 2.2.0.
+_Avoid_: refinement (implies a cloud step that no longer exists)
 
 **Vocabulary**:
 The user-maintained word list that biases transcription spelling.

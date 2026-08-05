@@ -36,4 +36,11 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(back.asrEngine, .cloud)
         XCTAssertEqual(back.cloudModelOverride, "qwen/qwen3-asr-flash-2026-03-01")
     }
+
+    func testEffectiveCloudModelHonorsTrimmedOverride() {
+        var config = AppConfig()
+        XCTAssertEqual(config.effectiveCloudModel, CloudDefaults.model)
+        config.cloudModelOverride = "  qwen/new-model  "
+        XCTAssertEqual(config.effectiveCloudModel, "qwen/new-model")
+    }
 }

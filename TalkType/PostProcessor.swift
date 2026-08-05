@@ -49,9 +49,9 @@ enum PostProcessor {
 
         // The engine occasionally starts a transcript with a stray comma (observed in
         // bakeoff); a sentence never starts with punctuation, and never ends with a
-        // comma/顿号, so those edge runs are noise.
-        s = replacing(s, "^[\\s,，、。；：!！?？]+", with: "")
-        s = replacing(s, "[、，,]+$", with: "")
+        // comma/顿号 (even one followed by whitespace), so those edge runs are noise.
+        s = replacing(s, "^[\\s,，、。；：!！?？.;:]+", with: "")
+        s = replacing(s, "[、，,]+\\s*$", with: "")
 
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }

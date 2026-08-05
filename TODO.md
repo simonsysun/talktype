@@ -11,8 +11,9 @@ Last reviewed: 2026-08-03
 
 ## State of the project
 
-- **macOS app (`TalkType/`)** — v2.0.2, shipped. Local Qwen3-ASR sidecar, optional Groq polish,
-  first-run setup window, signed releases, GitHub release with a downloadable build.
+- **macOS app (`TalkType/`)** — v2.2.0, shipped. One model (Qwen3-ASR) via OpenRouter cloud or
+  local MLX sidecar with automatic offline fallback; no Groq polish; a two-item Setup window
+  (OpenRouter key + local engine install); signed releases.
 - **iOS keyboard (`TalkTypeKeyboard/`) + companion app (`TalkTypeiOS/`)** — written 2026-04-07/08,
   then paused. **Never compiled, never run on a device.** Everything under "Parked: iOS" is a
   hypothesis until the targets build.
@@ -24,8 +25,8 @@ Last reviewed: 2026-08-03
 1. [ ] Deferred: overlay draggability. It is `ignoresMouseEvents = true` and fixed
        bottom-centre. Simon asked for it to move to the bottom (done) but has not said
        whether he wants to drag it.
-2. [ ] Deferred: filler-word cleanup is handled by the Groq polish, with
-       `PostProcessor.tidySpeech` as the offline floor. Revisit only if the floor proves weak.
+2. [ ] Deferred: filler-word cleanup is `PostProcessor.tidySpeech`, always on (the Groq polish
+       was removed in 2.2.0). Revisit only if the tidy proves weak.
 3. The signing certificate's backup lives in `secrets/`, which `.gitignore` covers — verified
    that `git add -A` cannot stage it. Do not move it anywhere `.gitignore` does not reach.
    Losing it costs one extra grant for everyone, once, and nothing else.
@@ -134,9 +135,9 @@ this 64 GB machine was carrying 17 GB of swap while idle.
       Local stays the default where the sidecar is installed. Whichever is chosen does all the work,
       so the same sentence never transcribes differently depending on what happened to be up.
       Done 2026-08-03: `config.asr_engine`, engine submenu, sidecar stopped when cloud is chosen.
-- [x] **Say what leaves the machine.** The Groq polish sends the transcript; a cloud ASR sends the
-      *audio*. That is a different promise from the one the README makes today, and the UI has to
-      state it plainly at the moment of choosing.
+- [x] **Say what leaves the machine.** A cloud ASR sends the *audio*; the local engine sends
+      nothing. (The Groq polish no longer exists — there is no transcript-only network step.)
+      The UI states it plainly at the moment of choosing.
       UI done 2026-08-03 (menu tooltip, setup copy, engine-switch notification). README rewrite
       waits for the release pass.
 - [ ] Pick the provider from the numbers in "ASR decision", then re-measure — that bake-off was one
@@ -186,6 +187,9 @@ docs and public benchmarks; the deciding numbers still have to come from Simon's
    of Qwen at acceptable latency; their real-time v5 streams sub-200 ms but means a new WebSocket
    integration.
 
+> 历史研究记录（2026-08-03）。2.2.0 起产品只保留 Qwen3-ASR（OpenRouter 云端 + 本地），
+> 下面的多服务商对比不再影响当前设计，仅作参考。
+
 **Ruled out or parked:** Groq whisper-large-v3(-turbo) — free tier (2,000 req/day) and fast, but
 weak CN/EN code-switching and no Chinese punctuation (the refiner covers punctuation, and the
 hallucination guard exists; still, the Grok bake-off result and the Chinese Linux voice-input
@@ -227,8 +231,9 @@ re-deriving it:
 - Local install (`asr/install.sh`) now emits `[progress] NN` while the weights download, and the
   Setup window drives a real percentage bar off it.
 
-Verified: 74 `swift test` cases green (15 new: provider detection, three request shapes, response
-parsing, config round-trip) and a Release `xcodebuild` passes. **Not verified on hardware** —
+Verified: 100+ `swift test` cases green (request shape, response parsing, config round-trip,
+fallback policy, stubbed network behaviour) and a Release `xcodebuild` passes. **Not verified on
+hardware** —
 Simon asked not to run the app; the re-bake-off and a real dictation are the field tests.
 
 Still open:
@@ -240,7 +245,7 @@ Still open:
       `provider.options` both no-op). No prompt-completion risk, but cloud vocab is dead — accept
       client-side correction; real cloud vocab would need DashScope official (parked).
 - [x] README + privacy copy for the cloud engine — done 2026-08-04: rewritten as a product blurb
-      plus manual; privacy copy says audio leaves on cloud, transcript-only to Groq.
+      plus manual; privacy copy says audio leaves on cloud, local stays on the machine.
 - [ ] Local model size choice (1.7B vs 0.6B) in Setup — server.py currently hardcodes 1.7B, so
       this needs the sidecar to know its installed size first.
 - [x] "Delete local engine" affordance in Setup — done 2026-08-04: confirmation dialog, stops the
@@ -264,8 +269,7 @@ Grill 后确定的设计（README 已按此写）:
   （仅本地已装时启用）。
 - 本地 sidecar 生命周期: 按需启动, 断网期间常驻, 网络恢复后停止。
 - 云端失败提示分三类: 没网 / key 无效或额度用完 / 服务故障——人话 + 下一步。
-- 润色留在 Groq（0.3 s vs OpenRouter 2.4–4.5 s, 同一模型质量相同; 第二把 key 可选但推荐,
-  README 写明）。
+- 润色已移除（2.2.0）——文字 = 引擎输出 + 本地规则清理，不再有云端改写步骤。
 - 词库: OpenRouter 不透传（见上）, 客户端纠错兜底。
 
 ---

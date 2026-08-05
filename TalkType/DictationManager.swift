@@ -141,8 +141,8 @@ final class DictationManager {
 
     private static func makeCloudClient(_ config: AppConfig) -> CloudASRClient? {
         guard let key = CloudKeyStore.apiKey() else { return nil }
-        let model = config.cloudModelOverride.isEmpty ? CloudDefaults.model : config.cloudModelOverride
-        return CloudASRClient(apiKey: key, model: model, timeout: config.asrTimeoutSeconds)
+        return CloudASRClient(apiKey: key, model: config.effectiveCloudModel,
+                              timeout: config.asrTimeoutSeconds)
     }
 
     // MARK: - Engine selection (cloud-first, automatic local fallback)
