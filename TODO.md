@@ -27,30 +27,38 @@ Collect real usage issues for at least a week and ship them as one tested batch.
 release for each small improvement; exceptions are crashes, security/privacy issues, data loss,
 or an upstream service breaking production.
 
-1. [ ] **Optional support link.** Choose and configure a donation provider, then add one quiet
+1. [ ] **First overlay appearance still has a brief disturbed edge.** On the first appearance
+       after the app loads, nearby pixels still move slightly, then settle quickly; later use is
+       good enough. Reproduce cold-start versus subsequent appearances and separate Liquid Glass
+       warm-up from the remaining fade before changing anything.
+2. [ ] **Manual stop can lose the final spoken character.** Even when the hotkey is pressed just
+       after speaking ends, the last character is often absent. Reproduce with fixed phrases and
+       measured pauses, then verify whether stopping the audio tap fails to drain its final buffer.
+       Do not hide the loss by guessing text in post-processing.
+3. [ ] **Optional support link.** Choose and configure a donation provider, then add one quiet
        “Support TalkType” link to the README/GitHub page. Keep the app free and open source; make
        payment clearly voluntary. Decide separately whether to offer a crypto-wallet address.
-2. [ ] **Resolve the TalkType name collision before wider promotion.** CareScribe already ships an
+4. [ ] **Resolve the TalkType name collision before wider promotion.** CareScribe already ships an
        active commercial dictation product named TalkType for Mac, Windows, web, and mobile
        (`talk-type.com`), with overlapping vocabulary and polish features. Open source plus
        voluntary donations does not itself require a rename, but this same-market collision is a
        real discoverability and possible trademark risk. Research a distinct name before putting
        meaningful promotion behind the project; do not rush-rename the current installed app.
-3. [ ] **Verify vocabulary through the polish stage.** Current order is ASR → optional Groq polish
+5. [ ] **Verify vocabulary through the polish stage.** Current order is ASR → optional Groq polish
        → conservative client-side vocabulary correction; saved terms are not included in the
        polish prompt. Test whether a compact canonical-term list helps preserve spelling without
        making the model insert terms that were never spoken.
-4. [ ] **Improve the polish prompt without regressing a 95/100 experience.** Build a small
+6. [ ] **Improve the polish prompt without regressing a 95/100 experience.** Build a small
        regression set from Simon's real corrections, compare the current prompt with candidates,
        and ship only if meaning preservation, completeness, mixed-language text, and punctuation
        are all no worse. Prefer no change over an unmeasured “smarter” prompt.
-5. [ ] Deferred: overlay draggability. It is `ignoresMouseEvents = true` and fixed
+7. [ ] Deferred: overlay draggability. It is `ignoresMouseEvents = true` and fixed
        bottom-centre. Simon asked for it to move to the bottom (done) but has not said
        whether he wants to drag it.
-6. [ ] Deferred: filler-word cleanup is `PostProcessor.tidySpeech`, the fallback when Groq
+8. [ ] Deferred: filler-word cleanup is `PostProcessor.tidySpeech`, the fallback when Groq
        polish is off or unreachable (polish was restored in 2.3.0). Revisit only if the tidy
        proves weak.
-7. The signing certificate's backup lives in `secrets/`, which `.gitignore` covers — verified
+9. The signing certificate's backup lives in `secrets/`, which `.gitignore` covers — verified
    that `git add -A` cannot stage it. Do not move it anywhere `.gitignore` does not reach.
    Losing it costs one extra grant for everyone, once, and nothing else.
 
