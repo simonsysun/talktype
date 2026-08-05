@@ -51,6 +51,36 @@ enum TextInserter {
         return AXIsProcessTrustedWithOptions(options)
     }
 
+    /// Whether the frontmost app currently has a focused element that accepts typed text.
+    /// Fail-open: any AX hiccup means "yes", so terminals and unusual apps keep working —
+    /// the worst case of failing open is today's behaviour (a beep), not a missed paste.
+    static func focusedElementAcceptsText() -> Bool {
+        guard accessibilityGranted(prompt: false),
+              let app = NSWorkspace.shared.frontmostApplication else { return true }
+
+        let axApp = AXUIElementCreateApplication(app.processIdentifier)
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(axApp,
+                                            kAXFocusedUIElementAttribute as CFString,
+                                            &focused) == .success,
+              let element = focused else { return true }
+
+        var role: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element as! AXUIElement,
+                                            kAXRoleAttribute as CFString,
+                                            &role) == .success,
+              let roleString = role as? String else { return true }
+
+        let textRoles: Set<String> = [
+            kAXTextFieldRole as String,
+            kAXTextAreaRole as String,
+            kAXComboBoxRole as String,
+            "AXSearchField",
+            "AXWebArea",
+        ]
+        return textRoles.contains(roleString)
+    }
+
     /// Forget any existing Accessibility decision for TalkType, then ask again.
     ///
     /// This exists because TalkType is not signed with a paid Developer ID. macOS ties the

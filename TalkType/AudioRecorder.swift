@@ -25,6 +25,8 @@ final class AudioRecorder {
     private var recording = false
     private var tapInstalled = false
     private let lock = NSLock()
+    /// Name of the capture device pinned by the last `start()`, for diagnostics.
+    private(set) var captureDeviceName: String?
 
     var isRecording: Bool { recording }
 
@@ -75,18 +77,28 @@ final class AudioRecorder {
             if status == noErr {
                 appliedDeviceID = device.id
                 hwFormat = nil          // the new device may run at a different rate
+                captureDeviceName = device.name
                 print("[audio] input device: \(device.name)")
             } else {
+                captureDeviceName = nil
                 print("[audio] could not select \(device.name) (OSStatus \(status)) — using system default")
             }
         }
         #endif
 
         if hwFormat == nil {
-            let format = inputNode.outputFormat(forBus: 0)
+            // A Bluetooth (HFP) device renegotiates asynchronously after being pinned:
+            // the node format can briefly read as zero channels, and installing a tap
+            // with that format never renders. Poll until it settles (or give up).
+            var format = inputNode.outputFormat(forBus: 0)
+            let deadline = Date().addingTimeInterval(2.0)
+            while (format.channelCount == 0 || format.sampleRate == 0) && Date() < deadline {
+                usleep(100_000)
+                format = inputNode.outputFormat(forBus: 0)
+            }
             hwFormat = format
             hwSampleRate = Int(format.sampleRate)
-            print("[audio] hardware sample rate: \(hwSampleRate) Hz")
+            print("[audio] hardware format: \(hwSampleRate) Hz, \(format.channelCount) ch")
         }
 
         lock.lock()

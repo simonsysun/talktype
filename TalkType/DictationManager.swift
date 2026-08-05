@@ -416,6 +416,7 @@ final class DictationManager {
             trayDelegate?.notifyError("Microphone unavailable. Check Microphone permission.")
             if overlay.isVisible { overlay.hide() }
             print("[audio] failed to start microphone: \(error)")
+            Log.write("[mic] start failed: \(error.localizedDescription) device=\(recorder.captureDeviceName ?? "?")")
             openMicSettings()
             return
         }
@@ -458,22 +459,26 @@ final class DictationManager {
             }
 
             guard audio.count >= minSamples else {
+                Log.write("[dict] too short: samples=\(audio.count)")
                 self.trayDelegate?.notifyInfo("Recording too short.")
                 return
             }
 
             let rms = AudioRecorder.calculateRMS(audio)
             print("[audio] captured samples=\(audio.count) rms=\(String(format: "%.5f", rms))")
+            Log.write("[dict] samples=\(audio.count) rms=\(String(format: "%.5f", rms)) device=\(self.recorder.captureDeviceName ?? "?")")
 
             if rms == 0 {
                 print("[audio] all-zero audio - microphone access likely blocked")
                 self.microphoneGranted = false
+                Log.write("[dict] all-zero audio — mic blocked")
                 self.trayDelegate?.notifyError("Microphone blocked. Enable in System Settings -> Privacy -> Microphone.")
                 DispatchQueue.main.async { self.openMicSettings() }
                 return
             }
 
             if Double(rms) < minRMS {
+                Log.write("[dict] no speech detected (rms below \(self.config.minTranscribeRms))")
                 self.trayDelegate?.notifyInfo("No speech detected. Speak louder or check microphone input.")
                 return
             }
@@ -551,6 +556,15 @@ final class DictationManager {
                     let restored = needsRestore
                     let insertBlock = { [weak self] in
                         guard let self = self else { return }
+                        // No editable text field at the cursor: skip the synthesized ⌘V
+                        // (it would only make macOS beep) and leave the text on the
+                        // clipboard with a hint instead.
+                        if !TextInserter.focusedElementAcceptsText() {
+                            TextInserter.copyToClipboard(processed)
+                            Log.write("[insert] no text field focused — clipboard only")
+                            self.trayDelegate?.notifyInfo("没有可粘贴的文字输入框，文字已复制到剪贴板。")
+                            return
+                        }
                         let pasted = TextInserter.insert(processed)
                         Log.write("[insert] pasted=\(pasted) chars=\(processed.count) target=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "?") restored=\(restored)")
                         guard !pasted else { return }
@@ -574,12 +588,15 @@ final class DictationManager {
                 }
             } catch let error as UserFacingError {
                 print("[asr] \(error.message)")
+                Log.write("[asr] \(error.message)")
                 self.trayDelegate?.notifyError(error.message)
             } catch let error as TranscriberError {
                 print("[asr] \(error.localizedDescription)")
+                Log.write("[asr] \(error.localizedDescription)")
                 self.trayDelegate?.notifyError(error.localizedDescription)
             } catch {
                 print("[asr] transcription failed: \(error)")
+                Log.write("[asr] transcription failed: \(error)")
                 self.trayDelegate?.notifyError("Transcription failed. Check network and API key.")
             }
         }
