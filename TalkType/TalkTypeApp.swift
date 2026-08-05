@@ -302,15 +302,13 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         menu.removeAllItems()
 
         let automatic = AudioDevices.automaticInput()
-        let autoName = automatic.device?.name
+        let autoName = automatic?.name
         let auto = NSMenuItem(title: autoName.map { "Automatic (\($0))" } ?? "Automatic",
                               action: #selector(selectInputDevice(_:)), keyEquivalent: "")
         auto.target = self
         auto.representedObject = ""
         auto.state = config.inputDeviceUID.isEmpty ? .on : .off
-        auto.toolTip = automatic.skippedBluetooth
-            ? "A connected Bluetooth headset was passed over on purpose — recording through it stalls the link. Pick it explicitly to use its mic."
-            : "Follow the system input device."
+        auto.toolTip = "Follow the system input device."
         menu.addItem(auto)
         menu.addItem(.separator())
 

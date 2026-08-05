@@ -11,6 +11,13 @@ typing, with the deterministic local tidy as the always-on fallback.
   again: OpenRouter (recognition) and Groq (polish, optional). Text only, ~0.3 s; any
   failure falls back to the local tidy after at most ~2.5 s.
 
+### Changed
+
+- **Automatic microphone follows the system default**, including a connected Bluetooth
+  headset (AirPods). Recording through a Bluetooth mic switches the link into headset
+  mode, so audio output drops to 24 kHz mono for the duration — the accepted price of
+  "system default".
+
 ### Notes
 
 - If you ran 2.2.0, its startup cleanup deleted the Groq key from your keychain — enter it

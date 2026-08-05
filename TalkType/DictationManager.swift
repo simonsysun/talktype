@@ -290,12 +290,11 @@ final class DictationManager {
         }
     }
 
-    /// Empty config UID means Automatic: follow the system default, except skip a
-    /// Bluetooth default — see `AudioDevices.automaticInput`. An explicit pick wins.
+    /// Empty config UID means Automatic: follow the system default, including a
+    /// Bluetooth headset — see `AudioDevices.automaticInput`. An explicit pick wins.
     private func applyInputSelection() {
-        let automatic = AudioDevices.automaticInput()
         recorder.preferredDeviceUID = config.inputDeviceUID.isEmpty
-            ? automatic.device?.uid
+            ? AudioDevices.automaticInput()?.uid
             : config.inputDeviceUID
     }
 
