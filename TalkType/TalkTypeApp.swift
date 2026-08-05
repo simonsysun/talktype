@@ -439,7 +439,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         engineCloudItem.target = self
         engineCloudItem.representedObject = ASREngine.cloud.rawValue
         engineCloudItem.state = config.asrEngine == .cloud ? .on : .off
-        engineCloudItem.toolTip = "Sends the recorded audio to OpenRouter (Qwen3-ASR-Flash). Setup… to add your key."
+        engineCloudItem.toolTip = "Audio goes to OpenRouter. Add your key in Setup…"
         submenu.addItem(engineCloudItem)
 
         refreshEngineStatus()
@@ -471,7 +471,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         engineCloudItem.state = engine == .cloud ? .on : .off
         refreshEngineStatus()
         notifyInfo(engine == .cloud
-            ? "Speech engine: cloud (\(config.effectiveCloudModel)). Audio now leaves your Mac."
+            ? "Speech engine: cloud. Audio now leaves your Mac."
             : "Speech engine: local (Qwen3-ASR). Voice stays on this Mac.")
     }
 
@@ -519,9 +519,9 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
                 engineStatusItem?.title = "Local · fallback (cloud unavailable)"
                 engineItem?.title = "Speech engine: local (cloud fallback)"
             } else {
-                engineStatusItem?.title = "Cloud · OpenRouter · \(config.effectiveCloudModel)"
+                engineStatusItem?.title = "Cloud · OpenRouter"
                 engineItem?.title = configured
-                    ? "Speech engine: cloud (\(config.effectiveCloudModel))"
+                    ? "Speech engine: cloud"
                     : "Speech engine: cloud (no API key)"
             }
             completion?(nil)

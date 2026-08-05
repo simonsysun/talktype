@@ -111,10 +111,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
 
         // MARK: Engine choice
         root.addArrangedSubview(heading("Speech engine",
-            "Both engines are the same Qwen3-ASR model. Local runs on this Mac "
-            + "(voice never leaves, ~4 GB once); Cloud goes through OpenRouter "
-            + "(faster to start, pay per use). With the local engine installed, "
-            + "offline dictation keeps working."))
+            "Cloud via OpenRouter, or Local on this Mac. Offline, Local takes over."))
 
         // The window is rebuilt each time it opens (windowWillClose nils the window), so
         // clear first — addItems without removeAllItems would double the list on the
@@ -240,7 +237,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
                                     action: #selector(openAXSettings)))
 
         let hint = NSTextField(wrappingLabelWithString:
-            "When the engine says ready, press ⌘⇧Space anywhere and start talking.")
+            "Press ⌘⇧Space and talk.")
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .tertiaryLabelColor
         root.addArrangedSubview(hint)
@@ -413,7 +410,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
             cloudStatus.stringValue = "Key saved (\(Self.masked(cloudKey)))"
             cloudStatus.textColor = .systemGreen
         } else {
-            cloudStatus.stringValue = "No key saved — TalkType now uses OpenRouter only"
+            cloudStatus.stringValue = "No key saved"
             cloudStatus.textColor = .secondaryLabelColor
         }
         keyRemoveButton.isHidden = cloudKey == nil
@@ -552,9 +549,8 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         if installed && !running {
             let alert = NSAlert()
             alert.messageText = "Delete the local engine?"
-            alert.informativeText = "Removes about 4 GB — the model weights, the Python "
-                + "environment and the server. Offline dictation stops working; cloud "
-                + "dictation is unaffected. You can install it again at any time."
+            alert.informativeText = "Removes about 4 GB. Offline dictation stops working; "
+                + "cloud keeps working. You can reinstall any time."
             alert.addButton(withTitle: "Delete")
             alert.addButton(withTitle: "Cancel")
             alert.alertStyle = .warning
@@ -565,9 +561,8 @@ final class SetupWindow: NSObject, NSWindowDelegate {
 
         let alert = NSAlert()
         alert.messageText = running ? "Stop the download and delete it?" : "Delete the partial download?"
-        alert.informativeText = "Removes what has downloaded so far and frees the space. "
-            + "The Python environment stays, so starting again is quick. "
-            + "Cloud dictation is unaffected."
+        alert.informativeText = "Removes what has downloaded so far. The Python environment "
+            + "stays, so reinstalling is quick."
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .warning
@@ -665,7 +660,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
                 progressBar.isHidden = false
                 progressLabel.isHidden = false
                 progressBar.doubleValue = Double(pct)
-                progressLabel.stringValue = "Downloading model weights… \(pct)%"
+                progressLabel.stringValue = "Downloading… \(pct)%"
                 engineStatus.stringValue = "Downloading… \(pct)%"
             } else if !line.isEmpty {
                 appendLog(line + "\n")
