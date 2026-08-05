@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.3.2 — 2026-08-05
+
+The recording indicator now stays visually stable around Liquid Glass.
+
+### Fixed
+
+- **Stable overlay edges on macOS 26**: the outer glow no longer changes blur radius with
+  every audio level update, and the Liquid Glass container is no longer scaled during its
+  entrance. Voice activity stays in the seven bars, so the pill no longer produces a moving
+  ring of pixels around itself.
+- **Processing and Reduce Motion**: the processing breath now animates only the bars instead
+  of the glass material, and the transition back to rest respects Reduce Motion.
+
 ## v2.3.1 — 2026-08-04
 
 Bluetooth headset capture and paste feedback fixes.
