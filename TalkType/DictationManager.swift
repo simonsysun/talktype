@@ -303,7 +303,7 @@ final class DictationManager {
     /// Cloud polish of the transcript via Groq, with the deterministic local tidy as the
     /// floor. Whatever happens — disabled, no key, offline, slow, or output that failed
     /// the plausibility check — the caller still gets usable text.
-    private func refine(_ text: String, config cfg: AppConfig) -> String {
+    private func refine(_ text: String, vocabularyHints: [String]?, config cfg: AppConfig) -> String {
         guard cfg.refineEnabled, !isOffline else { return PostProcessor.tidySpeech(text) }
 
         transcriberLock.lock()
@@ -311,7 +311,7 @@ final class DictationManager {
         transcriberLock.unlock()
 
         let started = Date()
-        guard let refined = refiner.refine(text) else {
+        guard let refined = refiner.refine(text, vocabularyHints: vocabularyHints ?? []) else {
             // Never throw; but if the polish keeps failing (retired model, exhausted
             // quota), say so once per streak instead of silently degrading forever.
             consecutiveRefineFailures += 1
@@ -322,7 +322,7 @@ final class DictationManager {
         }
         consecutiveRefineFailures = 0
         print("[refine] \(String(format: "%.2f", Date().timeIntervalSince(started)))s")
-        // The model is allowed to reword; typography is not negotiable.
+        // Typography is deterministic even when the model misses a spacing rule.
         return PostProcessor.normalizeTypography(refined)
     }
 
@@ -444,13 +444,23 @@ final class DictationManager {
         overlay.setState(.processing)
         trayDelegate?.setProcessing(true)
 
-        let audio = recorder.stop()
         let session = sessionID
-        let minSamples = Int(0.12 * Double(config.sampleRate))
-        let minRMS = config.minTranscribeRms
+        // Manual stop is a user-intent boundary, not an audio boundary. Keep the tap
+        // alive for one measured render quantum so the final spoken sound reaches the
+        // callback, while the UI moves to Processing immediately. Silence auto-stop has
+        // already observed a long quiet tail and does not need this grace period.
+        let tail = autoStopped ? 0 : recorder.manualStopTailDuration
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + tail) { [weak self] in
             guard let self = self else { return }
+            guard self.state == .processing, self.sessionID == session else { return }
+
+            let audio = self.recorder.stop()
+            let minSamples = Int(0.12 * Double(self.config.sampleRate))
+            let minRMS = self.config.minTranscribeRms
+
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                guard let self = self else { return }
             defer {
                 DispatchQueue.main.async {
                     if self.sessionID == session {
@@ -532,7 +542,7 @@ final class DictationManager {
                 // Cloud polish if enabled and reachable; the local tidy otherwise.
                 // Vocabulary canonicalisation runs last so the spellings the user chose
                 // survive whatever the refiner did.
-                let refined = self.refine(text, config: cfg)
+                let refined = self.refine(text, vocabularyHints: hints, config: cfg)
                 let processed = PostProcessor.postProcess(text: refined, vocabEntries: vocabEntries)
 
                 guard !processed.isEmpty else {
@@ -608,6 +618,7 @@ final class DictationManager {
                 print("[asr] transcription failed: \(error)")
                 Log.write("[asr] transcription failed: \(error)")
                 self.trayDelegate?.notifyError("Transcription failed. Check network and API key.")
+            }
             }
         }
     }

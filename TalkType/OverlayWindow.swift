@@ -45,9 +45,12 @@ final class OverlayWindow {
             self.hideTimer = nil
 
             self.reposition()
-            self.panel.orderFrontRegardless()
             self.hostingView.setState(.recording)
+            // Liquid Glass should be fully materialized before WindowServer reveals the
+            // panel. Fading the whole glass subtree makes its background sampling visible
+            // as a brief disturbed edge on the first appearance.
             self.hostingView.appear()
+            self.panel.orderFrontRegardless()
         }
     }
 
@@ -238,15 +241,10 @@ final class OverlayHostingView: NSView {
 
     // MARK: - Appearance
 
-    static let fadeInDuration: TimeInterval = 0.14
     static let fadeOutDuration: TimeInterval = 0.12
 
     func appear() {
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = Self.fadeInDuration
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            self.animator().alphaValue = 1
-        }
+        alphaValue = 1
     }
 
     func disappear() {

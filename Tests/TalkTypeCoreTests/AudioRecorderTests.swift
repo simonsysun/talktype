@@ -3,6 +3,66 @@ import XCTest
 
 final class AudioRecorderTests: XCTestCase {
 
+    /// Regression for the manual-stop truncation: an audio callback can already be in
+    /// flight when the user releases the hotkey. Stopping capture must wait for that
+    /// callback and include its samples instead of snapshotting the older buffer first.
+    func testStopIncludesChunkWhoseCallbackWasAlreadyInFlight() {
+        let capture = AudioCaptureBuffer()
+        capture.start()
+        XCTAssertTrue(capture.beginChunk())
+
+        let hardwareStopBegan = expectation(description: "hardware stop began")
+        let captureStopped = DispatchSemaphore(value: 0)
+        let resultLock = NSLock()
+        var result: [[Float]] = []
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let captured = capture.stop {
+                hardwareStopBegan.fulfill()
+            }
+            resultLock.lock()
+            result = captured
+            resultLock.unlock()
+            captureStopped.signal()
+        }
+
+        wait(for: [hardwareStopBegan], timeout: 1)
+        XCTAssertEqual(captureStopped.wait(timeout: .now() + 0.02), .timedOut,
+                       "stop must wait after hardware shutdown while the callback is in flight")
+        capture.finishChunk([0.25, 0.5, 0.75])
+        XCTAssertEqual(captureStopped.wait(timeout: .now() + 1), .success)
+
+        resultLock.lock()
+        XCTAssertEqual(result, [[0.25, 0.5, 0.75]])
+        resultLock.unlock()
+    }
+
+    func testManualStopTailCoversActualCallbackQuantum() {
+        XCTAssertEqual(AudioRecorder.stopTailDuration(callbackFrames: 2_048,
+                                                      hardwareSampleRate: 48_000), 0.12,
+                       accuracy: 0.001)
+        XCTAssertEqual(AudioRecorder.stopTailDuration(callbackFrames: 2_048,
+                                                      hardwareSampleRate: 16_000), 0.148,
+                       accuracy: 0.001)
+        XCTAssertEqual(AudioRecorder.stopTailDuration(callbackFrames: 4_800,
+                                                      hardwareSampleRate: 16_000), 0.32,
+                       accuracy: 0.001,
+                       "an implementation-selected larger callback must not be clipped")
+    }
+
+    /// A long-running menu-bar app repeats this lifecycle thousands of times. Chunks
+    /// from a completed dictation must never accumulate into the next one.
+    func testCaptureBufferIsEmptyBetweenRepeatedDictations() {
+        let capture = AudioCaptureBuffer()
+        for value in 0..<2_000 {
+            capture.start()
+            XCTAssertTrue(capture.beginChunk())
+            capture.finishChunk([Float(value)])
+            XCTAssertEqual(capture.stop(stoppingHardware: {}), [[Float(value)]])
+            XCTAssertFalse(capture.isCapturing)
+        }
+    }
+
     func testRMSOfSilenceIsZero() {
         XCTAssertEqual(AudioRecorder.calculateRMS([Float](repeating: 0, count: 100)), 0)
     }

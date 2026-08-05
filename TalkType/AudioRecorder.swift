@@ -4,8 +4,67 @@ import Accelerate
 import CoreAudio
 #endif
 
+/// Owns captured chunks and closes them without racing an AVAudioEngine tap callback.
+/// A callback that began before hardware shutdown must be allowed to finish and become
+/// part of the recording; otherwise the last render quantum disappears at manual stop.
+final class AudioCaptureBuffer {
+    private let condition = NSCondition()
+    private var chunks: [[Float]] = []
+    private var acceptingChunks = false
+    private var callbacksInFlight = 0
+
+    var isCapturing: Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return acceptingChunks
+    }
+
+    func start() {
+        condition.lock()
+        chunks = []
+        callbacksInFlight = 0
+        acceptingChunks = true
+        condition.unlock()
+    }
+
+    /// Called at the very start of the tap callback, before copying PCM memory.
+    func beginChunk() -> Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        guard acceptingChunks else { return false }
+        callbacksInFlight += 1
+        return true
+    }
+
+    func finishChunk(_ samples: [Float]) {
+        condition.lock()
+        if !samples.isEmpty { chunks.append(samples) }
+        callbacksInFlight -= 1
+        if callbacksInFlight == 0 { condition.broadcast() }
+        condition.unlock()
+    }
+
+    /// Hardware is stopped first so no new callback can be scheduled. Any callback that
+    /// already began is tracked and drained before the final snapshot is returned.
+    func stop(stoppingHardware: () -> Void) -> [[Float]] {
+        stoppingHardware()
+
+        condition.lock()
+        acceptingChunks = false
+        while callbacksInFlight > 0 {
+            condition.wait()
+        }
+        let result = chunks
+        chunks = []
+        condition.unlock()
+        return result
+    }
+}
+
 /// Records audio using AVAudioEngine. Engine created once, tap installed/removed per session.
 final class AudioRecorder {
+    private static let requestedTapFrames: AVAudioFrameCount = 2048
+
     let targetSampleRate: Int
     var onLevel: ((Float) -> Void)?
 
@@ -20,14 +79,30 @@ final class AudioRecorder {
 
     private var engine: AVAudioEngine?
     private var hwSampleRate: Int = 48000
-    private var buffer: [[Float]] = []
-    private var recording = false
+    private var largestObservedTapFrames = Int(requestedTapFrames)
+    private let captureFormatLock = NSLock()
     private var tapInstalled = false
-    private let lock = NSLock()
+    private let captureBuffer = AudioCaptureBuffer()
     /// Name of the capture device pinned by the last `start()`, for diagnostics.
     private(set) var captureDeviceName: String?
 
-    var isRecording: Bool { recording }
+    var isRecording: Bool { captureBuffer.isCapturing }
+
+    /// One observed tap quantum plus a small scheduling margin. AVAudioEngine may ignore
+    /// the requested frame count, so the real callback size is the only safe boundary.
+    var manualStopTailDuration: TimeInterval {
+        captureFormatLock.lock()
+        let sampleRate = hwSampleRate
+        let frames = largestObservedTapFrames
+        captureFormatLock.unlock()
+        return Self.stopTailDuration(callbackFrames: frames, hardwareSampleRate: sampleRate)
+    }
+
+    static func stopTailDuration(callbackFrames: Int, hardwareSampleRate sampleRate: Int) -> TimeInterval {
+        guard callbackFrames > 0, sampleRate > 0 else { return 0.15 }
+        let quantum = Double(callbackFrames) / Double(sampleRate)
+        return max(0.12, quantum + 0.02)
+    }
 
     init(sampleRate: Int = 16000, onLevel: ((Float) -> Void)? = nil) {
         self.targetSampleRate = sampleRate
@@ -123,16 +198,13 @@ final class AudioRecorder {
             throw NSError(domain: "AudioRecorder", code: 2,
                           userInfo: [NSLocalizedDescriptionKey: "Input not ready — Bluetooth device still switching."])
         }
+        captureFormatLock.lock()
         hwSampleRate = Int(format.sampleRate)
+        largestObservedTapFrames = Int(Self.requestedTapFrames)
+        captureFormatLock.unlock()
 
-        lock.lock()
-        if recording {
-            lock.unlock()
-            return
-        }
-        buffer = []
-        recording = true
-        lock.unlock()
+        if captureBuffer.isCapturing { return }
+        captureBuffer.start()
 
         if tapInstalled {
             inputNode.removeTap(onBus: 0)
@@ -142,7 +214,7 @@ final class AudioRecorder {
         // format: nil lets the bus's live format decide — a Bluetooth device can still
         // be settling here, and installing an explicit stale format can raise an ObjC
         // exception that Swift cannot catch.
-        inputNode.installTap(onBus: 0, bufferSize: 4800, format: nil) { [weak self] pcmBuffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: Self.requestedTapFrames, format: nil) { [weak self] pcmBuffer, _ in
             self?.tapCallback(pcmBuffer)
         }
         tapInstalled = true
@@ -150,45 +222,45 @@ final class AudioRecorder {
         do {
             try engine.start()
         } catch {
-            lock.lock()
-            recording = false
-            buffer = []
-            lock.unlock()
-            inputNode.removeTap(onBus: 0)
-            tapInstalled = false
+            _ = captureBuffer.stop {
+                inputNode.removeTap(onBus: 0)
+                tapInstalled = false
+                engine.stop()
+            }
             throw error
         }
     }
 
     func stop() -> [Float] {
-        lock.lock()
-        let wasRecording = recording || tapInstalled
-        recording = false
-        let chunks = buffer
-        buffer = []
-        lock.unlock()
-
+        let wasRecording = captureBuffer.isCapturing || tapInstalled
         guard wasRecording else { return [] }
 
-        if let engine = engine {
-            if tapInstalled {
-                engine.inputNode.removeTap(onBus: 0)
+        let chunks = captureBuffer.stop { [self] in
+            if let engine = engine {
+                if tapInstalled {
+                    engine.inputNode.removeTap(onBus: 0)
+                }
+                tapInstalled = false
+                engine.stop()
             }
-            tapInstalled = false
-            engine.stop()
         }
 
         let audio = chunks.flatMap { $0 }
-        return Self.resample(audio, from: hwSampleRate, to: targetSampleRate)
+        captureFormatLock.lock()
+        let capturedSampleRate = hwSampleRate
+        captureFormatLock.unlock()
+        return Self.resample(audio, from: capturedSampleRate, to: targetSampleRate)
     }
 
     func shutdown() {
-        if let engine = engine {
-            if tapInstalled {
-                engine.inputNode.removeTap(onBus: 0)
+        _ = captureBuffer.stop { [self] in
+            if let engine = engine {
+                if tapInstalled {
+                    engine.inputNode.removeTap(onBus: 0)
+                }
+                tapInstalled = false
+                engine.stop()
             }
-            tapInstalled = false
-            engine.stop()
         }
         engine = nil
     }
@@ -196,28 +268,30 @@ final class AudioRecorder {
     // MARK: - Private
 
     private func tapCallback(_ pcmBuffer: AVAudioPCMBuffer) {
-        guard let channelData = pcmBuffer.floatChannelData else { return }
+        guard captureBuffer.beginChunk() else { return }
+        guard let channelData = pcmBuffer.floatChannelData else {
+            captureBuffer.finishChunk([])
+            return
+        }
         let frameLength = Int(pcmBuffer.frameLength)
-        guard frameLength > 0 else { return }
+        guard frameLength > 0 else {
+            captureBuffer.finishChunk([])
+            return
+        }
 
         // The buffer's format is the truth: a Bluetooth device can settle after the tap
         // is installed, and resampling with the stale rate would pitch-shift the audio.
         let bufferRate = Int(pcmBuffer.format.sampleRate)
-        if bufferRate != hwSampleRate {
-            hwSampleRate = bufferRate
-        }
+        captureFormatLock.lock()
+        hwSampleRate = bufferRate
+        largestObservedTapFrames = max(largestObservedTapFrames, frameLength)
+        captureFormatLock.unlock()
 
         let ptr = channelData[0]
         let arr = Array(UnsafeBufferPointer(start: ptr, count: frameLength))
+        captureBuffer.finishChunk(arr)
 
-        lock.lock()
-        let isRecording = recording
-        if isRecording {
-            buffer.append(arr)
-        }
-        lock.unlock()
-
-        if isRecording, let onLevel = onLevel {
+        if let onLevel = onLevel {
             let rms = Self.calculateRMS(arr)
             let level = min(1.0, rms / 0.15)
             onLevel(level)

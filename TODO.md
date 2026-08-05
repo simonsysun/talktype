@@ -31,10 +31,15 @@ or an upstream service breaking production.
        after the app loads, nearby pixels still move slightly, then settle quickly; later use is
        good enough. Reproduce cold-start versus subsequent appearances and separate Liquid Glass
        warm-up from the remaining fade before changing anything.
+       Candidate installed 2026-08-05: the glass is fully materialized before the panel appears;
+       the whole-glass fade-in is gone. Awaiting Simon's cold-start visual check.
 2. [ ] **Manual stop can lose the final spoken character.** Even when the hotkey is pressed just
        after speaking ends, the last character is often absent. Reproduce with fixed phrases and
        measured pauses, then verify whether stopping the audio tap fails to drain its final buffer.
        Do not hide the loss by guessing text in post-processing.
+       Candidate installed 2026-08-05: manual stop keeps one measured tap quantum, then drains any
+       callback already in flight before snapshotting. The deterministic race test is green;
+       awaiting repeated real-speech checks on built-in and Bluetooth microphones.
 3. [ ] **Optional support link.** Choose and configure a donation provider, then add one quiet
        “Support TalkType” link to the README/GitHub page. Keep the app free and open source; make
        payment clearly voluntary. Decide separately whether to offer a crypto-wallet address.
@@ -48,10 +53,17 @@ or an upstream service breaking production.
        → conservative client-side vocabulary correction; saved terms are not included in the
        polish prompt. Test whether a compact canonical-term list helps preserve spelling without
        making the model insert terms that were never spoken.
+       Candidate installed 2026-08-05: active terms are structured as optional approved spellings
+       in Polish. Six live Groq acceptance cases passed, including `cloud code` → `Claude Code`
+       and a negative case that did not insert either saved term. A deterministic guard also
+       rejects an English product name if no matching spoken form exists; keep open for real usage.
 6. [ ] **Improve the polish prompt without regressing a 95/100 experience.** Build a small
        regression set from Simon's real corrections, compare the current prompt with candidates,
        and ship only if meaning preservation, completeness, mixed-language text, and punctuation
        are all no worse. Prefer no change over an unmeasured “smarter” prompt.
+       Candidate installed 2026-08-05: ambiguity now defaults to preserving words. A live test
+       caught the model deleting the meaningful `那个` in `那个文件`; an explicit boundary fixed it
+       and the same six-case suite then passed. Still needs Simon's real correction set.
 7. [ ] Deferred: overlay draggability. It is `ignoresMouseEvents = true` and fixed
        bottom-centre. Simon asked for it to move to the bottom (done) but has not said
        whether he wants to drag it.

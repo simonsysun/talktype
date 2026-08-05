@@ -17,6 +17,18 @@ press hotkey → talk → press again / pause → text appears at your cursor
 
 ---
 
+## Help shape TalkType
+
+TalkType gets better through real daily use — especially the small details one person cannot
+discover alone. If something feels off, a word is repeatedly misheard, or you have an idea that
+would make dictation fit your workflow better, **please [open a GitHub issue](https://github.com/simonsysun/talktype/issues/new)**.
+
+Bug reports, rough ideas, feature requests, and tiny usability observations are all welcome. You
+do not need to know how to code or arrive with a complete solution. We can work out what to build
+together. You can also [browse and join existing discussions](https://github.com/simonsysun/talktype/issues).
+
+---
+
 ## Two engines, one hotkey
 
 TalkType has two ways to turn your voice into words, and it picks for you:
@@ -35,9 +47,9 @@ plainly instead of failing silently.
 
 | What | Leaves your Mac? |
 |---|---|
-| Audio, cloud engine | Yes — to OpenRouter, subject to its data policy |
+| Audio + active vocabulary hints, cloud engine | Yes — to OpenRouter, subject to its data policy |
 | Audio, local engine | No |
-| Transcript → polish (optional) | Text only, to Groq — never audio |
+| Transcript + active vocabulary → polish (optional) | Text only, to Groq — never audio |
 
 No account, no telemetry, no subscription. The only credentials are your own API keys
 (OpenRouter for recognition, Groq for optional polish), stored in the macOS Keychain.
@@ -72,11 +84,10 @@ Press **⌘⇧Space** and start talking.
 - **Microphone** — pick one, or Automatic (follows the system default, including a Bluetooth
   headset; recording through a Bluetooth mic switches the link into headset mode, so playback
   drops to 24 kHz mono for a while).
-- **Vocabulary** — add names and terms the model keeps mishearing. Only distinctive spellings are
-  auto-corrected: `TestFlight` is recoverable from "test flight"; `xAI` is not recoverable from
-  "what's a ship" — those sound nearly identical, and no vocabulary fixes that. The hints are
-  sent with the request, but OpenRouter does not forward them to the model (verified) — the
-  conservative client-side correction is what applies.
+- **Vocabulary** — add names and terms the model keeps mishearing. OpenRouter currently ignores
+  the speech engine's hint field, so TalkType also gives these terms to optional Polish as
+  approved spellings — only when the transcript clearly contains the term — and applies a final
+  conservative spelling correction locally.
 - **Engine** — menu bar ▸ Speech engine ▸ Cloud / Local. Cloud is the default; the menu shows
   which one is active.
 - **Local engine** — install or reinstall it from Setup; the red "Delete local engine…" button
