@@ -50,16 +50,16 @@ enum CloudKeyStore {
         return SecItemDelete(query as CFDictionary) == errSecSuccess
     }
 
-    /// 2.1.0 kept one keychain slot per provider plus a Groq polish slot. Those
-    /// providers are gone; clear the orphaned entries once, so a privacy-focused app
-    /// does not leave stale credentials lying around with no way to remove them.
+    /// 2.1.0 kept one keychain slot per provider. Those providers are gone; clear the
+    /// orphaned entries once, so a privacy-focused app does not leave stale credentials
+    /// lying around with no way to remove them. (`talktype-groq` stays — it is the
+    /// polish key.)
     static func removeLegacyKeys() {
         let legacyServices = [
             "talktype-asr-openai",
             "talktype-asr-dashscope",
             "talktype-asr-groq",
             "talktype-asr-custom",
-            "talktype-groq",
         ]
         for service in legacyServices {
             let query: [String: Any] = [

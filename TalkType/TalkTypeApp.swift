@@ -22,6 +22,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     private var engineCloudItem: NSMenuItem!
     private var vocabMenu: NSMenu!
     private var launchItem: NSMenuItem!
+    private var refineItem: NSMenuItem!
     private var inputMenu: NSMenu!
     private var hotkeyDisplayItem: NSMenuItem!
     private var hotkeySettingsWindow: HotkeySettingsWindow!
@@ -132,6 +133,10 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             self?.dictationManager.toggleDictation()
         }
 
+        // Open the refiner's connection now so the first dictation does not also pay
+        // for DNS and a TLS handshake.
+        dictationManager.prewarmRefiner()
+
         // Settings window
         hotkeySettingsWindow = HotkeySettingsWindow()
 
@@ -155,6 +160,9 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         print("  \(hotkeyDisplayString()) -> Dictation (speak -> type)")
         print("  Hotkey capture: \(mode)")
         print("  Speech engine: \(config.asrEngine == .local ? "local, 127.0.0.1:\(config.asrPort)" : "cloud, \(config.effectiveCloudModel)")")
+        let polish = !dictationManager.refinerConfigured ? "no key"
+            : (config.refineEnabled ? "on (\(config.refineModel))" : "off")
+        print("  Cloud polish:  \(polish)")
         if config.silenceAutoStopEnabled {
             print("  Silence auto-stop: \(config.silenceAutoStopSeconds)s")
         }
@@ -203,9 +211,14 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         menu.addItem(engineItem)
         configureEngineMenu()
 
+        refineItem = NSMenuItem(title: "Polish with cloud AI", action: #selector(toggleRefine), keyEquivalent: "")
+        refineItem.target = self
+        menu.addItem(refineItem)
+
         let setupItem = NSMenuItem(title: "Setup...", action: #selector(openSetup), keyEquivalent: "")
         setupItem.target = self
         menu.addItem(setupItem)
+        refreshRefineItem()
 
         inputMenu = NSMenu()
         inputMenu.delegate = self          // rebuilt on open; devices come and go
@@ -411,6 +424,39 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             self.setupWindow.config = self.config
             self.setupWindow.refresh()
         }
+    }
+
+    // MARK: - Cloud refinement
+
+    private static func masked(_ key: String) -> String {
+        guard key.count > 10 else { return "•••" }
+        return "\(key.prefix(6))…\(key.suffix(4))"
+    }
+
+    @objc private func toggleRefine() {
+        config.refineEnabled.toggle()
+        persistConfig()
+        dictationManager.reloadConfig(config)
+        refreshRefineItem()
+        if config.refineEnabled {
+            dictationManager.prewarmRefiner()
+            notifyInfo("Transcripts will be polished by cloud AI before typing.")
+        } else {
+            notifyInfo("Polishing off. Everything stays on this machine.")
+        }
+    }
+
+    private func refreshRefineItem() {
+        guard let item = refineItem else { return }
+        let configured = dictationManager.refinerConfigured
+        item.state = (config.refineEnabled && configured) ? .on : .off
+        item.isEnabled = configured
+        item.title = configured
+            ? "Polish with cloud AI"
+            : "Polish with cloud AI (no key)"
+        item.toolTip = configured
+            ? "Sends the transcript — not the audio — to Groq for cleanup."
+            : "Add a Groq key in Setup to enable."
     }
 
     // MARK: - Local speech engine

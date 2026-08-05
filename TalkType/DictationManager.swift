@@ -17,6 +17,7 @@ final class DictationManager {
     let transcriber: Transcriber
     private let sidecar: SidecarManager
     private var cloudASR: CloudASRClient?
+    private var refiner: TextRefiner
     private let vocabularyStore: VocabularyStore
     private let overlay: OverlayWindow
     private weak var trayDelegate: TrayDelegate?
@@ -60,6 +61,10 @@ final class DictationManager {
             timeout: config.asrTimeoutSeconds
         )
         self.cloudASR = Self.makeCloudClient(config)
+        self.refiner = TextRefiner(
+            model: config.refineModel,
+            timeout: config.refineTimeoutSeconds
+        )
 
         self.recorder = AudioRecorder(
             sampleRate: config.sampleRate,
@@ -130,6 +135,7 @@ final class DictationManager {
         config = newConfig
         transcriber.timeout = newConfig.asrTimeoutSeconds
         cloudASR = Self.makeCloudClient(newConfig)
+        refiner = TextRefiner(model: newConfig.refineModel, timeout: newConfig.refineTimeoutSeconds)
         transcriberLock.unlock()
         applyInputSelection()
     }
@@ -290,6 +296,36 @@ final class DictationManager {
             ? automatic.device?.uid
             : config.inputDeviceUID
     }
+
+    // MARK: - Refinement
+
+    /// Cloud polish of the transcript via Groq, with the deterministic local tidy as the
+    /// floor. Whatever happens — disabled, no key, offline, slow, or output that failed
+    /// the plausibility check — the caller still gets usable text.
+    private func refine(_ text: String) -> String {
+        let fallback = PostProcessor.tidySpeech(text)
+        guard config.refineEnabled else { return fallback }
+
+        transcriberLock.lock()
+        let refiner = self.refiner
+        transcriberLock.unlock()
+
+        let started = Date()
+        guard let refined = refiner.refine(text) else { return fallback }
+        print("[refine] \(String(format: "%.2f", Date().timeIntervalSince(started)))s")
+        return refined
+    }
+
+    /// Open the connection to the refiner ahead of first use.
+    func prewarmRefiner() {
+        guard config.refineEnabled else { return }
+        transcriberLock.lock()
+        let refiner = self.refiner
+        transcriberLock.unlock()
+        refiner.prewarm()
+    }
+
+    var refinerConfigured: Bool { refiner.isConfigured }
 
     /// Mutations of the engine-state pair and the tray notifications that go with them
     /// always land on the main thread. The transcription thread decides which engine
@@ -469,11 +505,11 @@ final class DictationManager {
                     return
                 }
 
-                // Text comes out exactly as the engine heard it, tidied deterministically
-                // on the machine. Vocabulary canonicalisation runs last so the spellings
-                // the user chose survive the tidy.
-                let tidied = PostProcessor.tidySpeech(text)
-                let processed = PostProcessor.postProcess(text: tidied, vocabEntries: vocabEntries)
+                // Cloud polish if enabled and reachable; the local tidy otherwise.
+                // Vocabulary canonicalisation runs last so the spellings the user chose
+                // survive whatever the refiner did.
+                let refined = self.refine(text)
+                let processed = PostProcessor.postProcess(text: refined, vocabEntries: vocabEntries)
 
                 guard !processed.isEmpty else {
                     self.trayDelegate?.notifyInfo("No text recognized. Try speaking more clearly.")

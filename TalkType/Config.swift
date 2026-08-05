@@ -24,6 +24,11 @@ struct AppConfig: Codable {
     var silenceAutoStopSeconds: Double = 20
     var silenceRmsThreshold: Double = 0.008
     var minTranscribeRms: Double = 0.012
+    /// Cloud polish of the transcript via Groq (text only, never audio). Off means the
+    /// deterministic local tidy is all that runs.
+    var refineEnabled: Bool = true
+    var refineModel: String = "qwen/qwen3.6-27b"
+    var refineTimeoutSeconds: Double = 2.5
     /// UID of the microphone to record from. Empty means follow the system default.
     var inputDeviceUID: String = ""
     /// Hidden escape hatch, not exposed in the UI: if OpenRouter ever retires the default
@@ -47,6 +52,9 @@ struct AppConfig: Codable {
         case silenceAutoStopSeconds = "silence_auto_stop_seconds"
         case silenceRmsThreshold = "silence_rms_threshold"
         case minTranscribeRms = "min_transcribe_rms"
+        case refineEnabled = "refine_enabled"
+        case refineModel = "refine_model"
+        case refineTimeoutSeconds = "refine_timeout_seconds"
         case inputDeviceUID = "input_device_uid"
         case cloudModelOverride = "cloud_model_override"
     }
@@ -68,6 +76,9 @@ struct AppConfig: Codable {
         silenceAutoStopSeconds = try c.decodeIfPresent(Double.self, forKey: .silenceAutoStopSeconds) ?? d.silenceAutoStopSeconds
         silenceRmsThreshold = try c.decodeIfPresent(Double.self, forKey: .silenceRmsThreshold) ?? d.silenceRmsThreshold
         minTranscribeRms = try c.decodeIfPresent(Double.self, forKey: .minTranscribeRms) ?? d.minTranscribeRms
+        refineEnabled = try c.decodeIfPresent(Bool.self, forKey: .refineEnabled) ?? d.refineEnabled
+        refineModel = try c.decodeIfPresent(String.self, forKey: .refineModel) ?? d.refineModel
+        refineTimeoutSeconds = try c.decodeIfPresent(Double.self, forKey: .refineTimeoutSeconds) ?? d.refineTimeoutSeconds
         inputDeviceUID = try c.decodeIfPresent(String.self, forKey: .inputDeviceUID) ?? d.inputDeviceUID
         cloudModelOverride = try c.decodeIfPresent(String.self, forKey: .cloudModelOverride) ?? d.cloudModelOverride
     }

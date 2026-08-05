@@ -36,6 +36,12 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     private let keyRemoveButton = NSButton()
     private var cloudRows: [NSView] = []
 
+    // Polish
+    private let polishStatus = NSTextField(labelWithString: "")
+    private let polishKeyField = SecretField()
+    private let polishKeyButton = NSButton()
+    private let polishRemoveButton = NSButton()
+
     // Permissions
     private let micStatus = NSTextField(labelWithString: "")
     private let micButton = NSButton()
@@ -50,6 +56,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     /// Weights are removed after the installer has actually exited, never underneath it.
     private var deleteWeightsAfterStop = false
     private var verifyingCloudKey = false
+    private var verifyingPolishKey = false
 
     /// Live config; the app reads engine/provider/model choices out of here.
     var config: AppConfig = AppConfig()
@@ -227,6 +234,17 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         for row in cloudRows {
             root.addArrangedSubview(row)
         }
+
+        root.addArrangedSubview(separator())
+        root.addArrangedSubview(heading("Cloud polish",
+            "Tidies filler words and punctuation through Groq. Text only — never audio."))
+        polishKeyField.placeholderString = "gsk_…"
+        polishKeyField.onChange = { [weak self] in self?.syncKeyButtons() }
+        root.addArrangedSubview(formRow(label: "Groq key", view: keyRow(
+            field: polishKeyField, save: polishKeyButton, saveAction: #selector(savePolishKey),
+            remove: polishRemoveButton, removeAction: #selector(removePolishKey))))
+        polishStatus.font = .systemFont(ofSize: 11)
+        root.addArrangedSubview(formRow(label: "", view: polishStatus))
 
         root.addArrangedSubview(separator())
         root.addArrangedSubview(heading("Permissions",
@@ -414,6 +432,16 @@ final class SetupWindow: NSObject, NSWindowDelegate {
             cloudStatus.textColor = .secondaryLabelColor
         }
         keyRemoveButton.isHidden = cloudKey == nil
+
+        let polishKey = TextRefiner.apiKey()
+        if let polishKey = polishKey {
+            polishStatus.stringValue = "Key saved (\(Self.masked(polishKey)))"
+            polishStatus.textColor = .systemGreen
+        } else {
+            polishStatus.stringValue = "Not configured — transcripts go in as dictated"
+            polishStatus.textColor = .secondaryLabelColor
+        }
+        polishRemoveButton.isHidden = polishKey == nil
         syncKeyButtons()
 
         let mic = AVCaptureDeviceAuthorization.isGranted
@@ -451,10 +479,16 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     /// Save is only live when there is something to save, so pressing it always does
     /// something. Held down while a key is being checked, so it cannot be double-fired.
     private func syncKeyButtons() {
-        guard !verifyingCloudKey else { return }
-        keyButton.title = "Save"
-        keyButton.isEnabled = !keyField.stringValue
-            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if !verifyingCloudKey {
+            keyButton.title = "Save"
+            keyButton.isEnabled = !keyField.stringValue
+                .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        if !verifyingPolishKey {
+            polishKeyButton.title = "Save"
+            polishKeyButton.isEnabled = !polishKeyField.stringValue
+                .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
     }
 
     @objc private func saveKey() {
@@ -512,6 +546,63 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     @objc private func removeKey() {
         CloudKeyStore.deleteAPIKey()
         keyField.stringValue = ""
+        onConfigChanged?(config)
+        refresh()
+    }
+
+    @objc private func savePolishKey() {
+        let key = polishKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+
+        verifyingPolishKey = true
+        polishKeyButton.isEnabled = false
+        polishKeyButton.title = "Checking…"
+        polishStatus.stringValue = "Checking the key with Groq…"
+        polishStatus.textColor = .secondaryLabelColor
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = TextRefiner.validate(key)
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.verifyingPolishKey = false
+                switch result {
+                case .valid:
+                    break
+                case .rejected:
+                    self.polishStatus.stringValue = "Groq did not accept that key. Nothing was saved."
+                    self.polishStatus.textColor = .systemOrange
+                    self.syncKeyButtons()
+                    return
+                case .unreachable(let message):
+                    let hint = message.hasPrefix("HTTP ")
+                        ? "Groq is having a bad moment (\(message)). Nothing was saved — try again shortly."
+                        : "Could not reach Groq (\(message)). Nothing was saved — check your network."
+                    self.polishStatus.stringValue = hint
+                    self.polishStatus.textColor = .systemOrange
+                    self.syncKeyButtons()
+                    return
+                case .invalidURL:
+                    self.polishStatus.stringValue = "Groq's address is invalid. Nothing was saved."
+                    self.polishStatus.textColor = .systemOrange
+                    self.syncKeyButtons()
+                    return
+                }
+                guard TextRefiner.storeAPIKey(key) else {
+                    self.polishStatus.stringValue = "Could not write the key to the keychain."
+                    self.polishStatus.textColor = .systemOrange
+                    self.syncKeyButtons()
+                    return
+                }
+                self.polishKeyField.stringValue = ""
+                self.onConfigChanged?(self.config)
+                self.refresh()
+            }
+        }
+    }
+
+    @objc private func removePolishKey() {
+        TextRefiner.deleteAPIKey()
+        polishKeyField.stringValue = ""
         onConfigChanged?(config)
         refresh()
     }

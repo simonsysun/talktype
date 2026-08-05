@@ -21,6 +21,7 @@
 		A10013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10015; };
 		A10014 /* HotkeySettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10016; };
 		A10016 /* SidecarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10017; };
+		A10017 /* TextRefiner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10018; };
 		A10018 /* AudioDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10019; };
 		A10019 /* SetupWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10020; };
 		A10022 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10023; };
@@ -94,6 +95,7 @@
 		C10001 /* TalkType.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkType.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10016 /* HotkeySettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeySettingsWindow.swift; sourceTree = "<group>"; };
 		B10017 /* SidecarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidecarManager.swift; sourceTree = "<group>"; };
+		B10018 /* TextRefiner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextRefiner.swift; sourceTree = "<group>"; };
 		B10019 /* AudioDevices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDevices.swift; sourceTree = "<group>"; };
 		B10020 /* SetupWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupWindow.swift; sourceTree = "<group>"; };
 		B10023 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
@@ -165,6 +167,7 @@
 				B10012 /* PostProcessor.swift */,
 				B10016 /* HotkeySettingsWindow.swift */,
 				B10017 /* SidecarManager.swift */,
+				B10018 /* TextRefiner.swift */,
 				B10019 /* AudioDevices.swift */,
 				B10020 /* SetupWindow.swift */,
 				B10023 /* Log.swift */,
@@ -348,6 +351,7 @@
 				A10012 /* PostProcessor.swift in Sources */,
 				A10014 /* HotkeySettingsWindow.swift in Sources */,
 				A10016 /* SidecarManager.swift in Sources */,
+				A10017 /* TextRefiner.swift in Sources */,
 				A10018 /* AudioDevices.swift in Sources */,
 				A10019 /* SetupWindow.swift in Sources */,
 				A10022 /* Log.swift in Sources */,
@@ -477,10 +481,10 @@
 				CODE_SIGN_ENTITLEMENTS = TalkType/TalkType.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 205;
+				CURRENT_PROJECT_VERSION = 206;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TalkType/Info.plist;
-				MARKETING_VERSION = 2.2.0;
+				MARKETING_VERSION = 2.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.talktype.local;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -497,10 +501,10 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 205;
+				CURRENT_PROJECT_VERSION = 206;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TalkType/Info.plist;
-				MARKETING_VERSION = 2.2.0;
+				MARKETING_VERSION = 2.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.talktype.local;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;

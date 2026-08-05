@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.3.0 — 2026-08-04
+
+Groq polish is back — the transcript (never the audio) is tidied by Qwen on Groq before
+typing, with the deterministic local tidy as the always-on fallback.
+
+### Added
+
+- **Cloud polish restored** after the 2.2.0 simplification removed it. Setup has two keys
+  again: OpenRouter (recognition) and Groq (polish, optional). Text only, ~0.3 s; any
+  failure falls back to the local tidy, so dictation never waits on it.
+
 ## v2.2.0 — 2026-08-04
 
 One model, one provider, one key.
