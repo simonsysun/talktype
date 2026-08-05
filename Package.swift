@@ -38,6 +38,7 @@ let package = Package(
                 "Config.swift",
                 "FallbackPolicy.swift",
                 "PostProcessor.swift",
+                "TextRefiner.swift",
                 "Transcriber.swift",
                 "VocabularyStore.swift",
             ]

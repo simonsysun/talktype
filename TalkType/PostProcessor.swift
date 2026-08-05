@@ -35,6 +35,15 @@ enum PostProcessor {
         // 说说, 想想 are words, and a general AA rule turned 先看看 into 先看.
         s = replacing(s, "([我你他她它])\\1(?=[\(cjk)])", with: "$1")
 
+        return normalizeTypography(s)
+    }
+
+    /// Deterministic typography rules only: punctuation width, spacing between scripts,
+    /// and stray punctuation at the edges. Runs after cloud polish too, because small
+    /// models routinely miss the "full-width punctuation + one space" rule in the prompt.
+    static func normalizeTypography(_ text: String) -> String {
+        var s = text
+
         // Half-width punctuation that follows a Chinese character belongs full-width.
         for (half, full) in [(",", "，"), ("?", "？"), ("!", "！"), (";", "；"), (":", "：")] {
             s = replacing(s, "(?<=[\(cjk)])\\\(half)", with: full)

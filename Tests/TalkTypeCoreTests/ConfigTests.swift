@@ -18,6 +18,8 @@ final class ConfigTests: XCTestCase {
         XCTAssertTrue(config.launchAtLogin)
         XCTAssertEqual(config.silenceAutoStopSeconds, 42)
         XCTAssertEqual(config.asrEngine, AppConfig().asrEngine)
+        XCTAssertEqual(config.refineEnabled, AppConfig().refineEnabled, "new keys take defaults")
+        XCTAssertEqual(config.refineModel, AppConfig().refineModel)
         XCTAssertEqual(config.cloudModelOverride, "", "new keys take defaults")
     }
 
@@ -29,11 +31,13 @@ final class ConfigTests: XCTestCase {
         var config = AppConfig()
         config.asrPort = 1234
         config.asrEngine = .cloud
+        config.refineEnabled = false
         config.cloudModelOverride = "qwen/qwen3-asr-flash-2026-03-01"
         let data = try JSONEncoder().encode(config)
         let back = try JSONDecoder().decode(AppConfig.self, from: data)
         XCTAssertEqual(back.asrPort, 1234)
         XCTAssertEqual(back.asrEngine, .cloud)
+        XCTAssertEqual(back.refineEnabled, false)
         XCTAssertEqual(back.cloudModelOverride, "qwen/qwen3-asr-flash-2026-03-01")
     }
 

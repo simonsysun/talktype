@@ -27,7 +27,7 @@ struct AppConfig: Codable {
     /// Cloud polish of the transcript via Groq (text only, never audio). Off means the
     /// deterministic local tidy is all that runs.
     var refineEnabled: Bool = true
-    var refineModel: String = "qwen/qwen3.6-27b"
+    var refineModel: String = TextRefiner.defaultModel
     var refineTimeoutSeconds: Double = 2.5
     /// UID of the microphone to record from. Empty means follow the system default.
     var inputDeviceUID: String = ""
@@ -40,6 +40,13 @@ struct AppConfig: Codable {
     var effectiveCloudModel: String {
         let trimmed = cloudModelOverride.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? CloudDefaults.model : trimmed
+    }
+
+    /// The model the refiner actually uses, honoring (and trimming) the stored value.
+    /// A blank stored value would otherwise 400 every request.
+    var effectiveRefineModel: String {
+        let trimmed = refineModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? TextRefiner.defaultModel : trimmed
     }
 
     enum CodingKeys: String, CodingKey {

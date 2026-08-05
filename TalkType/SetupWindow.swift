@@ -57,6 +57,10 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     private var deleteWeightsAfterStop = false
     private var verifyingCloudKey = false
     private var verifyingPolishKey = false
+    /// While true, refresh() leaves the status line alone: an in-flight key check or a
+    /// just-shown error must not be stamped over by the 1.5-second timer.
+    private var cloudStatusOwned = false
+    private var polishStatusOwned = false
 
     /// Live config; the app reads engine/provider/model choices out of here.
     var config: AppConfig = AppConfig()
@@ -424,22 +428,26 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         // Never clear the key fields here. refresh() runs on a 1.5-second timer, and wiping
         // the field was erasing whatever the user was part-way through typing or pasting.
         let cloudKey = CloudKeyStore.apiKey()
-        if let cloudKey = cloudKey {
-            cloudStatus.stringValue = "Key saved (\(Self.masked(cloudKey)))"
-            cloudStatus.textColor = .systemGreen
-        } else {
-            cloudStatus.stringValue = "No key saved"
-            cloudStatus.textColor = .secondaryLabelColor
+        if !cloudStatusOwned {
+            if let cloudKey = cloudKey {
+                cloudStatus.stringValue = "Key saved (\(Self.masked(cloudKey)))"
+                cloudStatus.textColor = .systemGreen
+            } else {
+                cloudStatus.stringValue = "No key saved"
+                cloudStatus.textColor = .secondaryLabelColor
+            }
         }
         keyRemoveButton.isHidden = cloudKey == nil
 
         let polishKey = TextRefiner.apiKey()
-        if let polishKey = polishKey {
-            polishStatus.stringValue = "Key saved (\(Self.masked(polishKey)))"
-            polishStatus.textColor = .systemGreen
-        } else {
-            polishStatus.stringValue = "Not configured — transcripts go in as dictated"
-            polishStatus.textColor = .secondaryLabelColor
+        if !polishStatusOwned {
+            if let polishKey = polishKey {
+                polishStatus.stringValue = "Key saved (\(Self.masked(polishKey)))"
+                polishStatus.textColor = .systemGreen
+            } else {
+                polishStatus.stringValue = "Not configured — transcripts go in as dictated"
+                polishStatus.textColor = .secondaryLabelColor
+            }
         }
         polishRemoveButton.isHidden = polishKey == nil
         syncKeyButtons()
@@ -496,16 +504,24 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         guard !key.isEmpty else { return }
 
         verifyingCloudKey = true
+        cloudStatusOwned = true
         keyButton.isEnabled = false
         keyButton.title = "Checking…"
         cloudStatus.stringValue = "Checking the key with OpenRouter…"
         cloudStatus.textColor = .secondaryLabelColor
+
+        func releaseOwnership() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+                self?.cloudStatusOwned = false
+            }
+        }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let result = CloudASRClient.validate(apiKey: key)
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.verifyingCloudKey = false
+                defer { if !(result == .valid) { releaseOwnership() } }
                 switch result {
                 case .valid:
                     break
@@ -536,6 +552,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
                     self.syncKeyButtons()
                     return
                 }
+                self.cloudStatusOwned = false
                 self.keyField.stringValue = ""
                 self.onConfigChanged?(self.config)
                 self.refresh()
@@ -555,16 +572,24 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         guard !key.isEmpty else { return }
 
         verifyingPolishKey = true
+        polishStatusOwned = true
         polishKeyButton.isEnabled = false
         polishKeyButton.title = "Checking…"
         polishStatus.stringValue = "Checking the key with Groq…"
         polishStatus.textColor = .secondaryLabelColor
+
+        func releaseOwnership() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+                self?.polishStatusOwned = false
+            }
+        }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let result = TextRefiner.validate(key)
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.verifyingPolishKey = false
+                defer { if !(result == .valid) { releaseOwnership() } }
                 switch result {
                 case .valid:
                     break
@@ -593,6 +618,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
                     self.syncKeyButtons()
                     return
                 }
+                self.polishStatusOwned = false
                 self.polishKeyField.stringValue = ""
                 self.onConfigChanged?(self.config)
                 self.refresh()

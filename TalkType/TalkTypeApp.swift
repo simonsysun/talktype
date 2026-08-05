@@ -382,6 +382,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             }
             self.refreshEngineStatus()
             self.configureEngineMenu()
+            self.refreshRefineItem()
         }
         setupWindow.onRepairAccessibility = { [weak self] in self?.promptAccessibilityRepair() }
         setupWindow.onEngineInstalled = { [weak self] in
@@ -428,12 +429,11 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
     // MARK: - Cloud refinement
 
-    private static func masked(_ key: String) -> String {
-        guard key.count > 10 else { return "•••" }
-        return "\(key.prefix(6))…\(key.suffix(4))"
-    }
-
     @objc private func toggleRefine() {
+        guard dictationManager.refinerConfigured else {
+            openSetup()
+            return
+        }
         config.refineEnabled.toggle()
         persistConfig()
         dictationManager.reloadConfig(config)

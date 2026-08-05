@@ -9,7 +9,12 @@ typing, with the deterministic local tidy as the always-on fallback.
 
 - **Cloud polish restored** after the 2.2.0 simplification removed it. Setup has two keys
   again: OpenRouter (recognition) and Groq (polish, optional). Text only, ~0.3 s; any
-  failure falls back to the local tidy, so dictation never waits on it.
+  failure falls back to the local tidy after at most ~2.5 s.
+
+### Notes
+
+- If you ran 2.2.0, its startup cleanup deleted the Groq key from your keychain — enter it
+  again in Setup ▸ Cloud polish.
 
 ## v2.2.0 — 2026-08-04
 

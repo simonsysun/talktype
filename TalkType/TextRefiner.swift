@@ -227,7 +227,11 @@ final class TextRefiner {
         // dictation losing 30% means the model summarised instead of tidying — which is
         // exactly what an earlier prompt caused it to do.
         let allowedLoss = max(15.0, a * 0.25)
-        return b >= a - allowedLoss && b <= a * 1.2
+        // Growth is budgeted in characters too: dense CN/EN alternation gains spaces
+        // from the typography rule, and a fixed 1.2x cap rejected legitimate polish on
+        // exactly the mixed-language dictations TalkType is for.
+        let allowedGrowth = max(15.0, a * 0.2)
+        return b >= a - allowedLoss && b <= a + allowedGrowth
     }
 
     private static func cjkRatio(_ text: String) -> Double {

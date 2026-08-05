@@ -25,6 +25,7 @@ final class DictationManager {
     private let transcriberLock = NSLock()
     private var sessionID: Int = 0
     private var clipboardHintShown = false
+    private var consecutiveRefineFailures = 0
     private var microphoneGranted = false
     private var micPermissionInFlight = false
     private var startAfterMicPermission = false
@@ -62,7 +63,7 @@ final class DictationManager {
         )
         self.cloudASR = Self.makeCloudClient(config)
         self.refiner = TextRefiner(
-            model: config.refineModel,
+            model: config.effectiveRefineModel,
             timeout: config.refineTimeoutSeconds
         )
 
@@ -135,7 +136,8 @@ final class DictationManager {
         config = newConfig
         transcriber.timeout = newConfig.asrTimeoutSeconds
         cloudASR = Self.makeCloudClient(newConfig)
-        refiner = TextRefiner(model: newConfig.refineModel, timeout: newConfig.refineTimeoutSeconds)
+        refiner = TextRefiner(model: newConfig.effectiveRefineModel,
+                              timeout: newConfig.refineTimeoutSeconds)
         transcriberLock.unlock()
         applyInputSelection()
     }
@@ -302,18 +304,28 @@ final class DictationManager {
     /// Cloud polish of the transcript via Groq, with the deterministic local tidy as the
     /// floor. Whatever happens — disabled, no key, offline, slow, or output that failed
     /// the plausibility check — the caller still gets usable text.
-    private func refine(_ text: String) -> String {
+    private func refine(_ text: String, config cfg: AppConfig) -> String {
         let fallback = PostProcessor.tidySpeech(text)
-        guard config.refineEnabled else { return fallback }
+        guard cfg.refineEnabled, !isOffline else { return fallback }
 
         transcriberLock.lock()
         let refiner = self.refiner
         transcriberLock.unlock()
 
         let started = Date()
-        guard let refined = refiner.refine(text) else { return fallback }
+        guard let refined = refiner.refine(text) else {
+            // Never throw; but if the polish keeps failing (retired model, exhausted
+            // quota), say so once per streak instead of silently degrading forever.
+            consecutiveRefineFailures += 1
+            if consecutiveRefineFailures == 3 {
+                trayDelegate?.notifyInfo("润色暂时不可用，已用本地清理。检查 Groq key 或额度。")
+            }
+            return fallback
+        }
+        consecutiveRefineFailures = 0
         print("[refine] \(String(format: "%.2f", Date().timeIntervalSince(started)))s")
-        return refined
+        // The model is allowed to reword; typography is not negotiable.
+        return PostProcessor.normalizeTypography(refined)
     }
 
     /// Open the connection to the refiner ahead of first use.
@@ -508,7 +520,7 @@ final class DictationManager {
                 // Cloud polish if enabled and reachable; the local tidy otherwise.
                 // Vocabulary canonicalisation runs last so the spellings the user chose
                 // survive whatever the refiner did.
-                let refined = self.refine(text)
+                let refined = self.refine(text, config: cfg)
                 let processed = PostProcessor.postProcess(text: refined, vocabEntries: vocabEntries)
 
                 guard !processed.isEmpty else {
