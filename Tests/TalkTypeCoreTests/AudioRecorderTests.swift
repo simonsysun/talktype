@@ -63,6 +63,11 @@ final class AudioRecorderTests: XCTestCase {
         }
     }
 
+    func testCapturedAudioFlattensEveryChunkBeforeResampling() {
+        let capture = CapturedAudio(chunks: [[0.1, 0.2], [0.3], [], [0.4]], sampleRate: 16_000)
+        XCTAssertEqual(capture.samples(at: 16_000), [0.1, 0.2, 0.3, 0.4])
+    }
+
     func testRMSOfSilenceIsZero() {
         XCTAssertEqual(AudioRecorder.calculateRMS([Float](repeating: 0, count: 100)), 0)
     }

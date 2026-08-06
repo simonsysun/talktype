@@ -61,6 +61,18 @@ final class AudioCaptureBuffer {
     }
 }
 
+/// Raw hardware-rate chunks returned immediately after the engine stops. Flattening and
+/// resampling can be tens or hundreds of milliseconds for a long dictation, so callers can do
+/// that work off the main thread while the processing animation keeps moving.
+struct CapturedAudio {
+    let chunks: [[Float]]
+    let sampleRate: Int
+
+    func samples(at targetSampleRate: Int) -> [Float] {
+        AudioRecorder.resample(chunks.flatMap { $0 }, from: sampleRate, to: targetSampleRate)
+    }
+}
+
 /// Records audio using AVAudioEngine. Engine created once, tap installed/removed per session.
 final class AudioRecorder {
     private static let requestedTapFrames: AVAudioFrameCount = 2048
@@ -231,9 +243,13 @@ final class AudioRecorder {
         }
     }
 
-    func stop() -> [Float] {
+    /// Stops AVAudioEngine and snapshots its chunks. This part stays on main because AppKit owns
+    /// the recorder lifecycle; the expensive flatten/resample step belongs on a worker queue.
+    func stopCapture() -> CapturedAudio {
         let wasRecording = captureBuffer.isCapturing || tapInstalled
-        guard wasRecording else { return [] }
+        guard wasRecording else {
+            return CapturedAudio(chunks: [], sampleRate: targetSampleRate)
+        }
 
         let chunks = captureBuffer.stop { [self] in
             if let engine = engine {
@@ -245,11 +261,16 @@ final class AudioRecorder {
             }
         }
 
-        let audio = chunks.flatMap { $0 }
         captureFormatLock.lock()
         let capturedSampleRate = hwSampleRate
         captureFormatLock.unlock()
-        return Self.resample(audio, from: capturedSampleRate, to: targetSampleRate)
+        return CapturedAudio(chunks: chunks, sampleRate: capturedSampleRate)
+    }
+
+    /// Compatibility path for the parked keyboard target. The shipping macOS app calls
+    /// `stopCapture()` and processes the result off-main.
+    func stop() -> [Float] {
+        stopCapture().samples(at: targetSampleRate)
     }
 
     func shutdown() {

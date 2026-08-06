@@ -149,6 +149,20 @@ final class DoubaoSTTClientTests: XCTestCase {
         }
     }
 
+    /// 新接口有时把旧式、遮罩或格式错误的 key 当成“没有 app key”，并返回 HTTP 400。
+    /// 这和 401 一样是用户需要重填项目 API Key，不该把 provider 原文直接扔给用户。
+    func testMissingAppKeyResponsePointsBackToTheAPIKeyField() {
+        MockURLProtocol.handler = { _ in
+            self.respond(400, #"{"header":{"code":45000000,"message":"app key not found in header or query"}}"#)
+        }
+        let client = DoubaoSTTClient(apiKey: "wrong-kind-of-key", session: mockSession())
+        XCTAssertThrowsError(try client.transcribe(wav: wav, terms: [], timeout: 5)) { error in
+            let message = (error as? STTError)?.userMessage ?? ""
+            XCTAssertTrue(message.contains("API Key"), "got: \(message)")
+            XCTAssertFalse(message.contains("豆包出错（400）"), "got: \(message)")
+        }
+    }
+
     func testMissingServiceGrantExplainsWhatToEnable() {
         MockURLProtocol.handler = { _ in
             self.respond(401, "", headers: ["X-Api-Message": "requested grant not found"])

@@ -338,6 +338,14 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
                 notifyError("API Key 不能为空。")
                 return
             }
+            guard !apiKey.allSatisfy({ $0 == "*" }) else {
+                notifyError("复制的是遮罩值。请先在豆包控制台显示完整 API Key。")
+                return
+            }
+            guard !apiKey.contains(where: { $0.isWhitespace }) else {
+                notifyError("API Key 里有空格或换行。请只复制完整 Key。")
+                return
+            }
             guard STTKeyStore.store(apiKey: apiKey) else {
                 notifyError("存到钥匙串失败。")
                 return

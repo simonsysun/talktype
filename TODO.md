@@ -44,10 +44,9 @@ exceptions are crashes, security/privacy issues, data loss, or an upstream break
 5. The signing certificate's backup lives in `secrets/`, which `.gitignore` covers — verified
    that `git add -A` cannot stage it. Do not move it anywhere `.gitignore` does not reach.
    Losing it costs one extra grant for everyone, once, and nothing else.
-6. [ ] **Measure long-recording stop latency before changing the audio thread model.** The
-        33-tap resampler currently runs during `recorder.stop()` on the main thread. Profile
-        Release builds with 60 s and 180 s recordings; move only flattening/resampling off-main
-        if the UI blocks for more than 50 ms, while keeping AVAudioEngine shutdown on main.
+6. [x] **Keep long-recording stop work off the UI thread.** A 2026-08-06 Release benchmark measured
+       the 33-tap resampler at 79 ms for 60 s and 172 ms for 180 s. AVAudioEngine shutdown stays on
+       main; chunk flattening and resampling now run on the existing processing queue.
 
 ---
 

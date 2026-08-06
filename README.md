@@ -52,7 +52,7 @@ There is no offline mode: no network means a clear error, not a fallback.
 
 ## Quick start — about 5 minutes
 
-**You need:** an Apple silicon Mac (M1 or newer) on macOS 13+.
+**You need:** macOS 13 or newer.
 
 1. **Download and open.** [⬇ Latest release](https://github.com/simonsysun/talktype/releases/latest) —
    unzip, drag to Applications. The first time you open it, macOS will refuse — free apps aren't
@@ -98,7 +98,7 @@ Press **⌘⇧Space** and start talking.
 
 | | TalkType | Apple Dictation | Wispr Flow / Superwhisper |
 |---|---|---|---|
-| Price | Free (bring your own key) | Free | Subscription |
+| Price | Free app; Doubao usage billed separately | Free | Subscription |
 | Offline | No | Partly | Usually cloud |
 | Voice leaves your Mac | Yes | Sometimes | Usually |
 | Mixed Chinese + English | Yes | Poorly | Varies |

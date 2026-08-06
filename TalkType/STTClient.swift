@@ -28,9 +28,9 @@ enum STTError: LocalizedError {
             if let focused = Self.focusedProviderMessage(detail) { return focused }
             return "豆包拒绝了这次请求：\(detail.prefix(200))"
         case .badStatus(let code, let body):
+            if let focused = Self.focusedProviderMessage(body) { return focused }
             switch code {
             case 401, 403:
-                if let focused = Self.focusedProviderMessage(body) { return focused }
                 return "豆包 API Key 不对。菜单栏 ▸ API Key… 重填。"
             case 429:
                 return "请求太频繁，或额度用完了。"
@@ -48,6 +48,9 @@ enum STTError: LocalizedError {
             return "这个豆包项目还没开通「录音文件识别大模型 极速版」。"
         }
         if lower.contains("invalid x-api-key") || lower.contains("invalid api key") {
+            return "豆包 API Key 不对。菜单栏 ▸ API Key… 重填。"
+        }
+        if lower.contains("app key not found") {
             return "豆包 API Key 不对。菜单栏 ▸ API Key… 重填。"
         }
         return nil

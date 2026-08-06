@@ -85,6 +85,9 @@ enum STTKeyStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
         ]
-        return SecItemDelete(query as CFDictionary) == errSecSuccess
+        let status = SecItemDelete(query as CFDictionary)
+        if status == errSecSuccess || status == errSecItemNotFound { return true }
+        print("[key] keychain delete failed: service=\(service) OSStatus \(status)")
+        return false
     }
 }

@@ -206,12 +206,14 @@ final class DictationManager {
             guard let self = self else { return }
             guard self.state == .processing, self.sessionID == session else { return }
 
-            let audio = self.recorder.stop()
+            let capture = self.recorder.stopCapture()
+            let targetSampleRate = self.recorder.targetSampleRate
             let minSamples = Int(0.12 * Double(self.config.sampleRate))
             let minRMS = self.config.minTranscribeRms
 
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 guard let self = self else { return }
+                let audio = capture.samples(at: targetSampleRate)
                 defer {
                     DispatchQueue.main.async {
                         if self.sessionID == session {
