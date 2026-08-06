@@ -14,14 +14,12 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     private var config: AppConfig!
 
     // Menu items needing dynamic updates
-    private var providerItem: NSMenuItem!
-    private var providerMenu: NSMenu!
+    private var apiKeyItem: NSMenuItem!
     private var vocabMenu: NSMenu!
     private var launchItem: NSMenuItem!
     private var inputMenu: NSMenu!
     private var hotkeyDisplayItem: NSMenuItem!
     private var hotkeySettingsWindow: HotkeySettingsWindow!
-    private let setupWindow = SetupWindow()
 
     static func main() {
         setbuf(stdout, nil)
@@ -143,8 +141,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         print("Ready!")
         print("  \(hotkeyDisplayString()) -> Dictation (speak -> type)")
         print("  Hotkey capture: \(mode)")
-        print("  Speech-to-text: \(config.sttProvider.displayName)"
-            + (dictationManager.providerConfigured ? "" : " (no API key)"))
+        print("  豆包 API Key: \(dictationManager.isConfigured ? "已填" : "未填")")
         if config.silenceAutoStopEnabled {
             print("  Silence auto-stop: \(config.silenceAutoStopSeconds)s")
         }
@@ -154,11 +151,10 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             notifyError("Hotkey cannot override macOS until Accessibility is enabled. Open Accessibility Settings from the tray.")
         }
 
-        // Lead with setup when the chosen provider has no key — the one problem that makes
-        // every dictation fail and that retrying cannot fix.
-        configureSetupWindow()
-        if !dictationManager.providerConfigured {
-            setupWindow.show()
+        // Ask for the key straight away when it is missing — it is the one problem that
+        // makes every dictation fail and that retrying cannot fix.
+        if !dictationManager.isConfigured {
+            promptForAPIKey()
         }
     }
 
@@ -182,15 +178,10 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         hotkeyItem.target = self
         menu.addItem(hotkeyItem)
 
-        providerMenu = NSMenu()
-        providerItem = NSMenuItem(title: "Speech-to-text", action: nil, keyEquivalent: "")
-        providerItem.submenu = providerMenu
-        menu.addItem(providerItem)
-        rebuildProviderMenu()
-
-        let setupItem = NSMenuItem(title: "Setup...", action: #selector(openSetup), keyEquivalent: "")
-        setupItem.target = self
-        menu.addItem(setupItem)
+        apiKeyItem = NSMenuItem(title: "API Key…", action: #selector(promptForAPIKey), keyEquivalent: "")
+        apiKeyItem.target = self
+        menu.addItem(apiKeyItem)
+        refreshAPIKeyItem()
 
         inputMenu = NSMenu()
         inputMenu.delegate = self          // rebuilt on open; devices come and go
@@ -325,73 +316,73 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     /// so it must be kept in step or a stale copy would silently revert menu changes.
     private func persistConfig() {
         ConfigManager.save(config)
-        setupWindow.config = config
     }
 
-    // MARK: - Setup
+    // MARK: - API key
 
-    @objc private func openSetup() {
-        // Refresh what the window shows before opening — the provider/key/mic can have
-        // changed from the menu since the window was last configured.
-        setupWindow.config = config
-        setupWindow.show()
-    }
+    /// One dialog, two fields. There is no settings window any more: a key and two system
+    /// permissions did not justify one, and the permissions announce themselves when they
+    /// are actually needed.
+    @objc private func promptForAPIKey() {
+        NSApp.activate(ignoringOtherApps: true)
 
-    private func configureSetupWindow() {
-        setupWindow.config = config
-        setupWindow.onConfigChanged = { [weak self] updated in
-            guard let self = self else { return }
-            self.config = updated
-            ConfigManager.save(updated)
-            self.dictationManager.reloadConfig(updated)
-            self.rebuildProviderMenu()
-        }
-        setupWindow.onRepairAccessibility = { [weak self] in self?.promptAccessibilityRepair() }
-    }
+        let stored = STTKeyStore.credentials()
+        let alert = NSAlert()
+        alert.messageText = "豆包 API Key"
+        alert.informativeText = "火山引擎控制台 ▸ 语音技术 ▸ 应用管理，复制 App ID 和 Access Token。"
+        alert.addButton(withTitle: "保存")
+        alert.addButton(withTitle: "取消")
+        if stored != nil { alert.addButton(withTitle: "删除") }
 
-    // MARK: - Provider choice
+        let appIDField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 22))
+        appIDField.placeholderString = "App ID"
+        // The App ID is not a secret and is the easier of the two to mistype, so it comes
+        // back prefilled; the token never does.
+        appIDField.stringValue = stored?.appID ?? ""
 
-    /// The four APIs, as radio items, plus whether the current one has a key. Switching
-    /// here is the whole comparison workflow: same voice, same hotkey, different provider.
-    private func rebuildProviderMenu() {
-        guard let submenu = providerMenu else { return }
-        submenu.removeAllItems()
+        let tokenField = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 22))
+        tokenField.placeholderString = stored == nil ? "Access Token" : "Access Token（已保存，留空则不改）"
 
-        for provider in STTProvider.allCases {
-            let item = NSMenuItem(title: provider.displayName,
-                                  action: #selector(selectProvider(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = provider.rawValue
-            item.state = provider == config.sttProvider ? .on : .off
-            item.toolTip = provider.summary
-            submenu.addItem(item)
-        }
+        let stack = NSStackView(views: [appIDField, tokenField])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 8
+        stack.frame = NSRect(x: 0, y: 0, width: 300, height: 52)
+        alert.accessoryView = stack
+        alert.window.initialFirstResponder = appIDField.stringValue.isEmpty ? appIDField : tokenField
 
-        let configured = dictationManager?.providerConfigured ?? false
-        providerItem?.title = configured
-            ? "Speech-to-text: \(config.sttProvider.displayName)"
-            : "Speech-to-text: \(config.sttProvider.displayName) (no API key)"
-    }
-
-    @objc private func selectProvider(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String,
-              let provider = STTProvider(rawValue: raw),
-              provider != config.sttProvider
-        else { return }
-
-        config.sttProvider = provider
-        persistConfig()
-        dictationManager.reloadConfig(config)
-        rebuildProviderMenu()
-        setupWindow.refresh()
-
-        if STTKeyStore.apiKey(for: provider) == nil {
-            notifyInfo("已切到 \(provider.displayName)，但还没有 API key——已打开设置。")
-            openSetup()
-        } else {
-            notifyInfo("Speech-to-text: \(provider.displayName)")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            let appID = appIDField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            let typedToken = tokenField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Leaving the token blank on a re-edit means "keep the one I already saved",
+            // which is the only way to fix a typo'd App ID without re-pasting the token.
+            let token = typedToken.isEmpty ? (stored?.accessToken ?? "") : typedToken
+            guard !appID.isEmpty, !token.isEmpty else {
+                notifyError("App ID 和 Access Token 都要填。")
+                return
+            }
+            guard STTKeyStore.store(appID: appID, accessToken: token) else {
+                notifyError("存到钥匙串失败。")
+                return
+            }
+            dictationManager.reloadConfig(config)
+            refreshAPIKeyItem()
+            notifyInfo("API Key 已保存。按 \(hotkeyDisplayString()) 开始说。")
+        case .alertThirdButtonReturn:
+            STTKeyStore.clear()
+            dictationManager.reloadConfig(config)
+            refreshAPIKeyItem()
+            notifyInfo("API Key 已删除。")
+        default:
+            break
         }
     }
+
+    private func refreshAPIKeyItem() {
+        apiKeyItem?.title = (dictationManager?.isConfigured ?? false) ? "API Key…" : "API Key…（未填）"
+    }
+
     // MARK: - Vocabulary
 
     private func refreshVocabularyMenu() {

@@ -2,38 +2,29 @@
 
 ## v3.0.0 — 2026-08-05
 
-TalkType is now a shell around one speech-to-text API call. Record, send, paste — nothing in
-between.
+TalkType 现在就是一层壳：录音、发给豆包、粘贴。中间什么都没有。
 
 ### Changed
 
-- **One call, four providers.** Pick ElevenLabs Scribe v2, xAI Grok, Soniox v5, or OpenAI
-  `gpt-transcribe` from the menu bar. Each keeps its own key, so switching to compare costs a
-  menu click. The quality-deciding parameters are set in code: `no_verbatim=true` and
-  `tag_audio_events=false` for ElevenLabs, `filler_words=false` for Grok, both `zh` and `en`
-  hints for Soniox and OpenAI, and no pinned language for ElevenLabs so mixed
-  Chinese/English survives.
-- **Vocabulary goes to the provider, not to a rewrite pass.** Terms are sent as `keyterm`,
-  `keyterms`, `context.terms`, or `keywords[]` depending on the provider. Nothing is
-  corrected locally afterwards, so a term that still comes out wrong is real signal about
-  that provider.
+- **一次调用，一个 provider。** 豆包（火山引擎）大模型录音文件识别极速版，一次 HTTP POST 同步
+  返回文字。`enable_punc` 和 `enable_itn` 都显式打开——本地后处理已经没了，标点和「百分之
+  九十五 → 95%」只能靠它们。
+- **词库直接作为热词传给豆包**（`request.corpus.context`），之后不再做任何本地纠正。所以一个词
+  传了还是错，那就是豆包的真实水平。
+- **没有设置窗口了。** 菜单栏 ▸ API Key… 一个对话框，两个字段。权限该弹的时候系统会自己弹。
 
 ### Removed
 
-- **The polish pass** (Groq LLM) — providers now do filler removal inside transcription.
-- **The local engine** — the ~4 GB MLX sidecar, its installer, the cloud→local fallback, and
-  the reachability probe. There is no offline mode: no network is now a clear error.
-- **All local text post-processing** — Chinese/English spacing, full-width punctuation,
-  stutter collapsing, hallucination discarding, and vocabulary canonicalisation. Output is
-  the provider's, unmodified. This can regress text quality in ways the old pipeline hid;
-  the code is in git history and comes back per-symptom if real use calls for it.
+- **润色层**（Groq LLM）——豆包已经在转写里做了标点和数字规范化。
+- **本地引擎**——约 4 GB 的 MLX sidecar、它的安装器、云→本地 fallback、联网探测。没有离线模式了：
+  没网就是明确报错。
+- **全部本地文字后处理**——中英空格、全角标点、结巴折叠、幻觉丢弃、词库规范化。输出就是豆包的
+  原始结果。这可能让文字质量在某些方面比上个版本差；代码在 git 历史里，按症状补回来。
 
 ### Notes
 
-- Keys from the previous release (OpenRouter, Groq) are deliberately left in the Keychain, so
-  going back to v2.3.2 does not mean setting it up again.
-- `TALKTYPE_STATE_DIR` overrides where config and vocabulary live — useful for trialling a
-  setup without touching the real one.
+- 上一代的 OpenRouter 和 Groq key 故意留在钥匙串里，回退到 v2.3.2 不需要重新配置。
+- `TALKTYPE_STATE_DIR` 可以覆盖配置和词库的位置——试新配置时不用动正在用的那套。
 
 ## v2.3.2 — 2026-08-05
 

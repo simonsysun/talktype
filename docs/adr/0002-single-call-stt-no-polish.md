@@ -1,54 +1,43 @@
-# One speech-to-text call, no polish layer
+# 一次语音识别调用，没有润色层
 
-A dictation is one API call. Record, POST the WAV to the chosen speech-to-text provider,
-paste the response. Nothing runs between the provider and the text field.
+一次听写就是一次 API 调用：录音、把 WAV POST 给豆包、粘贴返回的文字。provider 和输入框之间
+什么都不跑。
 
 Status: accepted (2026-08-05), supersedes [ADR-0001](0001-cloud-first-engine-with-offline-fallback.md)
 
-## Why
+## 为什么
 
-The previous pipeline had four stages: cloud ASR (or a local 4 GB MLX engine on fallback),
-an LLM polish pass through Groq, a deterministic local tidy, and vocabulary
-canonicalisation. It existed because the ASR of the time returned verbatim, unpunctuated
-text that was not pasteable.
+旧管线有四段：云端 ASR（连不上时退到本地 4 GB MLX 引擎）、Groq 上的 LLM 润色、本地确定性
+清理、词库规范化。它之所以存在，是因为当年的 ASR 返回的是逐字、无标点、不能直接粘贴的文本。
 
-That premise expired. Providers now do the cleanup inside transcription — ElevenLabs
-`no_verbatim` removes fillers, false starts, repetitions and stuttering; xAI removes filler
-words by default. A polish pass on top of that is a second model with its own latency,
-failure modes, prompt, and opportunity to change what was actually said.
+这个前提已经过期。现在的 provider 把清理做进了转写里——豆包的 `enable_punc` 和 `enable_itn`
+直接给标点和「百分之九十五 → 95%」。在这之上再加一层润色，等于多一个模型、多一份延迟、多一
+套失败模式，以及多一次改写你原话的机会。
 
-## Considered options
+## 考虑过的选项
 
-- **Keep the pipeline, add providers behind it** — rejected: the polish layer would mask the
-  very differences between providers that need comparing.
-- **One provider, no polish** — rejected: which provider is the open question. Chinese with
-  embedded English technical terms is not something any vendor benchmarks.
-- **Four providers, pick one, no polish** — chosen.
+- **保留管线，把 provider 换掉** —— 否决：润色层会盖住 provider 之间的真实差异，而那正是要看的。
+- **接四家可切换（ElevenLabs / Grok / Soniox / OpenAI）** —— 一度实现，随即否决：厂商文档和
+  第三方评测都证明不了「中文夹英文术语」这个场景谁更强，四份适配换来的是四份未验证的猜测。
+- **只接一家，用真实使用来判断** —— 选定。豆包（火山引擎），因为它是手上已有 key 的那家。
 
-## Consequences
+## 结果
 
-- **The provider choice is the product.** Whatever it returns is what gets pasted, so a bad
-  choice is visible immediately rather than absorbed by a cleanup pass.
-- **No offline dictation at all.** With the local engine gone, no network means a clear
-  error. Acceptable: the local engine cost ~4 GB resident and was rarely the path taken.
-- **Text quality can regress from the previous release** in ways the polish pass used to
-  hide — Chinese/English spacing, half-width punctuation, self-corrections ("A，不对，B").
-  `PostProcessor` did some of this deterministically and was removed with the rest; it is
-  in git history and can come back per-symptom once real usage shows which symptoms are
-  actually left standing.
-- **The comparison is the point.** Four providers behind one hotkey with one keychain slot
-  each means switching costs a menu click, so a real answer comes from real dictations
-  rather than from vendor documentation.
+- **provider 的选择就是产品本身。** 它返回什么就粘贴什么，选错了立刻能看出来，不会被清理层吸收。
+- **完全没有离线听写。** 本地引擎已删，没网就是明确报错。可接受：本地引擎常驻约 4 GB，而且很少
+  真的走到那条路。
+- **文字质量可能比上个 release 差**，差在润色层过去掩盖掉的地方——中英空格、半角标点、自我
+  纠正（「A，不对，B」）。`PostProcessor` 里有一部分是确定性规则，这次一并删了；代码在 git
+  历史里，等真实使用暴露出哪些症状还在，再按症状补回来。
+- **要换 provider 就是加一个文件。** `DoubaoSTTClient` 没有藏在协议后面——只有一个实现的协议
+  是空架子。真要加第二家时，那时候才知道抽象该长什么样。
 
-## The four
+## 接口选择
 
-| Provider | Native cleanup | Mixed CN/EN | Terms |
-|---|---|---|---|
-| ElevenLabs Scribe v2 | `no_verbatim`: fillers, false starts, repetitions, stuttering | English words stay English regardless of surrounding language (documented; examples are Indic, not Chinese) | 1000 keyterms |
-| xAI Grok | filler words removed by default | undocumented — Chinese is absent from the published language table | 100 keyterms |
-| Soniox v5 | none documented | explicitly handles languages mixed within one sentence | context: terms + free text, ~8k tokens |
-| OpenAI gpt-transcribe | none | documented code-switching support | keywords + language hints |
+火山的流式接口走 WebSocket 二进制帧协议；**极速版**（`volc.bigasr.auc_turbo`）是普通的一次
+HTTP POST，音频 base64 放 body 里，同步返回文字。听写只需要后者，所以整个 WebSocket 分支都
+不必实现。
 
-Vendor documentation is where these claims come from, and for the one case that matters
-most — Mandarin with embedded English technical terms — none of them publish a benchmark.
-That is what the app is now shaped to answer.
+热词走 `request.corpus.context`，而且它是一个 JSON **字符串**、不是嵌套对象。这个格式取自流式
+接口文档，极速版是否同样接受尚未实测——所以只在词库非空时才带上，万一被拒，没有词库的听写不会
+跟着一起失败。

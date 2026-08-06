@@ -19,7 +19,6 @@
 		A10013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10015; };
 		A10014 /* HotkeySettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10016; };
 		A10018 /* AudioDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10019; };
-		A10019 /* SetupWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10020; };
 		A10022 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10023; };
 		A10015 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = PKG10002; };
 		A20001 /* TalkTypeiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20001; };
@@ -34,14 +33,10 @@
 		A30005 /* VocabularyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10008; };
 		A30006 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10010; };
 		A30008 /* AppIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10011; };
-		A10030 /* STTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10030; };
 		A10031 /* STTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10031; };
-		A10032 /* GrokSTTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10032; };
-		A10033 /* ElevenLabsSTTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10033; };
-		A10034 /* SonioxSTTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10034; };
-		A10035 /* OpenAISTTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10035; };
 		A10036 /* STTKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10036; };
 		A10037 /* WAVEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10037; };
+		A10038 /* DoubaoSTTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10038; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -84,7 +79,6 @@
 		C10001 /* TalkType.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkType.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10016 /* HotkeySettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeySettingsWindow.swift; sourceTree = "<group>"; };
 		B10019 /* AudioDevices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDevices.swift; sourceTree = "<group>"; };
-		B10020 /* SetupWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupWindow.swift; sourceTree = "<group>"; };
 		B10023 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		B20001 /* TalkTypeiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkTypeiOSApp.swift; sourceTree = "<group>"; };
 		B20002 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -95,14 +89,10 @@
 		B30002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B30003 /* TalkTypeKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TalkTypeKeyboard.entitlements; sourceTree = "<group>"; };
 		C30001 /* TalkTypeKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkTypeKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		B10030 /* STTProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTProvider.swift; sourceTree = "<group>"; };
 		B10031 /* STTClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTClient.swift; sourceTree = "<group>"; };
-		B10032 /* GrokSTTClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokSTTClient.swift; sourceTree = "<group>"; };
-		B10033 /* ElevenLabsSTTClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElevenLabsSTTClient.swift; sourceTree = "<group>"; };
-		B10034 /* SonioxSTTClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SonioxSTTClient.swift; sourceTree = "<group>"; };
-		B10035 /* OpenAISTTClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAISTTClient.swift; sourceTree = "<group>"; };
 		B10036 /* STTKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTKeyStore.swift; sourceTree = "<group>"; };
 		B10037 /* WAVEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WAVEncoder.swift; sourceTree = "<group>"; };
+		B10038 /* DoubaoSTTClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubaoSTTClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -155,16 +145,11 @@
 				B10011 /* AppIdentity.swift */,
 				B10016 /* HotkeySettingsWindow.swift */,
 				B10019 /* AudioDevices.swift */,
-				B10020 /* SetupWindow.swift */,
 				B10023 /* Log.swift */,
-				B10030 /* STTProvider.swift */,
 				B10031 /* STTClient.swift */,
-				B10032 /* GrokSTTClient.swift */,
-				B10033 /* ElevenLabsSTTClient.swift */,
-				B10034 /* SonioxSTTClient.swift */,
-				B10035 /* OpenAISTTClient.swift */,
 				B10036 /* STTKeyStore.swift */,
 				B10037 /* WAVEncoder.swift */,
+				B10038 /* DoubaoSTTClient.swift */,
 				B10013 /* Info.plist */,
 				B10014 /* TalkType.entitlements */,
 				B10015 /* Assets.xcassets */,
@@ -338,14 +323,9 @@
 				A10011 /* AppIdentity.swift in Sources */,
 				A10014 /* HotkeySettingsWindow.swift in Sources */,
 				A10018 /* AudioDevices.swift in Sources */,
-				A10019 /* SetupWindow.swift in Sources */,
 				A10022 /* Log.swift in Sources */,
-				A10030 /* STTProvider.swift in Sources */,
+				A10038 /* DoubaoSTTClient.swift in Sources */,
 				A10031 /* STTClient.swift in Sources */,
-				A10032 /* GrokSTTClient.swift in Sources */,
-				A10033 /* ElevenLabsSTTClient.swift in Sources */,
-				A10034 /* SonioxSTTClient.swift in Sources */,
-				A10035 /* OpenAISTTClient.swift in Sources */,
 				A10036 /* STTKeyStore.swift in Sources */,
 				A10037 /* WAVEncoder.swift in Sources */,
 			);

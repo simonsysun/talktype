@@ -1,80 +1,85 @@
 import Foundation
 import Security
 
-/// One keychain slot per provider. Switching providers to compare them is the normal way
-/// to use this app right now, so a key entered once has to survive being switched away
-/// from and back.
-///
-/// There is deliberately no online key validation. Every provider would need its own
-/// probe endpoint, and a wrong key already surfaces on the first dictation as "拒绝了这个
-/// API key" — a check that costs four integrations to duplicate one error message is not
-/// worth carrying.
+/// 豆包要两个值：App ID 和 Access Token。两个一起存、一起取、一起清——只有一个的状态没有
+/// 意义，暴露出来只会让「填好了没有」变成一个需要解释的问题。
 enum STTKeyStore {
+    private static let appIDService = "talktype-doubao-appid"
+    private static let tokenService = "talktype-doubao-token"
 
-    static func apiKey(for provider: STTProvider) -> String? {
+    static func credentials() -> (appID: String, accessToken: String)? {
+        guard let appID = read(appIDService), let token = read(tokenService) else { return nil }
+        return (appID, token)
+    }
+
+    static var isConfigured: Bool { credentials() != nil }
+
+    @discardableResult
+    static func store(appID: String, accessToken: String) -> Bool {
+        let id = appID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let token = accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !id.isEmpty, !token.isEmpty else { return false }
+        return write(id, to: appIDService) && write(token, to: tokenService)
+    }
+
+    static func clear() {
+        delete(appIDService)
+        delete(tokenService)
+    }
+
+    /// 上一代管线的 key（OpenRouter 转写、Groq 润色）故意留着：上个 release 还是能回退的
+    /// 版本，删掉它的凭证等于把回退变成重新配置。真的不再需要时再调这个。
+    static func removeLegacyKeys() {
+        for service in ["talktype-asr-openrouter", "talktype-groq", "talktype-asr-openai",
+                        "talktype-asr-dashscope", "talktype-asr-groq", "talktype-asr-custom",
+                        "talktype-stt-grok", "talktype-stt-elevenlabs",
+                        "talktype-stt-soniox", "talktype-stt-openai"] {
+            delete(service)
+        }
+    }
+
+    // MARK: - Keychain
+
+    private static func read(_ service: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: provider.keychainService,
+            kSecAttrService as String: service,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
         var item: AnyObject?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
               let data = item as? Data,
-              let key = String(data: data, encoding: .utf8)?
+              let value = String(data: data, encoding: .utf8)?
                   .trimmingCharacters(in: .whitespacesAndNewlines),
-              !key.isEmpty
+              !value.isEmpty
         else { return nil }
-        return key
+        return value
     }
 
-    /// Store or replace. `SecItemAdd` fails on a duplicate rather than replacing, so an
-    /// existing item is removed first.
+    /// `SecItemAdd` 在重复项上会失败而不是覆盖，所以先删再写。
     @discardableResult
-    static func store(_ key: String, for provider: STTProvider) -> Bool {
-        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let data = trimmed.data(using: .utf8), !trimmed.isEmpty else { return false }
-        delete(for: provider)
+    private static func write(_ value: String, to service: String) -> Bool {
+        guard let data = value.data(using: .utf8) else { return false }
+        delete(service)
         let attrs: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: provider.keychainService,
+            kSecAttrService as String: service,
             kSecAttrAccount as String: NSUserName(),
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
         ]
         let status = SecItemAdd(attrs as CFDictionary, nil)
-        if status != errSecSuccess { print("[stt-key] keychain write failed: OSStatus \(status)") }
+        if status != errSecSuccess { print("[key] keychain write failed: OSStatus \(status)") }
         return status == errSecSuccess
     }
 
     @discardableResult
-    static func delete(for provider: STTProvider) -> Bool {
+    private static func delete(_ service: String) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: provider.keychainService,
+            kSecAttrService as String: service,
         ]
         return SecItemDelete(query as CFDictionary) == errSecSuccess
-    }
-
-    /// Versions before the single-call rewrite kept keys for OpenRouter transcription and
-    /// Groq polish, plus a handful of older providers. None of those paths exist any more;
-    /// clear the slots once so a dictation app does not sit on credentials it can no longer
-    /// use and offers no way to remove.
-    static func removeLegacyKeys() {
-        let legacy = [
-            "talktype-asr-openrouter",
-            "talktype-groq",
-            "talktype-asr-openai",
-            "talktype-asr-dashscope",
-            "talktype-asr-groq",
-            "talktype-asr-custom",
-        ]
-        for service in legacy {
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: service,
-            ]
-            SecItemDelete(query as CFDictionary)
-        }
     }
 }

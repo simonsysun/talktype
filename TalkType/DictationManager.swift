@@ -3,10 +3,9 @@ import Cocoa
 
 /// Central state machine: idle -> recording -> processing -> idle
 ///
-/// The whole pipeline is: record, send the WAV to one speech-to-text API, paste what comes
-/// back. Nothing runs between the API and the text field — no polish pass, no local tidy,
-/// no fallback engine. Whatever the chosen provider returns is what lands in the document,
-/// which is exactly what makes comparing providers meaningful.
+/// The whole pipeline is: record, send the WAV to 豆包, paste what comes back. Nothing runs
+/// between the API and the text field — no polish pass, no local tidy, no fallback engine.
+/// What 豆包 returns is what lands in the document.
 final class DictationManager {
     enum State {
         case idle
@@ -18,7 +17,7 @@ final class DictationManager {
 
     private var config: AppConfig
     private let recorder: AudioRecorder
-    private var client: STTClient?
+    private var client: DoubaoSTTClient?
     private let vocabularyStore: VocabularyStore
     private let overlay: OverlayWindow
     private weak var trayDelegate: TrayDelegate?
@@ -96,16 +95,14 @@ final class DictationManager {
         applyInputSelection()
     }
 
-    /// Nil when the chosen provider has no key stored yet — the one failure the user has
-    /// to fix in Setup rather than by retrying.
-    private static func makeClient(_ config: AppConfig) -> STTClient? {
-        guard let key = STTKeyStore.apiKey(for: config.sttProvider) else { return nil }
-        return config.sttProvider.makeClient(apiKey: key, config: config)
+    /// Nil until the App ID and Access Token are both stored — the one failure retrying
+    /// cannot fix.
+    private static func makeClient(_ config: AppConfig) -> DoubaoSTTClient? {
+        guard let credentials = STTKeyStore.credentials() else { return nil }
+        return DoubaoSTTClient(appID: credentials.appID, accessToken: credentials.accessToken)
     }
 
-    var providerConfigured: Bool {
-        STTKeyStore.apiKey(for: config.sttProvider) != nil
-    }
+    var isConfigured: Bool { STTKeyStore.isConfigured }
 
     /// Empty config UID means Automatic: follow the system default, including a
     /// Bluetooth headset — see `AudioDevices.automaticInput`. An explicit pick wins.
@@ -264,9 +261,7 @@ final class DictationManager {
                     let client = self.client
                     self.configLock.unlock()
 
-                    guard let client = client else {
-                        throw STTError.missingKey(provider: cfg.sttProvider.displayName)
-                    }
+                    guard let client = client else { throw STTError.missingKey }
 
                     let wav = WAVEncoder.encode(samples: audio, sampleRate: cfg.sampleRate)
                     let terms = self.vocabularyStore.getActiveVocabulary()
@@ -274,11 +269,11 @@ final class DictationManager {
                     let text = try client.transcribe(wav: wav, terms: terms,
                                                      timeout: cfg.sttTimeoutSeconds)
                     let elapsed = Date().timeIntervalSince(started)
-                    print("[stt] \(cfg.sttProvider.rawValue) \(String(format: "%.2f", elapsed))s chars=\(text.count)")
-                    Log.write("[stt] provider=\(cfg.sttProvider.rawValue) \(String(format: "%.2f", elapsed))s chars=\(text.count)")
+                    print("[stt] \(String(format: "%.2f", elapsed))s chars=\(text.count)")
+                    Log.write("[stt] \(String(format: "%.2f", elapsed))s chars=\(text.count)")
 
                     guard !text.isEmpty else {
-                        Log.write("[dict] provider returned empty text")
+                        Log.write("[dict] 豆包 returned empty text")
                         self.trayDelegate?.notifyInfo("No text recognized. Try speaking more clearly.")
                         return
                     }
@@ -291,7 +286,7 @@ final class DictationManager {
                 } catch {
                     print("[stt] transcription failed: \(error)")
                     Log.write("[stt] transcription failed: \(error)")
-                    self.trayDelegate?.notifyError("Transcription failed. Check network and API key.")
+                    self.trayDelegate?.notifyError("听写失败。检查网络和 API Key。")
                 }
             }
         }

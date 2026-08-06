@@ -4,11 +4,8 @@ struct AppConfig: Codable {
     // The hotkey itself is owned by the KeyboardShortcuts library (UserDefaults), not this file.
     var sampleRate: Int = 16000
     var launchAtLogin: Bool = false
-    /// Which speech-to-text API the dictation calls. There is nothing behind it — no
-    /// polish pass, no local fallback — so this choice alone decides the output quality.
-    var sttProvider: STTProvider = .elevenlabs
-    /// Generous: a long recording plus an upload can legitimately take a while, and
-    /// Soniox additionally polls. A dictation failing early is worse than one that waits.
+    /// Generous on purpose: a long recording is a big upload, and a dictation that fails
+    /// early is worse than one that waits.
     var sttTimeoutSeconds: Double = 60.0
     var silenceAutoStopEnabled: Bool = true
     var silenceAutoStopSeconds: Double = 20
@@ -16,23 +13,16 @@ struct AppConfig: Codable {
     var minTranscribeRms: Double = 0.012
     /// UID of the microphone to record from. Empty means follow the system default.
     var inputDeviceUID: String = ""
-    /// Hidden escape hatch, not exposed in the UI. xAI's published language table has no
-    /// Chinese entry, and `format` (spoken numbers → written form) only applies when a
-    /// language is sent — so whether `zh` helps or hurts is an empirical question. Blank
-    /// this in config.json to send no language at all.
-    var grokLanguage: String = "zh"
 
     enum CodingKeys: String, CodingKey {
         case sampleRate = "sample_rate"
         case launchAtLogin = "launch_at_login"
-        case sttProvider = "stt_provider"
         case sttTimeoutSeconds = "stt_timeout_seconds"
         case silenceAutoStopEnabled = "silence_auto_stop_enabled"
         case silenceAutoStopSeconds = "silence_auto_stop_seconds"
         case silenceRmsThreshold = "silence_rms_threshold"
         case minTranscribeRms = "min_transcribe_rms"
         case inputDeviceUID = "input_device_uid"
-        case grokLanguage = "grok_language"
     }
 
     init() {}
@@ -45,14 +35,12 @@ struct AppConfig: Codable {
         let d = AppConfig()
         sampleRate = try c.decodeIfPresent(Int.self, forKey: .sampleRate) ?? d.sampleRate
         launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? d.launchAtLogin
-        sttProvider = try c.decodeIfPresent(STTProvider.self, forKey: .sttProvider) ?? d.sttProvider
         sttTimeoutSeconds = try c.decodeIfPresent(Double.self, forKey: .sttTimeoutSeconds) ?? d.sttTimeoutSeconds
         silenceAutoStopEnabled = try c.decodeIfPresent(Bool.self, forKey: .silenceAutoStopEnabled) ?? d.silenceAutoStopEnabled
         silenceAutoStopSeconds = try c.decodeIfPresent(Double.self, forKey: .silenceAutoStopSeconds) ?? d.silenceAutoStopSeconds
         silenceRmsThreshold = try c.decodeIfPresent(Double.self, forKey: .silenceRmsThreshold) ?? d.silenceRmsThreshold
         minTranscribeRms = try c.decodeIfPresent(Double.self, forKey: .minTranscribeRms) ?? d.minTranscribeRms
         inputDeviceUID = try c.decodeIfPresent(String.self, forKey: .inputDeviceUID) ?? d.inputDeviceUID
-        grokLanguage = try c.decodeIfPresent(String.self, forKey: .grokLanguage) ?? d.grokLanguage
     }
 }
 
