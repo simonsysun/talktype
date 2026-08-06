@@ -66,16 +66,23 @@ or an upstream service breaking production.
        Candidate installed 2026-08-05: ambiguity now defaults to preserving words. A live test
        caught the model deleting the meaningful `那个` in `那个文件`; an explicit boundary fixed it
        and the same six-case suite then passed. Still needs Simon's real correction set.
-7. [ ] Deferred: overlay draggability. It is `ignoresMouseEvents = true` and fixed
+7. [ ] **Prove nearby-context accuracy before connecting it to dictation.** A local-only probe
+       now reads a bounded visible part of the focused window, redacts links/email/secrets, and
+       shows the selected terms/excerpt without saving or uploading it. The production dictation
+       and Polish paths are unchanged. The benchmark has 40 text/context cases plus a separate
+       20-recording manifest; next gate is representative native/browser/Electron field coverage,
+       followed by the opt-in live Polish comparison. Do not ship context upload unless it beats
+       terms-only on ambiguous cases with zero unrelated insertions.
+8. [ ] Deferred: overlay draggability. It is `ignoresMouseEvents = true` and fixed
        bottom-centre. Simon asked for it to move to the bottom (done) but has not said
        whether he wants to drag it.
-8. [ ] Deferred: filler-word cleanup is `PostProcessor.tidySpeech`, the fallback when Groq
+9. [ ] Deferred: filler-word cleanup is `PostProcessor.tidySpeech`, the fallback when Groq
        polish is off or unreachable (polish was restored in 2.3.0). Revisit only if the tidy
        proves weak.
-9. The signing certificate's backup lives in `secrets/`, which `.gitignore` covers — verified
+10. The signing certificate's backup lives in `secrets/`, which `.gitignore` covers — verified
    that `git add -A` cannot stage it. Do not move it anywhere `.gitignore` does not reach.
    Losing it costs one extra grant for everyone, once, and nothing else.
-10. [ ] **Measure long-recording stop latency before changing the audio thread model.** The
+11. [ ] **Measure long-recording stop latency before changing the audio thread model.** The
         33-tap resampler currently runs during `recorder.stop()` on the main thread. Profile
         Release builds with 60 s and 180 s recordings; move only flattening/resampling off-main
         if the UI blocks for more than 50 ms, while keeping AVAudioEngine shutdown on main.

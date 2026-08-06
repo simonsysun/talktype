@@ -17,6 +17,7 @@ let package = Package(
             path: "TalkType",
             exclude: [
                 "Assets.xcassets",
+                "AXContextProvider.swift",
                 "CloudKeyStore.swift",
                 "DictationManager.swift",
                 "HotkeyManager.swift",
@@ -34,6 +35,7 @@ let package = Package(
                 "AudioRecorder.swift",
                 "CloudASRClient.swift",
                 "Config.swift",
+                "ContextSelector.swift",
                 "FallbackPolicy.swift",
                 "Log.swift",
                 "PostProcessor.swift",

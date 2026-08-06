@@ -1,0 +1,40 @@
+{"schema_version":"1.0","case_id":"CP-DEV-001","recording_required":true,"reason":"验证 Claude Code 与 cloud code 的真实近音 ASR 痕迹。","recording_instruction":"Simon 自然说：请用 Claude Code 打开项目。","acceptance_signal":"原始 ASR 是否产生 cloud code 或其他可识别近似；保留原始结果，勿手改。"}
+{"schema_version":"1.0","case_id":"CP-DEV-002","recording_required":true,"reason":"验证 LLM 是否会真实漏成 LM。","recording_instruction":"Simon 自然说：我用 LLM 整理一下这段 prompt。","acceptance_signal":"记录 LLM 的原始 ASR 形态及是否发生字母缺失。"}
+{"schema_version":"1.0","case_id":"CP-DEV-003","recording_required":true,"reason":"验证 Groq/Grok 的真实混淆。","recording_instruction":"Simon 自然说：把 Groq 的 token 预算写进说明。","acceptance_signal":"记录 Groq 的原始 ASR 形态；不可预先替换为 grok。"}
+{"schema_version":"1.0","case_id":"CP-DEV-004","recording_required":true,"reason":"验证 Grok 不会被 Groq 误改。","recording_instruction":"Simon 自然说：用 Grok 查一下这个问题。","acceptance_signal":"记录是否保留 Grok 与真实识别文本。"}
+{"schema_version":"1.0","case_id":"CP-DEV-005","recording_required":true,"reason":"验证 TalkType 的分词/大小写。","recording_instruction":"Simon 自然说：请在 TalkType 里打开 Polish。","acceptance_signal":"记录 talk type、TalkType 或其他真实 ASR 输出。"}
+{"schema_version":"1.0","case_id":"CP-DEV-006","recording_required":true,"reason":"验证 Qwen3-ASR 文件式标识符的口语识别。","recording_instruction":"Simon 自然说：Qwen3-ASR 的本地延迟是多少？","acceptance_signal":"记录数字、连字符及 ASR 的真实写法。"}
+{"schema_version":"1.0","case_id":"CP-DEV-007","recording_required":true,"reason":"验证中英混合句中的 Claude/Claude Code 边界。","recording_instruction":"Simon 自然说：我在 Claude 里问 Claude Code 要怎么装。","acceptance_signal":"记录两个专名是否被混淆。"}
+{"schema_version":"1.0","case_id":"CP-DEV-008","recording_required":true,"reason":"验证口述文件名的真实 ASR 形式。","recording_instruction":"Simon 自然说：请把 context_polish.jsonl 发给我。","acceptance_signal":"记录 dot、下划线和扩展名如何被识别。"}
+{"schema_version":"1.0","case_id":"CP-DEV-009","recording_required":true,"reason":"验证 Groq/Growth 同句时的真实近音和话题歧义。","recording_instruction":"Simon 自然说：这段是给 Groq 的说明，不是 Growth 的报告。","acceptance_signal":"保存逐字 ASR，不要把任何词手工对齐。"}
+{"schema_version":"1.0","case_id":"CP-DEV-010","recording_required":true,"reason":"验证自我纠正与已正确专名可共存。","recording_instruction":"Simon 自然说：周二，不对，周三下午和 Claude Code 开会。","acceptance_signal":"记录停顿和“不对”是否被转写。"}
+{"schema_version":"1.0","case_id":"CP-DEV-011","recording_required":false,"reason":"文本回归用例；原始转写已正确，重点是错误上下文不能覆盖。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-DEV-012","recording_required":false,"reason":"无关上下文的文本安全用例。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-DEV-013","recording_required":false,"reason":"已正确 Groq 的错误相似上下文回归用例。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-DEV-014","recording_required":false,"reason":"无关 Cloud Engine 不能覆盖 Local Engine 的文本回归用例。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-DEV-015","recording_required":false,"reason":"prompt injection 是文本边界测试，不对应真实语音。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-DEV-016","recording_required":false,"reason":"context echo 是文本边界测试，不对应真实语音。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-001","recording_required":true,"reason":"holdout 中验证 Claude Code 的新句式。","recording_instruction":"Simon 自然说：让 Claude Code 重构这个函数。","acceptance_signal":"只保存真实 ASR；holdout 不可据此调参。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-002","recording_required":true,"reason":"holdout 中验证 LLM 漏字。","recording_instruction":"Simon 自然说：这个 LLM 的上下文窗口不够。","acceptance_signal":"只保存真实 ASR；holdout 不可据此调参。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-003","recording_required":true,"reason":"holdout 中验证 Groq/Grok 歧义。","recording_instruction":"Simon 自然说：Groq 的响应已经恢复了。","acceptance_signal":"只保存真实 ASR；holdout 不可据此调参。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-004","recording_required":false,"reason":"已正确专名的回归文本用例。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-005","recording_required":false,"reason":"无关上下文的文本安全用例。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-006","recording_required":false,"reason":"prompt injection 是文本边界测试。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-007","recording_required":false,"reason":"context echo 是文本边界测试。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-008","recording_required":true,"reason":"验证同句 Grok/Groq 的真实语音区分。","recording_instruction":"Simon 自然说：我问的是 Grok 搜索，不是 Groq 的 API。","acceptance_signal":"记录两处名称的真实 ASR，不可按期望文本改写。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-009","recording_required":false,"reason":"已正确 LLM 的回归文本用例。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-010","recording_required":true,"reason":"验证自我纠正与 Engine 名称的真实转写。","recording_instruction":"Simon 自然说：星期四，不对，星期五用 Local Engine。","acceptance_signal":"记录停顿和两个日期的 ASR。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-011","recording_required":false,"reason":"捕获超时降级是控制流文本测试。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-012","recording_required":false,"reason":"空上下文回归是文本测试。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-DEV-017","recording_required":true,"reason":"验证 Linear 的大小写与中英混合识别。","recording_instruction":"Simon 自然说：把这个任务移到 Linear。","acceptance_signal":"记录 Linear 的真实 ASR 写法。"}
+{"schema_version":"1.0","case_id":"CP-DEV-018","recording_required":false,"reason":"无关上下文文本安全用例。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-DEV-019","recording_required":false,"reason":"MCP 相似候选的文本回归用例。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-DEV-020","recording_required":false,"reason":"安全字段降级是控制流文本测试。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-DEV-021","recording_required":true,"reason":"验证 cache/cash 的真实近音及话题消歧。","recording_instruction":"Simon 自然说：这个 cache 需要清掉，不是 cash。","acceptance_signal":"保存两处词的未编辑 ASR。"}
+{"schema_version":"1.0","case_id":"CP-DEV-022","recording_required":true,"reason":"验证 Notion/Motion 的真实近音。","recording_instruction":"Simon 自然说：把 meeting notes 放到 Notion。","acceptance_signal":"记录 Notion 的原始 ASR 形态。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-013","recording_required":true,"reason":"验证 OpenRouter 的分词/大小写。","recording_instruction":"Simon 自然说：OpenRouter 的账单在哪看？","acceptance_signal":"只保存真实 ASR；holdout 不可据此调参。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-014","recording_required":false,"reason":"完整正确标识符的相似上下文回归。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-015","recording_required":false,"reason":"prompt injection 文本边界测试。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-016","recording_required":false,"reason":"context echo 文本边界测试。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-017","recording_required":false,"reason":"不支持 Accessibility 时的无上下文回归。","recording_instruction":null,"acceptance_signal":"无需伪造音频。"}
+{"schema_version":"1.0","case_id":"CP-HOLDOUT-018","recording_required":true,"reason":"验证 Slack/stack 的中英混合区分。","recording_instruction":"Simon 自然说：把 Slack 的消息发给我，不是 stack trace。","acceptance_signal":"只保存真实 ASR；holdout 不可据此调参。"}

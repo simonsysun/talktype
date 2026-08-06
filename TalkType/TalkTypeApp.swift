@@ -13,6 +13,8 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     private var vocabularyStore: VocabularyStore!
     private var config: AppConfig!
     private let sidecar = SidecarManager()
+    private let contextProbeProvider = AXContextProvider()
+    private var contextProbeSession = 0
     private var healthTimer: Timer?
 
     // Menu items needing dynamic updates
@@ -214,6 +216,15 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         refineItem = NSMenuItem(title: "Polish with cloud AI", action: #selector(toggleRefine), keyEquivalent: "")
         refineItem.target = self
         menu.addItem(refineItem)
+
+        let contextProbeItem = NSMenuItem(
+            title: "Test Nearby Context Locally...",
+            action: #selector(testNearbyContextLocally),
+            keyEquivalent: ""
+        )
+        contextProbeItem.target = self
+        contextProbeItem.toolTip = "Experimental local preview. It never sends or saves the captured text."
+        menu.addItem(contextProbeItem)
 
         let setupItem = NSMenuItem(title: "Setup...", action: #selector(openSetup), keyEquivalent: "")
         setupItem.target = self
@@ -455,6 +466,52 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         item.toolTip = configured
             ? "Sends the transcript — not the audio — to Groq for cleanup."
             : "Add a Groq key in Setup to enable."
+    }
+
+    @objc private func testNearbyContextLocally() {
+        guard TextInserter.accessibilityGranted(prompt: false) else {
+            notifyInfo("Accessibility is required for the local context test.")
+            return
+        }
+        guard let target = NSWorkspace.shared.frontmostApplication,
+              target.bundleIdentifier != Bundle.main.bundleIdentifier else {
+            notifyInfo("Focus the app you want to test, then open this menu again.")
+            return
+        }
+
+        contextProbeSession += 1
+        let ticket = contextProbeProvider.begin(target: target, sessionID: contextProbeSession)
+
+        let query = NSAlert()
+        query.messageText = "Test Nearby Context — Local Only"
+        query.informativeText = "Enter the raw words TalkType might hear. The captured preview stays in memory, is never saved, and is not sent to Groq."
+        query.addButton(withTitle: "Show Preview")
+        query.addButton(withTitle: "Cancel")
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24))
+        input.placeholderString = "e.g. 请用 cloud code 打开项目"
+        query.accessoryView = input
+
+        guard query.runModal() == .alertFirstButtonReturn else {
+            contextProbeProvider.discard(ticket)
+            return
+        }
+
+        let context = contextProbeProvider.resolve(ticket, rawTranscript: input.stringValue)
+        let result = NSAlert()
+        result.messageText = context.isEmpty
+            ? "No usable nearby context found"
+            : "Local context preview"
+        if context.isEmpty {
+            result.informativeText = "Nothing will be sent anywhere. This app may not expose visible text through macOS Accessibility, or the capture may have timed out."
+        } else {
+            let terms = context.terms.isEmpty ? "(none)" : context.terms.joined(separator: ", ")
+            let snippets = context.snippets.isEmpty
+                ? "(none)"
+                : context.snippets.joined(separator: "\n\n")
+            result.informativeText = "App: \(context.activeApp ?? target.localizedName ?? "Unknown")\n\nMatched terms: \(terms)\n\nNearby excerpt:\n\(snippets)\n\nThis preview was not saved or uploaded."
+        }
+        result.addButton(withTitle: "Done")
+        result.runModal()
     }
 
     // MARK: - Local speech engine

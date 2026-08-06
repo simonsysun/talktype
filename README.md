@@ -50,6 +50,7 @@ plainly instead of failing silently.
 | Audio + active vocabulary hints, cloud engine | Yes — to OpenRouter, subject to its data policy |
 | Audio, local engine | No |
 | Transcript + active vocabulary → polish (optional) | Text only, to Groq — never audio |
+| Visible text, manual “Test Nearby Context Locally” preview | No — one bounded preview, never saved, and not used by dictation yet |
 
 No account, no telemetry, no subscription. The only credentials are your own API keys
 (OpenRouter for recognition, Groq for optional polish), stored in the macOS Keychain.

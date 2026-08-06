@@ -63,8 +63,13 @@ final class OverlayWindow {
 
             self.hideTimer?.invalidate()
             self.hideTimer = Timer.scheduledTimer(withTimeInterval: Self.popOutDuration, repeats: false) { [weak self] _ in
-                self?.panel.orderOut(nil)
-                self?.hideTimer = nil
+                guard let self = self else { return }
+                self.panel.orderOut(nil)
+                // Processing uses an infinite opacity animation. Once the panel is no
+                // longer visible, return the layers to their resting state so a hidden
+                // overlay cannot keep an animation alive until the next dictation.
+                self.hostingView.setState(.recording)
+                self.hideTimer = nil
             }
         }
     }

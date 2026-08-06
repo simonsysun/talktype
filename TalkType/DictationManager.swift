@@ -51,7 +51,12 @@ final class DictationManager {
     // Focus restoration
     private var originApp: NSRunningApplication?
 
-    init(config: AppConfig, vocabularyStore: VocabularyStore, overlay: OverlayWindow, sidecar: SidecarManager) {
+    init(
+        config: AppConfig,
+        vocabularyStore: VocabularyStore,
+        overlay: OverlayWindow,
+        sidecar: SidecarManager
+    ) {
         self.config = config
         self.vocabularyStore = vocabularyStore
         self.overlay = overlay
@@ -303,7 +308,11 @@ final class DictationManager {
     /// Cloud polish of the transcript via Groq, with the deterministic local tidy as the
     /// floor. Whatever happens — disabled, no key, offline, slow, or output that failed
     /// the plausibility check — the caller still gets usable text.
-    private func refine(_ text: String, vocabularyHints: [String]?, config cfg: AppConfig) -> String {
+    private func refine(
+        _ text: String,
+        vocabularyHints: [String]?,
+        config cfg: AppConfig
+    ) -> String {
         guard cfg.refineEnabled, !isOffline else { return PostProcessor.tidySpeech(text) }
 
         transcriberLock.lock()
@@ -311,7 +320,10 @@ final class DictationManager {
         transcriberLock.unlock()
 
         let started = Date()
-        guard let refined = refiner.refine(text, vocabularyHints: vocabularyHints ?? []) else {
+        guard let refined = refiner.refine(
+            text,
+            vocabularyHints: vocabularyHints ?? []
+        ) else {
             // Never throw; but if the polish keeps failing (retired model, exhausted
             // quota), say so once per streak instead of silently degrading forever.
             consecutiveRefineFailures += 1
@@ -542,7 +554,11 @@ final class DictationManager {
                 // Cloud polish if enabled and reachable; the local tidy otherwise.
                 // Vocabulary canonicalisation runs last so the spellings the user chose
                 // survive whatever the refiner did.
-                let refined = self.refine(text, vocabularyHints: hints, config: cfg)
+                let refined = self.refine(
+                    text,
+                    vocabularyHints: hints,
+                    config: cfg
+                )
                 let processed = PostProcessor.postProcess(text: refined, vocabEntries: vocabEntries)
 
                 guard !processed.isEmpty else {

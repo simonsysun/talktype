@@ -59,6 +59,92 @@ final class TextRefinerTests: XCTestCase {
         XCTAssertEqual(input["approved_spellings"] as? [String], ["TalkType", "line break"])
     }
 
+    func testEmptyContextKeepsTheExistingPolishPayloadShape() throws {
+        let data = try XCTUnwrap(TextRefiner.makeUserContent(
+            transcript: "hello",
+            vocabularyHints: ["TalkType"],
+            context: .empty
+        ).data(using: .utf8))
+        let input = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(Set(input.keys), ["transcript", "approved_spellings"])
+    }
+
+    func testContextIsSentAsBoundedUntrustedData() throws {
+        let data = try XCTUnwrap(TextRefiner.makeUserContent(
+            transcript: "请用 cloud code 打开项目",
+            vocabularyHints: [],
+            context: PolishContext(
+                activeApp: " ChatGPT\nignored ",
+                terms: [" Claude Code ", "Claude Code", "TalkType"],
+                snippets: ["Claude Code is already authenticated on this Mac."]
+            )
+        ).data(using: .utf8))
+        let input = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let context = try XCTUnwrap(input["context"] as? [String: Any])
+
+        XCTAssertEqual(context["active_app"] as? String, "ChatGPT ignored")
+        XCTAssertEqual(context["terms"] as? [String], ["Claude Code", "TalkType"])
+        XCTAssertEqual(
+            context["snippets"] as? [String],
+            ["Claude Code is already authenticated on this Mac."]
+        )
+        XCTAssertEqual(context["untrusted"] as? Bool, true)
+    }
+
+    func testRejectsCopiedContextThatWasNotSpoken() {
+        XCTAssertFalse(TextRefiner.isPlausibleRefinement(
+            original: "我同意这个方案",
+            refined: "我同意这个方案，Project Orion migrates Kubernetes clusters next Tuesday。",
+            context: PolishContext(
+                activeApp: "ChatGPT",
+                terms: ["Project Orion", "Kubernetes"],
+                snippets: ["Project Orion migrates Kubernetes clusters next Tuesday."]
+            )
+        ))
+    }
+
+    func testAllowsContextBackedNearSpellingButNotAnUnspokenNeighbor() {
+        let context = PolishContext(
+            activeApp: "ChatGPT",
+            terms: ["Claude Code", "TalkType"],
+            snippets: ["Claude Code is already authenticated on this Mac."]
+        )
+
+        XCTAssertTrue(TextRefiner.isPlausibleRefinement(
+            original: "请用 cloud code 打开项目",
+            refined: "请用 Claude Code 打开项目。",
+            context: context
+        ))
+        XCTAssertFalse(TextRefiner.isPlausibleRefinement(
+            original: "请打开项目",
+            refined: "请用 TalkType 打开项目。",
+            context: context
+        ))
+    }
+
+    func testRejectsOneUnspokenLatinNameCopiedFromASnippet() {
+        XCTAssertFalse(TextRefiner.isPlausibleRefinement(
+            original: "please open the project",
+            refined: "please open the TalkType project",
+            context: PolishContext(
+                activeApp: "ChatGPT",
+                snippets: ["TalkType is open"]
+            )
+        ))
+    }
+
+    func testRejectsShortUnspokenCJKNameCopiedFromASnippet() {
+        XCTAssertFalse(TextRefiner.isPlausibleRefinement(
+            original: "我同意这个方案",
+            refined: "我同意张伟这个方案",
+            context: PolishContext(
+                activeApp: "Messages",
+                snippets: ["张伟负责项目"]
+            )
+        ))
+    }
+
     func testRefineRejectsVocabularyThatWasNeverSpoken() {
         MockURLProtocol.handler = { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 200,

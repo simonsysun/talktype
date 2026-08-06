@@ -28,6 +28,8 @@
 		A10024 /* CloudASRClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10025; };
 		A10025 /* CloudKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10026; };
 		A10026 /* FallbackPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10027; };
+		A10027 /* ContextSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10028; };
+		A10028 /* AXContextProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10029; };
 		A10020 /* install.sh in Resources */ = {isa = PBXBuildFile; fileRef = B10021; };
 		A10021 /* server.py in Resources */ = {isa = PBXBuildFile; fileRef = B10022; };
 		A10015 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = PKG10002; };
@@ -102,6 +104,8 @@
 		B10025 /* CloudASRClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudASRClient.swift; sourceTree = "<group>"; };
 		B10026 /* CloudKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKeyStore.swift; sourceTree = "<group>"; };
 		B10027 /* FallbackPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FallbackPolicy.swift; sourceTree = "<group>"; };
+		B10028 /* ContextSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextSelector.swift; sourceTree = "<group>"; };
+		B10029 /* AXContextProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXContextProvider.swift; sourceTree = "<group>"; };
 		B10021 /* install.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; name = install.sh; path = ../asr/install.sh; sourceTree = "<group>"; };
 		B10022 /* server.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = server.py; path = ../asr/server.py; sourceTree = "<group>"; };
 		B20001 /* TalkTypeiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkTypeiOSApp.swift; sourceTree = "<group>"; };
@@ -174,6 +178,8 @@
 				B10025 /* CloudASRClient.swift */,
 				B10026 /* CloudKeyStore.swift */,
 				B10027 /* FallbackPolicy.swift */,
+				B10028 /* ContextSelector.swift */,
+				B10029 /* AXContextProvider.swift */,
 				B10021 /* install.sh */,
 				B10022 /* server.py */,
 				B10013 /* Info.plist */,
@@ -358,6 +364,8 @@
 				A10024 /* CloudASRClient.swift in Sources */,
 				A10025 /* CloudKeyStore.swift in Sources */,
 				A10026 /* FallbackPolicy.swift in Sources */,
+				A10027 /* ContextSelector.swift in Sources */,
+				A10028 /* AXContextProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
