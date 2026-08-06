@@ -12,17 +12,12 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     private var overlay: OverlayWindow!
     private var vocabularyStore: VocabularyStore!
     private var config: AppConfig!
-    private let sidecar = SidecarManager()
-    private var healthTimer: Timer?
 
     // Menu items needing dynamic updates
-    private var engineItem: NSMenuItem!
-    private var engineStatusItem: NSMenuItem!
-    private var engineLocalItem: NSMenuItem!
-    private var engineCloudItem: NSMenuItem!
+    private var providerItem: NSMenuItem!
+    private var providerMenu: NSMenu!
     private var vocabMenu: NSMenu!
     private var launchItem: NSMenuItem!
-    private var refineItem: NSMenuItem!
     private var inputMenu: NSMenu!
     private var hotkeyDisplayItem: NSMenuItem!
     private var hotkeySettingsWindow: HotkeySettingsWindow!
@@ -81,16 +76,10 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         // Load config
         config = ConfigManager.load()
         ConfigManager.save(config)
-        // Providers other than OpenRouter were removed in 2.2.0; drop their stale
-        // keychain slots in one pass.
-        CloudKeyStore.removeLegacyKeys()
-
-        // Start the speech engine early. Local weights take about a second to load, and
-        // the socket is up before then so the first dictation rarely waits. Cloud means
-        // the sidecar never runs — that is where the ~4 GB saving comes from.
-        if config.asrEngine == .local {
-            startSidecar()
-        }
+        // The OpenRouter and Groq keys from the old pipeline are deliberately left alone.
+        // While the four providers are being compared, the previous release is still a
+        // live fallback — deleting its credentials would make going back a re-setup.
+        // `STTKeyStore.removeLegacyKeys()` does the cleanup once that stops being true.
 
         // Initialize stores
         vocabularyStore = VocabularyStore()
@@ -102,8 +91,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         dictationManager = DictationManager(
             config: config,
             vocabularyStore: vocabularyStore,
-            overlay: overlay,
-            sidecar: sidecar
+            overlay: overlay
         )
         dictationManager.setTrayDelegate(self)
 
@@ -133,10 +121,6 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             self?.dictationManager.toggleDictation()
         }
 
-        // Open the refiner's connection now so the first dictation does not also pay
-        // for DNS and a TLS handshake.
-        dictationManager.prewarmRefiner()
-
         // Settings window
         hotkeySettingsWindow = HotkeySettingsWindow()
 
@@ -159,10 +143,8 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         print("Ready!")
         print("  \(hotkeyDisplayString()) -> Dictation (speak -> type)")
         print("  Hotkey capture: \(mode)")
-        print("  Speech engine: \(config.asrEngine == .local ? "local, 127.0.0.1:\(config.asrPort)" : "cloud, \(config.effectiveCloudModel)")")
-        let polish = !dictationManager.refinerConfigured ? "no key"
-            : (config.refineEnabled ? "on (\(config.refineModel))" : "off")
-        print("  Cloud polish:  \(polish)")
+        print("  Speech-to-text: \(config.sttProvider.displayName)"
+            + (dictationManager.providerConfigured ? "" : " (no API key)"))
         if config.silenceAutoStopEnabled {
             print("  Silence auto-stop: \(config.silenceAutoStopSeconds)s")
         }
@@ -172,22 +154,17 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             notifyError("Hotkey cannot override macOS until Accessibility is enabled. Open Accessibility Settings from the tray.")
         }
 
-        // Lead with setup when the chosen engine cannot work yet: local weights missing,
-        // or cloud configured without a key. Never block on the engine we are not using.
+        // Lead with setup when the chosen provider has no key — the one problem that makes
+        // every dictation fail and that retrying cannot fix.
         configureSetupWindow()
-        let needsSetup = config.asrEngine == .local
-            ? SidecarManager.installState() != .ready
-            : CloudKeyStore.apiKey() == nil
-        if needsSetup {
+        if !dictationManager.providerConfigured {
             setupWindow.show()
         }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        healthTimer?.invalidate()
         dictationManager.shutdown()
         hotkeyManager.cleanup()
-        sidecar.stop()
     }
 
     // MARK: - Menu bar setup
@@ -205,20 +182,15 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         hotkeyItem.target = self
         menu.addItem(hotkeyItem)
 
-        let engineMenu = NSMenu()
-        engineItem = NSMenuItem(title: "Speech engine", action: nil, keyEquivalent: "")
-        engineItem.submenu = engineMenu
-        menu.addItem(engineItem)
-        configureEngineMenu()
-
-        refineItem = NSMenuItem(title: "Polish with cloud AI", action: #selector(toggleRefine), keyEquivalent: "")
-        refineItem.target = self
-        menu.addItem(refineItem)
+        providerMenu = NSMenu()
+        providerItem = NSMenuItem(title: "Speech-to-text", action: nil, keyEquivalent: "")
+        providerItem.submenu = providerMenu
+        menu.addItem(providerItem)
+        rebuildProviderMenu()
 
         let setupItem = NSMenuItem(title: "Setup...", action: #selector(openSetup), keyEquivalent: "")
         setupItem.target = self
         menu.addItem(setupItem)
-        refreshRefineItem()
 
         inputMenu = NSMenu()
         inputMenu.delegate = self          // rebuilt on open; devices come and go
@@ -359,7 +331,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     // MARK: - Setup
 
     @objc private func openSetup() {
-        // Refresh what the window shows before opening — the engine/key/mic can have
+        // Refresh what the window shows before opening — the provider/key/mic can have
         // changed from the menu since the window was last configured.
         setupWindow.config = config
         setupWindow.show()
@@ -372,233 +344,54 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             self.config = updated
             ConfigManager.save(updated)
             self.dictationManager.reloadConfig(updated)
-            if updated.asrEngine == .cloud {
-                self.sidecar.stop()
-                self.healthTimer?.invalidate()
-            } else {
-                self.startSidecar()
-            }
-            self.refreshEngineStatus()
-            self.configureEngineMenu()
-            self.refreshRefineItem()
+            self.rebuildProviderMenu()
         }
         setupWindow.onRepairAccessibility = { [weak self] in self?.promptAccessibilityRepair() }
-        setupWindow.onEngineInstalled = { [weak self] in
-            guard let self = self else { return }
-            if self.config.asrEngine == .local {
-                self.startSidecar()
-            }
-            self.notifyInfo("Speech engine installed. Press \(self.hotkeyDisplayString()) to dictate.")
-        }
-        setupWindow.onEngineDeleted = { [weak self] in
-            guard let self = self else { return }
-            self.healthTimer?.invalidate()
-            if let error = self.sidecar.uninstall() {
-                self.notifyError(error)
-                self.refreshEngineStatus()
-                return
-            }
-            self.dictationManager.clearFallbackState()
-            // Deleting the local engine while it is the chosen engine leaves dictation
-            // with no working path — move to cloud, the default.
-            if self.config.asrEngine == .local {
-                self.config.asrEngine = .cloud
-                self.persistConfig()
-                self.dictationManager.reloadConfig(self.config)
-                self.engineLocalItem?.state = .off
-                self.engineCloudItem?.state = .on
-                if CloudKeyStore.apiKey() == nil {
-                    self.notifyInfo("本地引擎已删除，语音引擎已切到云端，但还没有 OpenRouter key——已打开设置。")
-                    self.openSetup()
-                } else {
-                    self.notifyInfo("本地引擎已删除，语音引擎已切到云端。")
-                }
-            } else {
-                self.notifyInfo("本地引擎已删除，约 4 GB 已释放。")
-            }
-            self.refreshEngineStatus()
-            // The delete flow changed the app's config (possibly the engine); push it
-            // back into the open Setup window so its engine dropdown and status refresh
-            // against the new reality instead of the stale copy.
-            self.setupWindow.config = self.config
-            self.setupWindow.refresh()
-        }
     }
 
-    // MARK: - Cloud refinement
+    // MARK: - Provider choice
 
-    @objc private func toggleRefine() {
-        guard dictationManager.refinerConfigured else {
-            openSetup()
-            return
-        }
-        config.refineEnabled.toggle()
-        persistConfig()
-        dictationManager.reloadConfig(config)
-        refreshRefineItem()
-        if config.refineEnabled {
-            dictationManager.prewarmRefiner()
-            notifyInfo("Transcripts will be polished by cloud AI before typing.")
-        } else {
-            notifyInfo("Polishing off. Everything stays on this machine.")
-        }
-    }
-
-    private func refreshRefineItem() {
-        guard let item = refineItem else { return }
-        let configured = dictationManager.refinerConfigured
-        item.state = (config.refineEnabled && configured) ? .on : .off
-        item.isEnabled = configured
-        item.title = configured
-            ? "Polish with cloud AI"
-            : "Polish with cloud AI (no key)"
-        item.toolTip = configured
-            ? "Sends the transcript — not the audio — to Groq for cleanup."
-            : "Add a Groq key in Setup to enable."
-    }
-
-    // MARK: - Local speech engine
-
-    /// Engine menu: a status row plus Local/Cloud radio items. Cloud is cloud-first with
-    /// automatic local fallback when unreachable; Local runs on-device only.
-    private func configureEngineMenu() {
-        guard let submenu = engineItem.submenu else { return }
+    /// The four APIs, as radio items, plus whether the current one has a key. Switching
+    /// here is the whole comparison workflow: same voice, same hotkey, different provider.
+    private func rebuildProviderMenu() {
+        guard let submenu = providerMenu else { return }
         submenu.removeAllItems()
 
-        engineStatusItem = NSMenuItem(title: "…", action: nil, keyEquivalent: "")
-        engineStatusItem.isEnabled = false
-        submenu.addItem(engineStatusItem)
-        submenu.addItem(.separator())
+        for provider in STTProvider.allCases {
+            let item = NSMenuItem(title: provider.displayName,
+                                  action: #selector(selectProvider(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = provider.rawValue
+            item.state = provider == config.sttProvider ? .on : .off
+            item.toolTip = provider.summary
+            submenu.addItem(item)
+        }
 
-        engineLocalItem = NSMenuItem(title: "Local (Qwen3-ASR, on this Mac)",
-                                     action: #selector(selectEngine(_:)), keyEquivalent: "")
-        engineLocalItem.target = self
-        engineLocalItem.representedObject = ASREngine.local.rawValue
-        engineLocalItem.state = config.asrEngine == .local ? .on : .off
-        engineLocalItem.toolTip = "Runs on-device. Voice never leaves the machine, ~4 GB while in use."
-        submenu.addItem(engineLocalItem)
-
-        engineCloudItem = NSMenuItem(title: "Cloud (OpenRouter)",
-                                     action: #selector(selectEngine(_:)), keyEquivalent: "")
-        engineCloudItem.target = self
-        engineCloudItem.representedObject = ASREngine.cloud.rawValue
-        engineCloudItem.state = config.asrEngine == .cloud ? .on : .off
-        engineCloudItem.toolTip = "Audio goes to OpenRouter. Add your key in Setup…"
-        submenu.addItem(engineCloudItem)
-
-        refreshEngineStatus()
+        let configured = dictationManager?.providerConfigured ?? false
+        providerItem?.title = configured
+            ? "Speech-to-text: \(config.sttProvider.displayName)"
+            : "Speech-to-text: \(config.sttProvider.displayName) (no API key)"
     }
 
-    @objc private func selectEngine(_ sender: NSMenuItem) {
+    @objc private func selectProvider(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String,
-              let engine = ASREngine(rawValue: raw),
-              engine != config.asrEngine
+              let provider = STTProvider(rawValue: raw),
+              provider != config.sttProvider
         else { return }
 
-        config.asrEngine = engine
+        config.sttProvider = provider
         persistConfig()
         dictationManager.reloadConfig(config)
+        rebuildProviderMenu()
+        setupWindow.refresh()
 
-        if engine == .cloud {
-            // Free the ~4 GB resident model — the whole point of choosing cloud.
-            sidecar.stop()
-            healthTimer?.invalidate()
-            if CloudKeyStore.apiKey() == nil {
-                notifyInfo("已切到云端，但还没有 OpenRouter key——已打开设置。")
-                openSetup()
-            }
+        if STTKeyStore.apiKey(for: provider) == nil {
+            notifyInfo("已切到 \(provider.displayName)，但还没有 API key——已打开设置。")
+            openSetup()
         } else {
-            startSidecar()
-        }
-
-        engineLocalItem.state = engine == .local ? .on : .off
-        engineCloudItem.state = engine == .cloud ? .on : .off
-        refreshEngineStatus()
-        notifyInfo(engine == .cloud
-            ? "Speech engine: cloud. Audio now leaves your Mac."
-            : "Speech engine: local (Qwen3-ASR). Voice stays on this Mac.")
-    }
-
-    private func startSidecar() {
-        guard config.asrEngine == .local else { return }
-        let probe = Transcriber(port: config.asrPort)
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            let alreadyServing = probe.health() != .unreachable
-            let state = self.sidecar.start(port: self.config.asrPort, alreadyServing: alreadyServing)
-            if case .missing(let what) = state {
-                self.notifyError("Local speech engine is not installed: \(what)")
-            }
-            DispatchQueue.main.async { self.startHealthPolling() }
+            notifyInfo("Speech-to-text: \(provider.displayName)")
         }
     }
-
-    /// Poll fast while the weights load, then settle into a slow heartbeat that notices
-    /// a sidecar that died without the app noticing.
-    private func startHealthPolling() {
-        healthTimer?.invalidate()
-        refreshEngineStatus()
-
-        var interval: TimeInterval = 1.0
-        func schedule() {
-            healthTimer?.invalidate()
-            healthTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
-                guard let self = self else { return }
-                self.refreshEngineStatus { health in
-                    let next: TimeInterval = (health == .loading) ? 1.0 : 15.0
-                    if next != interval {
-                        interval = next
-                    }
-                    schedule()
-                }
-            }
-        }
-        schedule()
-    }
-
-    private func refreshEngineStatus(completion: ((SidecarHealth?) -> Void)? = nil) {
-        if config.asrEngine == .cloud {
-            let configured = CloudKeyStore.apiKey() != nil
-            if dictationManager?.effectiveEngine == .local {
-                engineStatusItem?.title = "Local · fallback (cloud unavailable)"
-                engineItem?.title = "Speech engine: local (cloud fallback)"
-            } else {
-                engineStatusItem?.title = "Cloud · OpenRouter"
-                engineItem?.title = configured
-                    ? "Speech engine: cloud"
-                    : "Speech engine: cloud (no API key)"
-            }
-            completion?(nil)
-            return
-        }
-
-        let probe = Transcriber(port: config.asrPort)
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let health = probe.health()
-            DispatchQueue.main.async {
-                guard let self = self else { return }
-                switch health {
-                case .ready(let model):
-                    let short = model.split(separator: "/").last.map(String.init) ?? model
-                    self.engineStatusItem?.title = "Local · ready (\(short))"
-                    self.engineItem?.title = "Speech engine: ready (\(short))"
-                case .loading:
-                    self.engineStatusItem?.title = "Local · loading model…"
-                    self.engineItem?.title = "Speech engine: loading model..."
-                case .unreachable:
-                    let problem = SidecarManager.installState().problem
-                    self.engineStatusItem?.title = problem == nil
-                        ? "Local · not running"
-                        : "Local · not installed"
-                    self.engineItem?.title = problem == nil
-                        ? "Speech engine: not running"
-                        : "Speech engine: not installed"
-                }
-                completion?(health)
-            }
-        }
-    }
-
     // MARK: - Vocabulary
 
     private func refreshVocabularyMenu() {
@@ -835,10 +628,8 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
     }
 
     @objc private func quitApp() {
-        healthTimer?.invalidate()
         dictationManager.shutdown()
         hotkeyManager.cleanup()
-        sidecar.stop()
         NSApp.terminate(nil)
     }
 
@@ -887,17 +678,6 @@ extension TalkTypeApp: TrayDelegate {
 
     func accessibilityMissing() {
         DispatchQueue.main.async { self.promptAccessibilityRepair() }
-    }
-
-    func engineStateDidChange(_ engine: ASREngine) {
-        DispatchQueue.main.async {
-            if engine == .local {
-                self.startHealthPolling()
-            } else {
-                self.healthTimer?.invalidate()
-                self.refreshEngineStatus()
-            }
-        }
     }
 
     private func sendNotification(title: String, subtitle: String, body: String) {

@@ -27,6 +27,16 @@ enum AppIdentity {
     static let legacyKeychainService = "com.whisper.api-keys"
 
     static let stateDir: URL = {
+        // An explicit override keeps a test run — or a second provider being trialled
+        // side by side — out of the real ~/.talktype. `homeDirectoryForCurrentUser` reads
+        // the password database, so overriding HOME does not achieve this.
+        if let override = ProcessInfo.processInfo.environment["TALKTYPE_STATE_DIR"],
+           !override.isEmpty {
+            let dir = URL(fileURLWithPath: (override as NSString).expandingTildeInPath)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            return dir
+        }
+
         let home = FileManager.default.homeDirectoryForCurrentUser
         let target = home.appendingPathComponent(standardStateDir)
         let legacy = home.appendingPathComponent(legacyStateDir)

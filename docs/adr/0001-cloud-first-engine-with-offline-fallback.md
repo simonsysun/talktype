@@ -6,7 +6,9 @@ user on every switch. This replaces the 2026-08-02 "chosen engine, no fallback" 
 TODO.md: the user prioritises saving the ~4 GB resident memory over output predictability,
 and the switch notification keeps the user informed of which engine actually ran.
 
-Status: accepted (2026-08-03)
+Status: superseded (2026-08-05) by [ADR-0002](0002-single-call-stt-no-polish.md) — the local
+engine, the fallback, and the polish pass were all removed in favour of one speech-to-text
+API call.
 
 Considered Options:
 - Cloud only, no fallback — rejected: no dictation offline.

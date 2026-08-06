@@ -1,104 +1,64 @@
 import Foundation
 
-/// Which engine turns audio into words. Local runs Qwen3-ASR through the sidecar; cloud
-/// sends the WAV to OpenRouter. Cloud is cloud-first with an automatic local fallback
-/// when the cloud is unreachable (the switch is notified); Local is on-device only.
-enum ASREngine: String, Codable {
-    case local
-    case cloud
-}
-
 struct AppConfig: Codable {
     // The hotkey itself is owned by the KeyboardShortcuts library (UserDefaults), not this file.
     var sampleRate: Int = 16000
     var launchAtLogin: Bool = false
-    /// Local or cloud. Cloud is the default (cloud-first, ADR-0001): the ~4 GB local
-    /// engine stays an optional one-click download for offline dictation.
-    var asrEngine: ASREngine = .cloud
-    /// Loopback port of the local ASR sidecar.
-    var asrPort: Int = SidecarDefaults.port
-    /// Generous by design: inference is local, so a slow response means a long recording,
-    /// not a flaky network.
-    var asrTimeoutSeconds: Double = 60.0
+    /// Which speech-to-text API the dictation calls. There is nothing behind it — no
+    /// polish pass, no local fallback — so this choice alone decides the output quality.
+    var sttProvider: STTProvider = .elevenlabs
+    /// Generous: a long recording plus an upload can legitimately take a while, and
+    /// Soniox additionally polls. A dictation failing early is worse than one that waits.
+    var sttTimeoutSeconds: Double = 60.0
     var silenceAutoStopEnabled: Bool = true
     var silenceAutoStopSeconds: Double = 20
     var silenceRmsThreshold: Double = 0.008
     var minTranscribeRms: Double = 0.012
-    /// Cloud polish of the transcript via Groq (text only, never audio). Off means the
-    /// deterministic local tidy is all that runs.
-    var refineEnabled: Bool = true
-    var refineModel: String = TextRefiner.defaultModel
-    var refineTimeoutSeconds: Double = 2.5
     /// UID of the microphone to record from. Empty means follow the system default.
     var inputDeviceUID: String = ""
-    /// Hidden escape hatch, not exposed in the UI: if OpenRouter ever retires the default
-    /// model snapshot, this lets a user point at the replacement by editing config.json.
-    /// Empty means use `CloudDefaults.model`.
-    var cloudModelOverride: String = ""
-
-    /// The model the cloud engine actually uses, honoring (and trimming) the override.
-    var effectiveCloudModel: String {
-        let trimmed = cloudModelOverride.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? CloudDefaults.model : trimmed
-    }
-
-    /// The model the refiner actually uses, honoring (and trimming) the stored value.
-    /// A blank stored value would otherwise 400 every request.
-    var effectiveRefineModel: String {
-        let trimmed = refineModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? TextRefiner.defaultModel : trimmed
-    }
+    /// Hidden escape hatch, not exposed in the UI. xAI's published language table has no
+    /// Chinese entry, and `format` (spoken numbers → written form) only applies when a
+    /// language is sent — so whether `zh` helps or hurts is an empirical question. Blank
+    /// this in config.json to send no language at all.
+    var grokLanguage: String = "zh"
 
     enum CodingKeys: String, CodingKey {
         case sampleRate = "sample_rate"
         case launchAtLogin = "launch_at_login"
-        case asrEngine = "asr_engine"
-        case asrPort = "asr_port"
-        case asrTimeoutSeconds = "asr_timeout_seconds"
+        case sttProvider = "stt_provider"
+        case sttTimeoutSeconds = "stt_timeout_seconds"
         case silenceAutoStopEnabled = "silence_auto_stop_enabled"
         case silenceAutoStopSeconds = "silence_auto_stop_seconds"
         case silenceRmsThreshold = "silence_rms_threshold"
         case minTranscribeRms = "min_transcribe_rms"
-        case refineEnabled = "refine_enabled"
-        case refineModel = "refine_model"
-        case refineTimeoutSeconds = "refine_timeout_seconds"
         case inputDeviceUID = "input_device_uid"
-        case cloudModelOverride = "cloud_model_override"
+        case grokLanguage = "grok_language"
     }
 
     init() {}
 
     /// Every field is optional on the way in. Synthesised decoding treats a missing key
     /// as a hard error, so adding one setting silently reset every other setting the
-    /// user had chosen.
+    /// user had chosen — and a config written by an older version is missing several.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = AppConfig()
         sampleRate = try c.decodeIfPresent(Int.self, forKey: .sampleRate) ?? d.sampleRate
         launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? d.launchAtLogin
-        asrEngine = try c.decodeIfPresent(ASREngine.self, forKey: .asrEngine) ?? d.asrEngine
-        asrPort = try c.decodeIfPresent(Int.self, forKey: .asrPort) ?? d.asrPort
-        asrTimeoutSeconds = try c.decodeIfPresent(Double.self, forKey: .asrTimeoutSeconds) ?? d.asrTimeoutSeconds
+        sttProvider = try c.decodeIfPresent(STTProvider.self, forKey: .sttProvider) ?? d.sttProvider
+        sttTimeoutSeconds = try c.decodeIfPresent(Double.self, forKey: .sttTimeoutSeconds) ?? d.sttTimeoutSeconds
         silenceAutoStopEnabled = try c.decodeIfPresent(Bool.self, forKey: .silenceAutoStopEnabled) ?? d.silenceAutoStopEnabled
         silenceAutoStopSeconds = try c.decodeIfPresent(Double.self, forKey: .silenceAutoStopSeconds) ?? d.silenceAutoStopSeconds
         silenceRmsThreshold = try c.decodeIfPresent(Double.self, forKey: .silenceRmsThreshold) ?? d.silenceRmsThreshold
         minTranscribeRms = try c.decodeIfPresent(Double.self, forKey: .minTranscribeRms) ?? d.minTranscribeRms
-        refineEnabled = try c.decodeIfPresent(Bool.self, forKey: .refineEnabled) ?? d.refineEnabled
-        refineModel = try c.decodeIfPresent(String.self, forKey: .refineModel) ?? d.refineModel
-        refineTimeoutSeconds = try c.decodeIfPresent(Double.self, forKey: .refineTimeoutSeconds) ?? d.refineTimeoutSeconds
         inputDeviceUID = try c.decodeIfPresent(String.self, forKey: .inputDeviceUID) ?? d.inputDeviceUID
-        cloudModelOverride = try c.decodeIfPresent(String.self, forKey: .cloudModelOverride) ?? d.cloudModelOverride
+        grokLanguage = try c.decodeIfPresent(String.self, forKey: .grokLanguage) ?? d.grokLanguage
     }
 }
 
 enum ConfigManager {
     private static var configURL: URL {
         AppIdentity.stateDir.appendingPathComponent("config.json")
-    }
-
-    /// Legacy YAML config path
-    private static var legacyConfigURL: URL {
-        AppIdentity.stateDir.appendingPathComponent("config.yaml")
     }
 
     static func load() -> AppConfig {
@@ -112,9 +72,6 @@ enum ConfigManager {
             } catch {
                 print("[config] failed to load config.json: \(error), using defaults")
             }
-        } else {
-            // Try migrating a few values from legacy YAML
-            migrateLegacyYAML(into: &config)
         }
 
         // Force sample rate
@@ -141,32 +98,5 @@ enum ConfigManager {
         } catch {
             print("[config] failed to save: \(error)")
         }
-    }
-
-    /// Simple line-based parsing of a few YAML values — no YAML library needed.
-    private static func migrateLegacyYAML(into config: inout AppConfig) {
-        let url = legacyConfigURL
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
-
-        guard let contents = try? String(contentsOf: url, encoding: .utf8) else { return }
-
-        for line in contents.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            let parts = trimmed.split(separator: ":", maxSplits: 1)
-            guard parts.count == 2 else { continue }
-            let key = parts[0].trimmingCharacters(in: .whitespaces)
-            let value = parts[1].trimmingCharacters(in: .whitespaces)
-
-            switch key {
-            case "silence_auto_stop_seconds":
-                if let val = Double(value) { config.silenceAutoStopSeconds = val }
-            case "launch_at_login":
-                config.launchAtLogin = (value.lowercased() == "true")
-            default:
-                break
-            }
-        }
-
-        print("[config] migrated values from legacy config.yaml")
     }
 }

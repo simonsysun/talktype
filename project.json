@@ -1,6 +1,6 @@
 {
   "status": "in-progress",
   "category": "project",
-  "description": "TalkType — native Swift macOS menu bar dictation; Qwen3-ASR via OpenRouter cloud or local MLX, optional Groq polish; personal Wispr Flow replacement",
+  "description": "TalkType — native Swift macOS menu bar dictation; one speech-to-text API call (ElevenLabs / Grok / Soniox / OpenAI, switchable), no polish layer; personal Wispr Flow replacement",
   "created": "2026-03"
 }

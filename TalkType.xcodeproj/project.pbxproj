@@ -10,47 +10,38 @@
 		A10001 /* TalkTypeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10001; };
 		A10002 /* DictationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10002; };
 		A10003 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10003; };
-		A10004 /* Transcriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10004; };
 		A10005 /* TextInserter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10005; };
 		A10006 /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10006; };
 		A10008 /* VocabularyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10008; };
 		A10009 /* OverlayWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10009; };
 		A10010 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10010; };
 		A10011 /* AppIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10011; };
-		A10012 /* PostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10012; };
 		A10013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10015; };
 		A10014 /* HotkeySettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10016; };
-		A10016 /* SidecarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10017; };
-		A10017 /* TextRefiner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10018; };
 		A10018 /* AudioDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10019; };
 		A10019 /* SetupWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10020; };
 		A10022 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10023; };
-		A10024 /* CloudASRClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10025; };
-		A10025 /* CloudKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10026; };
-		A10026 /* FallbackPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10027; };
-		A10020 /* install.sh in Resources */ = {isa = PBXBuildFile; fileRef = B10021; };
-		A10021 /* server.py in Resources */ = {isa = PBXBuildFile; fileRef = B10022; };
 		A10015 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = PKG10002; };
 		A20001 /* TalkTypeiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20001; };
 		A20002 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20002; };
-		A20003 /* Transcriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10004; };
 		A20004 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10003; };
-		A20005 /* PostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10012; };
 		A20006 /* VocabularyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10008; };
 		A20007 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10010; };
-		A20012 /* CloudASRClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10025; };
-		A20013 /* FallbackPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10027; };
 		A20009 /* AppIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10011; };
 		A20010 /* TalkTypeKeyboard.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C30001; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A30001 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30001; };
-		A30002 /* Transcriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10004; };
 		A30003 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10003; };
-		A30004 /* PostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10012; };
 		A30005 /* VocabularyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10008; };
 		A30006 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10010; };
-		A30010 /* CloudASRClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10025; };
-		A30011 /* FallbackPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10027; };
 		A30008 /* AppIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10011; };
+		A10030 /* STTProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10030; };
+		A10031 /* STTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10031; };
+		A10032 /* GrokSTTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10032; };
+		A10033 /* ElevenLabsSTTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10033; };
+		A10034 /* SonioxSTTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10034; };
+		A10035 /* OpenAISTTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10035; };
+		A10036 /* STTKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10036; };
+		A10037 /* WAVEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10037; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -81,29 +72,20 @@
 		B10001 /* TalkTypeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkTypeApp.swift; sourceTree = "<group>"; };
 		B10002 /* DictationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationManager.swift; sourceTree = "<group>"; };
 		B10003 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
-		B10004 /* Transcriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transcriber.swift; sourceTree = "<group>"; };
 		B10005 /* TextInserter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInserter.swift; sourceTree = "<group>"; };
 		B10006 /* HotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyManager.swift; sourceTree = "<group>"; };
 		B10008 /* VocabularyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VocabularyStore.swift; sourceTree = "<group>"; };
 		B10009 /* OverlayWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayWindow.swift; sourceTree = "<group>"; };
 		B10010 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		B10011 /* AppIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIdentity.swift; sourceTree = "<group>"; };
-		B10012 /* PostProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostProcessor.swift; sourceTree = "<group>"; };
 		B10013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B10014 /* TalkType.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TalkType.entitlements; sourceTree = "<group>"; };
 		B10015 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C10001 /* TalkType.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TalkType.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10016 /* HotkeySettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeySettingsWindow.swift; sourceTree = "<group>"; };
-		B10017 /* SidecarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidecarManager.swift; sourceTree = "<group>"; };
-		B10018 /* TextRefiner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextRefiner.swift; sourceTree = "<group>"; };
 		B10019 /* AudioDevices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDevices.swift; sourceTree = "<group>"; };
 		B10020 /* SetupWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupWindow.swift; sourceTree = "<group>"; };
 		B10023 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
-		B10025 /* CloudASRClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudASRClient.swift; sourceTree = "<group>"; };
-		B10026 /* CloudKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKeyStore.swift; sourceTree = "<group>"; };
-		B10027 /* FallbackPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FallbackPolicy.swift; sourceTree = "<group>"; };
-		B10021 /* install.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; name = install.sh; path = ../asr/install.sh; sourceTree = "<group>"; };
-		B10022 /* server.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; name = server.py; path = ../asr/server.py; sourceTree = "<group>"; };
 		B20001 /* TalkTypeiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkTypeiOSApp.swift; sourceTree = "<group>"; };
 		B20002 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B20003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -113,6 +95,14 @@
 		B30002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B30003 /* TalkTypeKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TalkTypeKeyboard.entitlements; sourceTree = "<group>"; };
 		C30001 /* TalkTypeKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkTypeKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10030 /* STTProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTProvider.swift; sourceTree = "<group>"; };
+		B10031 /* STTClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTClient.swift; sourceTree = "<group>"; };
+		B10032 /* GrokSTTClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokSTTClient.swift; sourceTree = "<group>"; };
+		B10033 /* ElevenLabsSTTClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElevenLabsSTTClient.swift; sourceTree = "<group>"; };
+		B10034 /* SonioxSTTClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SonioxSTTClient.swift; sourceTree = "<group>"; };
+		B10035 /* OpenAISTTClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAISTTClient.swift; sourceTree = "<group>"; };
+		B10036 /* STTKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTKeyStore.swift; sourceTree = "<group>"; };
+		B10037 /* WAVEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WAVEncoder.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -157,25 +147,24 @@
 				B10001 /* TalkTypeApp.swift */,
 				B10002 /* DictationManager.swift */,
 				B10003 /* AudioRecorder.swift */,
-				B10004 /* Transcriber.swift */,
 				B10005 /* TextInserter.swift */,
 				B10006 /* HotkeyManager.swift */,
 				B10008 /* VocabularyStore.swift */,
 				B10009 /* OverlayWindow.swift */,
 				B10010 /* Config.swift */,
 				B10011 /* AppIdentity.swift */,
-				B10012 /* PostProcessor.swift */,
 				B10016 /* HotkeySettingsWindow.swift */,
-				B10017 /* SidecarManager.swift */,
-				B10018 /* TextRefiner.swift */,
 				B10019 /* AudioDevices.swift */,
 				B10020 /* SetupWindow.swift */,
 				B10023 /* Log.swift */,
-				B10025 /* CloudASRClient.swift */,
-				B10026 /* CloudKeyStore.swift */,
-				B10027 /* FallbackPolicy.swift */,
-				B10021 /* install.sh */,
-				B10022 /* server.py */,
+				B10030 /* STTProvider.swift */,
+				B10031 /* STTClient.swift */,
+				B10032 /* GrokSTTClient.swift */,
+				B10033 /* ElevenLabsSTTClient.swift */,
+				B10034 /* SonioxSTTClient.swift */,
+				B10035 /* OpenAISTTClient.swift */,
+				B10036 /* STTKeyStore.swift */,
+				B10037 /* WAVEncoder.swift */,
 				B10013 /* Info.plist */,
 				B10014 /* TalkType.entitlements */,
 				B10015 /* Assets.xcassets */,
@@ -341,23 +330,24 @@
 				A10001 /* TalkTypeApp.swift in Sources */,
 				A10002 /* DictationManager.swift in Sources */,
 				A10003 /* AudioRecorder.swift in Sources */,
-				A10004 /* Transcriber.swift in Sources */,
 				A10005 /* TextInserter.swift in Sources */,
 				A10006 /* HotkeyManager.swift in Sources */,
 				A10008 /* VocabularyStore.swift in Sources */,
 				A10009 /* OverlayWindow.swift in Sources */,
 				A10010 /* Config.swift in Sources */,
 				A10011 /* AppIdentity.swift in Sources */,
-				A10012 /* PostProcessor.swift in Sources */,
 				A10014 /* HotkeySettingsWindow.swift in Sources */,
-				A10016 /* SidecarManager.swift in Sources */,
-				A10017 /* TextRefiner.swift in Sources */,
 				A10018 /* AudioDevices.swift in Sources */,
 				A10019 /* SetupWindow.swift in Sources */,
 				A10022 /* Log.swift in Sources */,
-				A10024 /* CloudASRClient.swift in Sources */,
-				A10025 /* CloudKeyStore.swift in Sources */,
-				A10026 /* FallbackPolicy.swift in Sources */,
+				A10030 /* STTProvider.swift in Sources */,
+				A10031 /* STTClient.swift in Sources */,
+				A10032 /* GrokSTTClient.swift in Sources */,
+				A10033 /* ElevenLabsSTTClient.swift in Sources */,
+				A10034 /* SonioxSTTClient.swift in Sources */,
+				A10035 /* OpenAISTTClient.swift in Sources */,
+				A10036 /* STTKeyStore.swift in Sources */,
+				A10037 /* WAVEncoder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -367,13 +357,9 @@
 			files = (
 				A20001 /* TalkTypeiOSApp.swift in Sources */,
 				A20002 /* SettingsView.swift in Sources */,
-				A20003 /* Transcriber.swift in Sources */,
 				A20004 /* AudioRecorder.swift in Sources */,
-				A20005 /* PostProcessor.swift in Sources */,
 				A20006 /* VocabularyStore.swift in Sources */,
 				A20007 /* Config.swift in Sources */,
-				A20012 /* CloudASRClient.swift in Sources */,
-				A20013 /* FallbackPolicy.swift in Sources */,
 				A20009 /* AppIdentity.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -383,13 +369,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				A30001 /* KeyboardViewController.swift in Sources */,
-				A30002 /* Transcriber.swift in Sources */,
 				A30003 /* AudioRecorder.swift in Sources */,
-				A30004 /* PostProcessor.swift in Sources */,
 				A30005 /* VocabularyStore.swift in Sources */,
 				A30006 /* Config.swift in Sources */,
-				A30010 /* CloudASRClient.swift in Sources */,
-				A30011 /* FallbackPolicy.swift in Sources */,
 				A30008 /* AppIdentity.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -402,8 +384,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10013 /* Assets.xcassets in Resources */,
-				A10020 /* install.sh in Resources */,
-				A10021 /* server.py in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

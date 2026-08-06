@@ -1,14 +1,20 @@
 import Foundation
 import Security
 
-/// The one API key TalkType needs: OpenRouter. A single slot, because there is a single
-/// provider by design.
-enum CloudKeyStore {
+/// One keychain slot per provider. Switching providers to compare them is the normal way
+/// to use this app right now, so a key entered once has to survive being switched away
+/// from and back.
+///
+/// There is deliberately no online key validation. Every provider would need its own
+/// probe endpoint, and a wrong key already surfaces on the first dictation as "拒绝了这个
+/// API key" — a check that costs four integrations to duplicate one error message is not
+/// worth carrying.
+enum STTKeyStore {
 
-    static func apiKey() -> String? {
+    static func apiKey(for provider: STTProvider) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: CloudDefaults.keychainService,
+            kSecAttrService as String: provider.keychainService,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
@@ -22,46 +28,48 @@ enum CloudKeyStore {
         return key
     }
 
-    /// Store or replace the key. `SecItemAdd` fails on a duplicate rather than replacing,
-    /// so an existing item is removed first.
+    /// Store or replace. `SecItemAdd` fails on a duplicate rather than replacing, so an
+    /// existing item is removed first.
     @discardableResult
-    static func storeAPIKey(_ key: String) -> Bool {
+    static func store(_ key: String, for provider: STTProvider) -> Bool {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let data = trimmed.data(using: .utf8), !trimmed.isEmpty else { return false }
-        deleteAPIKey()
+        delete(for: provider)
         let attrs: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: CloudDefaults.keychainService,
+            kSecAttrService as String: provider.keychainService,
             kSecAttrAccount as String: NSUserName(),
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
         ]
         let status = SecItemAdd(attrs as CFDictionary, nil)
-        if status != errSecSuccess { print("[asr-key] keychain write failed: OSStatus \(status)") }
+        if status != errSecSuccess { print("[stt-key] keychain write failed: OSStatus \(status)") }
         return status == errSecSuccess
     }
 
     @discardableResult
-    static func deleteAPIKey() -> Bool {
+    static func delete(for provider: STTProvider) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: CloudDefaults.keychainService,
+            kSecAttrService as String: provider.keychainService,
         ]
         return SecItemDelete(query as CFDictionary) == errSecSuccess
     }
 
-    /// 2.1.0 kept one keychain slot per provider. Those providers are gone; clear the
-    /// orphaned entries once, so a privacy-focused app does not leave stale credentials
-    /// lying around with no way to remove them. (`talktype-groq` stays — it is the
-    /// polish key.)
+    /// Versions before the single-call rewrite kept keys for OpenRouter transcription and
+    /// Groq polish, plus a handful of older providers. None of those paths exist any more;
+    /// clear the slots once so a dictation app does not sit on credentials it can no longer
+    /// use and offers no way to remove.
     static func removeLegacyKeys() {
-        let legacyServices = [
+        let legacy = [
+            "talktype-asr-openrouter",
+            "talktype-groq",
             "talktype-asr-openai",
             "talktype-asr-dashscope",
             "talktype-asr-groq",
             "talktype-asr-custom",
         ]
-        for service in legacyServices {
+        for service in legacy {
             let query: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
                 kSecAttrService as String: service,

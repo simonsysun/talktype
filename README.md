@@ -29,30 +29,33 @@ together. You can also [browse and join existing discussions](https://github.com
 
 ---
 
-## Two engines, one hotkey
+## Four providers, one hotkey
 
-TalkType has two ways to turn your voice into words, and it picks for you:
+A dictation is one API call: record, send, paste. Nothing runs in between — no cleanup pass,
+no local model — so whatever the provider returns is exactly what lands at your cursor.
 
-| Engine | What it is | When it runs |
-|---|---|---|
-| **Cloud** (default) | Qwen3-ASR-Flash through [OpenRouter](https://openrouter.ai) — accurate mixed CN/EN, ~2 s a dictation, ≈ $2/month at 30 min/day | When you're online |
-| **Local** | Qwen3-ASR on your Mac (MLX) — 0.3–0.9 s, audio never leaves the machine, ~4 GB download | Offline, or when the cloud is unreachable |
+Pick one in the menu bar. Each keeps its own key, so switching to compare is a menu click.
 
-Cloud is the default because it keeps your Mac's memory free. When there's no network — or the
-cloud is down — TalkType **switches to the local engine on its own and tells you it did**, so
-dictation keeps working on a plane. If there's no local engine and no network, it says so
-plainly instead of failing silently.
+| Provider | Price (file) | Removes fillers natively | Mixed CN/EN |
+|---|---|---|---|
+| **ElevenLabs Scribe v2** (default) | $0.22/h | Yes — `no_verbatim`: fillers, false starts, repetitions, stuttering | English words stay English regardless of surrounding language |
+| **xAI Grok** | $0.10/h | Yes — filler words removed by default | Not documented; Chinese is absent from the published language table |
+| **Soniox v5** | ~$0.10/h | No | Explicitly handles languages mixed within one sentence |
+| **OpenAI gpt-transcribe** | $0.27/h | No | Documented code-switching support |
+
+Which one is actually best for Mandarin with English technical terms is an open question —
+no vendor benchmarks that case. Switching providers and dictating the same sentence is how
+you find out.
 
 **Privacy, precisely:**
 
 | What | Leaves your Mac? |
 |---|---|
-| Audio + active vocabulary hints, cloud engine | Yes — to OpenRouter, subject to its data policy |
-| Audio, local engine | No |
-| Transcript + active vocabulary → polish (optional) | Text only, to Groq — never audio |
+| Audio + your vocabulary terms | Yes — to the provider you chose, subject to its data policy |
+| Anything else | Nothing. No account, no telemetry, no subscription. |
 
-No account, no telemetry, no subscription. The only credentials are your own API keys
-(OpenRouter for recognition, Groq for optional polish), stored in the macOS Keychain.
+The only credential is your own API key for the provider you picked, stored in the macOS
+Keychain. There is no offline mode: no network means a clear error, not a fallback.
 
 ---
 
@@ -65,14 +68,8 @@ No account, no telemetry, no subscription. The only credentials are your own API
    signed with a paid certificate. Right-click the app ▸ **Open** ▸ **Open**, and macOS remembers.
 2. **Allow two permissions.** The microphone, and "paste on your behalf". Both are required;
    TalkType can't grant them for you.
-3. **Add your OpenRouter key.** Setup ▸ paste the key (get one at
-   [openrouter.ai/keys](https://openrouter.ai/keys); a few dollars lasts a couple of months of
-   normal use). Cloud dictation works immediately.
-4. **Optional: install the local engine.** Setup ▸ Local engine ▸ **Install** — downloads ~4 GB
-   once. You only need it if you dictate offline, or want the audio to stay on the machine.
-5. **Optional: add a Groq key for polish.** Setup ▸ Cloud polish ▸ paste the key (free at
-   [console.groq.com/keys](https://console.groq.com/keys)). Polish removes 呃/嗯 and fixes
-   punctuation — transcript only, never audio. Without it, a local tidy still runs.
+3. **Pick a provider and paste its key.** Setup opens by itself when the chosen provider has
+   no key. The "拿 key →" link goes to that provider's console.
 
 Press **⌘⇧Space** and start talking.
 
@@ -81,22 +78,20 @@ Press **⌘⇧Space** and start talking.
 ## Manual
 
 - **Hotkey** — default ⌘⇧Space; change it from the menu bar (Change Hotkey…).
+- **Provider** — menu bar ▸ Speech-to-text ▸ pick one. The menu title shows which is active
+  and whether it has a key.
 - **Microphone** — pick one, or Automatic (follows the system default, including a Bluetooth
   headset; recording through a Bluetooth mic switches the link into headset mode, so playback
   drops to 24 kHz mono for a while).
-- **Vocabulary** — add names and terms the model keeps mishearing. OpenRouter currently ignores
-  the speech engine's hint field, so TalkType also gives these terms to optional Polish as
-  approved spellings — only when the transcript clearly contains the term — and applies a final
-  conservative spelling correction locally.
-- **Engine** — menu bar ▸ Speech engine ▸ Cloud / Local. Cloud is the default; the menu shows
-  which one is active.
-- **Local engine** — install or reinstall it from Setup; the red "Delete local engine…" button
-  frees the ~4 GB when you no longer need offline dictation.
-- **Keys** — Setup lets you add, replace, or remove them; they live in your login Keychain.
+- **Vocabulary** — add names and terms the model keeps mishearing. These are sent to the
+  provider in whatever form it accepts: `keyterm` for Grok, `keyterms` for ElevenLabs,
+  `context.terms` for Soniox, `keywords[]` for OpenAI. Nothing is rewritten locally
+  afterwards, so a term that still comes out wrong is telling you something real about that
+  provider.
+- **Keys** — one slot per provider, in your login Keychain. Setup lets you add, replace, or
+  remove them. They are saved as typed; a wrong key announces itself on the first dictation.
 - **Clipboard** — every transcript is also left on your clipboard, so ⌘V always works as a
   manual fallback.
-- **Offline** — TalkType switches to the local engine on its own and notifies you at the switch.
-  With no local engine and no network, it tells you to install the local engine or get online.
 
 ## Troubleshooting
 
@@ -104,43 +99,45 @@ Press **⌘⇧Space** and start talking.
   TalkType isn't signed with a paid certificate — so a new version looks like a different app.
   TalkType spots this and offers a **Fix This** button; click it and switch TalkType back on when
   macOS asks. *(Releases from v2.0.2 share one certificate, so this shouldn't recur.)*
-- **Told "云端语音引擎没有 API key"?** Add an OpenRouter key in Setup.
-- **Cloud feels slow?** Cloud adds ~2 s per dictation. If speed or privacy matters more than RAM,
-  switch to Local.
-- **Told "云端模型不可用"?** TalkType uses a fixed Qwen snapshot on OpenRouter. If OpenRouter
-  ever retires it, set `"cloud_model_override": "new/model"` in `~/.talktype/config.json` and
-  restart — or update TalkType for the new default.
+- **"还没有 API key"?** Pick the provider in Setup and paste its key.
+- **"拒绝了这个 API key"?** The provider answered and said no — usually a stray space, or the
+  wrong provider's key. The eye button in Setup reveals what was actually saved.
+- **Chinese and English run together without a space, or punctuation comes out half-width?**
+  That is the provider's raw output. Nothing normalises it any more — try another provider.
+- **Soniox feels slow?** It has no synchronous endpoint: a dictation costs an upload, a job
+  creation, polling, and a fetch. The other three are one round trip.
 
 ## How it compares
 
 | | TalkType | Apple Dictation | Wispr Flow / Superwhisper |
 |---|---|---|---|
-| Price | Free (bring your own keys) | Free | Subscription |
-| Offline | Yes, with local engine | Partly | Usually cloud |
-| Voice leaves your Mac | Only on the cloud engine | Sometimes | Usually |
+| Price | Free (bring your own key) | Free | Subscription |
+| Offline | No | Partly | Usually cloud |
+| Voice leaves your Mac | Yes | Sometimes | Usually |
 | Mixed Chinese + English | Yes | Poorly | Varies |
-| Removes filler words | Yes (optional cloud polish) | No | Yes |
+| Removes filler words | Depends on the provider | No | Yes |
 | Custom vocabulary | Yes | Limited | Yes |
 | Open source | Yes (MIT) | No | No |
 
 ## Under the hood
 
-- **Cloud:** Qwen3-ASR-Flash through OpenRouter's `/audio/transcriptions` (base64 WAV). The default
-  engine — ~2 s, ≈ $0.002/min, audio leaves the machine.
-- **Local:** Qwen3-ASR via [MLX](https://github.com/ml-explore/mlx) in a small loopback-only Python
-  helper that exits with the app. ~4 GB resident only while running.
-- **Polish:** Qwen on [Groq](https://groq.com) — ~0.3 s, transcript only, with strict guards
-  against rewriting or translating what you said. The deterministic local tidy is the fallback
-  when polish is off or unreachable.
+One `STTClient` protocol, four implementations. Three are a single multipart POST; Soniox
+uploads, creates a job, polls, then fetches. The parameters that decide output quality are
+set in code rather than exposed as settings — `no_verbatim=true` and `tag_audio_events=false`
+for ElevenLabs, `filler_words=false` for Grok, both language hints for Soniox and OpenAI.
+
+`grok_language` in `~/.talktype/config.json` is the one escape hatch: xAI's `format` (spoken
+numbers → written form) only applies when a language is also sent, but Chinese is absent from
+xAI's published language table — so whether `zh` helps is empirical. Blank it to send neither.
+
+Setting `TALKTYPE_STATE_DIR` points config and vocabulary somewhere else, which is how you
+trial a second setup without touching your real one.
 
 ## Building from source
 
 ```bash
 git clone https://github.com/simonsysun/talktype.git
 cd talktype
-
-./asr/install.sh                 # Python env + Qwen3-ASR weights, into ~/.talktype/asr
-                                 # ./asr/install.sh 0.6B for a smaller, less accurate model
 
 ./scripts/make-signing-cert.sh   # optional, once: keeps permissions valid across updates
 ./scripts/build.sh install

@@ -1,5 +1,10 @@
 # 单次 STT API：native polish 候选短名单
 
+> **状态（2026-08-05）：** 本文的短名单已落地为代码。ElevenLabs、Grok、Soniox、OpenAI 四家
+> 都已接进 app，可在菜单栏一键切换，polish 层和本地引擎已删除。见
+> [ADR-0002](../adr/0002-single-call-stt-no-polish.md)。下面两处判断在落地前已修正，正文中
+> 标注为「已修正」。
+
 **日期：** 2026-08-05  
 **决策对象：** TalkType（中文为主、中英混说、极简架构、价格敏感）  
 **基线：** xAI Grok STT 文件接口 **$0.10/小时**；实时 **$0.20/小时**。
@@ -11,10 +16,10 @@
 对 TalkType 最值得实测的只有三家：
 
 1. **Soniox v5：整体单调用架构首选。** 与 xAI 接近的价格，官方明确支持中文、英文以及同一句/同一对话内混说，并允许一次 STT 调用带结构化 context、自由文本和 terms。缺点是官方没有承诺去 filler、重复或 false start，所以它是「中文 + context winner」，不是「polish winner」。
-2. **ElevenLabs Scribe v2：native polish 首选。** `no_verbatim` 明确移除 fillers、false starts、repetitions、stuttering；这是可用中文候选中最接近当前 polish 层的官方承诺。批处理 $0.22/小时，绝对成本仍低；但官方只承诺单文件自动多语言，没有明确承诺中文和英文在同一句中的质量，也没有明确 ITN 合约。
+2. **ElevenLabs Scribe v2：native polish 首选。** `no_verbatim` 明确移除 fillers、false starts、repetitions、stuttering；这是可用中文候选中最接近当前 polish 层的官方承诺。批处理 $0.22/小时，绝对成本仍低。**修正（2026-08-05）：** 初版表格写「中英同句未承诺」是错的——官方明确说 English words 按 English 转写、不受周围语言影响，这正覆盖 TalkType 的核心场景；只是示例全为 Indic 语言，中文没有单独 benchmark。仍无明确 ITN 合约。
 3. **OpenAI `gpt-transcribe`：context / code-switch 强候选。** 官方明确支持中文语言提示、多个语言提示、code-switching、自由文本 context 和 keywords；但没有 clean/no-verbatim 模式，也没有承诺删除 filler、重复、false start 或处理自我纠正。文件接口 $0.27/小时，约 xAI 的 2.7 倍。
 
-**建议不要直接赌 xAI。** xAI 很便宜且默认移除 filler，但官方正式支持/格式化语言列表不含中文；项目实测虽能转中文，仍不能视为厂商保证。更稳的大胆方案是先只做一个 40–60 条真实语音的三臂 bake-off：`xAI`、`Soniox`、`ElevenLabs no_verbatim=true`。OpenAI 作为第四臂只在需要验证 context/code-switch 上限时加入。若 Soniox 的口头语残留可接受，就选 Soniox；若残留不可接受，选 ElevenLabs；只有实测证明 xAI 中文错误率没有产品影响时，才因成本选 xAI。
+**关于 xAI 的修正（2026-08-05）：** 官方 25 种语言表不含中文，这一条经复核属实。但它的含义是「没有 SLA、没承诺中文 formatting」，**不等于中文不准**——底层是大模型，中文能力不由文档决定。此前引用的 repo 实测走的是 OpenRouter 路由且未记录 `language`/`format` 参数，不能作为反面证据（见 [Grok 假设文档的撤回声明](grok-stt-single-stage-hypothesis.md)）。真实的剩余风险只有三条：`format=true`+`language=zh` 对中文是否真的生效、`keyterm` 对中英混句是否生效、服务端静默升级无版本可 pin。更稳的大胆方案是先只做一个 40–60 条真实语音的三臂 bake-off：`xAI`、`Soniox`、`ElevenLabs no_verbatim=true`。OpenAI 作为第四臂只在需要验证 context/code-switch 上限时加入。若 Soniox 的口头语残留可接受，就选 Soniox；若残留不可接受，选 ElevenLabs；只有实测证明 xAI 中文错误率没有产品影响时，才因成本选 xAI。
 
 ElevenLabs 虽是 xAI 的 2.2 倍，但绝对差价只有 **$0.12/音频小时**。按每位用户每天说 10 分钟计算，每月约多 **$0.60/用户**（不含可选 keyterms）。对 TalkType，这通常不算“贵得多”；延迟和可直接粘贴率更重要。
 
@@ -25,7 +30,7 @@ ElevenLabs 虽是 xAI 的 2.2 倍，但绝对差价只有 **$0.12/音频小时**
 | 厂商 / 模型 | 标点、大小写、ITN | filler / disfluency | 自我纠正 | context / keyterms | 中文 + 英文混说 | API | 官方价格 | TalkType 判断 |
 |---|---|---|---|---|---|---|---|---|
 | **xAI Grok STT** | **明确**：ITN 需 `format` + `language`；标点/格式化 | **明确**：默认 filler removal | **Unknown**：未承诺语义自我纠正 | keyterms，最多 100 个；无 rich prompt | **部分**：中文不在正式支持/格式化 25 种语言内，仅 best effort | 文件 REST；实时 WS | 文件 $0.10/h；实时 $0.20/h | 成本基线；最大风险是中文没有正式承诺 |
-| **ElevenLabs Scribe v2** | **部分**：自然转写有标点；没有独立 ITN 合约 | **明确**：`no_verbatim` 删除 filler、false start、disfluency；更新说明还明确 repetitions、stuttering | **Unknown**：没有承诺理解并解决语义冲突 | keyterms：文件最多 1000、实时 50；+$0.05/h | **部分**：中文正式支持；单文件自动多语言明确，但中文/英文同句质量未承诺 | 文件；实时 | 文件 $0.22/h；实时 $0.39/h | **polish winner；必须实测中英同句和数字格式** |
+| **ElevenLabs Scribe v2** | **部分**：自然转写有标点；没有独立 ITN 合约 | **明确**：`no_verbatim` 删除 filler、false start、disfluency；更新说明还明确 repetitions、stuttering | **Unknown**：没有承诺理解并解决语义冲突 | keyterms：文件最多 1000、实时 50；+$0.05/h | **部分（已修正）**：官方承诺「English words in English, regardless of the surrounding language」，覆盖同句混说；但示例全是 Indic 语言，中文未单独 benchmark | 文件；实时 | 文件 $0.22/h；实时 $0.39/h | **polish winner；必须实测中英同句和数字格式** |
 | **Soniox `stt-async-v5` / `stt-rt-v5`** | **明确/部分**：内建 punctuation；v5 明确改善 numbers、dates、times、emails、IDs/codes 等结构化格式 | **Unknown**：未找到 removal 承诺 | **Unknown** | **明确**：`general`、自由文本、`terms`，合计最高约 8k tokens / 10k chars | **明确**：中文和英文正式支持；可在同一句或对话中混合多语言 | 异步文件；实时 WS | 官方按 token 计费的典型折算：异步约 $0.10/h；实时约 $0.12/h，实际随语速变化 | **整体单调用 winner；cleanup 需实测** |
 | **OpenAI `gpt-transcribe`** | **部分**：prompt 可改善 formatting，并可指定保留 punctuation/capitalization/fillers；无独立 ITN 合约 | **Unknown**：无 removal/no-verbatim 参数或承诺 | **Unknown** | **明确**：free-form prompt、keywords、多个 language hints；实时可自动沿用早先 turn | **明确**：支持 code-switching；支持 `cmn`、`yue`、`zh-cn`、`zh-tw`、`zh-hk` 等提示 | 完整文件、文件流式、Realtime committed turn；实时音频另用 `gpt-live-transcribe` | 文件 $0.0045/min = $0.27/h；live $0.017/min = $1.02/h | context/code-switch 强，**不能按官方证据称为 polish 替代品** |
 | **Speechmatics Melia 1 / Standard** | **明确**：advanced punctuation/casing、numeral formatting | **部分**：官方写 disfluency detection；详细文档是标记英语 hesitation，不是删除，也不覆盖完整 stutter/false-start cleanup | **Unknown** | custom dictionary，最多 1000 项；无 rich semantic context | **部分**：普通话简/繁正式支持；Melia 1 支持多语言切换，但中文/英文同句质量未明确承诺 | 文件；实时（非 Melia 1） | Melia 1 文件 $0.129/h；Standard 文件/实时 $0.24/h | 可做廉价 code-switch 对照，但 native polish 不强于 xAI |

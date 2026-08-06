@@ -11,40 +11,50 @@ final class ConfigTests: XCTestCase {
     /// setting silently reset every setting the user had already chosen.
     func testConfigWrittenBeforeNewKeysExistedStillLoads() throws {
         let old = """
-        {"asr_port": 9999, "launch_at_login": true, "silence_auto_stop_seconds": 42}
+        {"launch_at_login": true, "silence_auto_stop_seconds": 42}
         """
         let config = try decode(old)
-        XCTAssertEqual(config.asrPort, 9999, "existing settings must survive")
-        XCTAssertTrue(config.launchAtLogin)
+        XCTAssertTrue(config.launchAtLogin, "existing settings must survive")
         XCTAssertEqual(config.silenceAutoStopSeconds, 42)
-        XCTAssertEqual(config.asrEngine, AppConfig().asrEngine)
-        XCTAssertEqual(config.refineEnabled, AppConfig().refineEnabled, "new keys take defaults")
-        XCTAssertEqual(config.refineModel, AppConfig().refineModel)
-        XCTAssertEqual(config.cloudModelOverride, "", "new keys take defaults")
+        XCTAssertEqual(config.sttProvider, AppConfig().sttProvider, "new keys take defaults")
+        XCTAssertEqual(config.grokLanguage, AppConfig().grokLanguage)
+    }
+
+    /// A config left behind by the version with a local engine and a polish pass carries
+    /// keys that no longer exist. Unknown keys must be ignored, not throw.
+    func testConfigFromThePipelineEraStillLoads() throws {
+        let legacy = """
+        {"asr_engine": "local", "asr_port": 9999, "refine_enabled": false,
+         "refine_model": "qwen/qwen3.6-27b", "cloud_model_override": "x",
+         "input_device_uid": "AppleHDA:1"}
+        """
+        let config = try decode(legacy)
+        XCTAssertEqual(config.inputDeviceUID, "AppleHDA:1", "surviving settings are kept")
+        XCTAssertEqual(config.sttProvider, AppConfig().sttProvider)
     }
 
     func testEmptyObjectYieldsDefaults() throws {
-        XCTAssertEqual(try decode("{}").asrPort, AppConfig().asrPort)
+        XCTAssertEqual(try decode("{}").sttProvider, AppConfig().sttProvider)
+        XCTAssertEqual(try decode("{}").sttTimeoutSeconds, AppConfig().sttTimeoutSeconds)
     }
 
     func testRoundTrip() throws {
         var config = AppConfig()
-        config.asrPort = 1234
-        config.asrEngine = .cloud
-        config.refineEnabled = false
-        config.cloudModelOverride = "qwen/qwen3-asr-flash-2026-03-01"
+        config.sttProvider = .soniox
+        config.sttTimeoutSeconds = 30
+        config.grokLanguage = ""
         let data = try JSONEncoder().encode(config)
         let back = try JSONDecoder().decode(AppConfig.self, from: data)
-        XCTAssertEqual(back.asrPort, 1234)
-        XCTAssertEqual(back.asrEngine, .cloud)
-        XCTAssertEqual(back.refineEnabled, false)
-        XCTAssertEqual(back.cloudModelOverride, "qwen/qwen3-asr-flash-2026-03-01")
+        XCTAssertEqual(back.sttProvider, .soniox)
+        XCTAssertEqual(back.sttTimeoutSeconds, 30)
+        XCTAssertEqual(back.grokLanguage, "")
     }
 
-    func testEffectiveCloudModelHonorsTrimmedOverride() {
-        var config = AppConfig()
-        XCTAssertEqual(config.effectiveCloudModel, CloudDefaults.model)
-        config.cloudModelOverride = "  qwen/new-model  "
-        XCTAssertEqual(config.effectiveCloudModel, "qwen/new-model")
+    func testEveryProviderRoundTripsThroughItsRawValue() {
+        for provider in STTProvider.allCases {
+            XCTAssertEqual(STTProvider(rawValue: provider.rawValue), provider)
+            XCTAssertFalse(provider.displayName.isEmpty)
+            XCTAssertTrue(provider.keychainService.hasPrefix("talktype-stt-"))
+        }
     }
 }

@@ -1,5 +1,40 @@
 # Changelog
 
+## v3.0.0 — 2026-08-05
+
+TalkType is now a shell around one speech-to-text API call. Record, send, paste — nothing in
+between.
+
+### Changed
+
+- **One call, four providers.** Pick ElevenLabs Scribe v2, xAI Grok, Soniox v5, or OpenAI
+  `gpt-transcribe` from the menu bar. Each keeps its own key, so switching to compare costs a
+  menu click. The quality-deciding parameters are set in code: `no_verbatim=true` and
+  `tag_audio_events=false` for ElevenLabs, `filler_words=false` for Grok, both `zh` and `en`
+  hints for Soniox and OpenAI, and no pinned language for ElevenLabs so mixed
+  Chinese/English survives.
+- **Vocabulary goes to the provider, not to a rewrite pass.** Terms are sent as `keyterm`,
+  `keyterms`, `context.terms`, or `keywords[]` depending on the provider. Nothing is
+  corrected locally afterwards, so a term that still comes out wrong is real signal about
+  that provider.
+
+### Removed
+
+- **The polish pass** (Groq LLM) — providers now do filler removal inside transcription.
+- **The local engine** — the ~4 GB MLX sidecar, its installer, the cloud→local fallback, and
+  the reachability probe. There is no offline mode: no network is now a clear error.
+- **All local text post-processing** — Chinese/English spacing, full-width punctuation,
+  stutter collapsing, hallucination discarding, and vocabulary canonicalisation. Output is
+  the provider's, unmodified. This can regress text quality in ways the old pipeline hid;
+  the code is in git history and comes back per-symptom if real use calls for it.
+
+### Notes
+
+- Keys from the previous release (OpenRouter, Groq) are deliberately left in the Keychain, so
+  going back to v2.3.2 does not mean setting it up again.
+- `TALKTYPE_STATE_DIR` overrides where config and vocabulary live — useful for trialling a
+  setup without touching the real one.
+
 ## v2.3.2 — 2026-08-05
 
 The recording indicator now stays visually stable around Liquid Glass.
