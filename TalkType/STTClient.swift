@@ -78,12 +78,8 @@ enum STTTransport {
                     : STTError.unreachable(error.localizedDescription)
                 return
             }
-            guard let data = data else {
-                failure = STTError.emptyResponse
-                return
-            }
             if let http = response as? HTTPURLResponse {
-                let responseBody = String(data: data, encoding: .utf8)?
+                let responseBody = data.flatMap { String(data: $0, encoding: .utf8) }?
                     .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 let apiMessage = http.value(forHTTPHeaderField: "X-Api-Message")?
                     .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -100,6 +96,10 @@ enum STTTransport {
                     failure = STTError.rejected(detail)
                     return
                 }
+            }
+            guard let data = data else {
+                failure = STTError.emptyResponse
+                return
             }
             body = data
         }

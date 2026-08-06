@@ -174,6 +174,21 @@ final class DoubaoSTTClientTests: XCTestCase {
         }
     }
 
+    func testHeaderOnlyProviderErrorExplainsTheMissingGrant() {
+        MockURLProtocol.handler = { _ in
+            (HTTPURLResponse(url: DoubaoSTTClient.endpoint, statusCode: 200,
+                             httpVersion: nil, headerFields: [
+                                "X-Api-Status-Code": "45000030",
+                                "X-Api-Message": "requested grant not found",
+                             ])!, nil)
+        }
+        let client = DoubaoSTTClient(apiKey: "valid-project-key", session: mockSession())
+        XCTAssertThrowsError(try client.transcribe(wav: wav, terms: [], timeout: 5)) { error in
+            let message = (error as? STTError)?.userMessage ?? ""
+            XCTAssertTrue(message.contains("录音文件识别大模型 极速版"), "got: \(message)")
+        }
+    }
+
     func testMissingKeyTellsTheUserWhereToFixIt() {
         XCTAssertTrue(STTError.missingKey.userMessage.contains("API Key"))
     }

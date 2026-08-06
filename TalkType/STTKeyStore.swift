@@ -50,11 +50,23 @@ enum STTKeyStore {
         return value
     }
 
-    /// `SecItemAdd` 在重复项上会失败而不是覆盖，所以先删再写。
+    /// 先原地更新，避免“删成功、写失败”把仍然可用的 Key 一起弄丢。
     @discardableResult
     private static func write(_ value: String, to service: String) -> Bool {
         guard let data = value.data(using: .utf8) else { return false }
-        delete(service)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+        ]
+        let updateStatus = SecItemUpdate(query as CFDictionary, [
+            kSecValueData as String: data,
+        ] as CFDictionary)
+        if updateStatus == errSecSuccess { return true }
+        guard updateStatus == errSecItemNotFound else {
+            print("[key] keychain update failed: OSStatus \(updateStatus)")
+            return false
+        }
+
         let attrs: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

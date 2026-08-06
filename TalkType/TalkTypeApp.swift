@@ -93,9 +93,6 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         // Setup menu bar
         setupStatusItem()
 
-        // Request notification permission once
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in }
-
         // Check mic permission (passive)
         dictationManager.checkMicPermission()
 
@@ -146,6 +143,12 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         // makes every dictation fail and that retrying cannot fix.
         if !dictationManager.isConfigured {
             promptForAPIKey()
+        }
+
+        // Keep the system notification prompt out of the API-key dialog. One run-loop turn
+        // also lets the first alert finish dismissing before macOS presents its own sheet.
+        DispatchQueue.main.async {
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in }
         }
     }
 
