@@ -95,11 +95,10 @@ final class DictationManager {
         applyInputSelection()
     }
 
-    /// Nil until the App ID and Access Token are both stored — the one failure retrying
-    /// cannot fix.
+    /// Nil until the API Key is stored — the one failure retrying cannot fix.
     private static func makeClient(_ config: AppConfig) -> DoubaoSTTClient? {
-        guard let credentials = STTKeyStore.credentials() else { return nil }
-        return DoubaoSTTClient(appID: credentials.appID, accessToken: credentials.accessToken)
+        guard let apiKey = STTKeyStore.apiKey() else { return nil }
+        return DoubaoSTTClient(apiKey: apiKey)
     }
 
     var isConfigured: Bool { STTKeyStore.isConfigured }

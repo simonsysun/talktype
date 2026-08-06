@@ -1,39 +1,32 @@
 import Foundation
 import Security
 
-/// 豆包要两个值：App ID 和 Access Token。两个一起存、一起取、一起清——只有一个的状态没有
-/// 意义，暴露出来只会让「填好了没有」变成一个需要解释的问题。
+/// 豆包新版控制台只发一个 API Key。TalkType 也只存这一项，避免把旧版 App ID / Token 或
+/// 火山 IAM 的 AK/SK 混进来。
 enum STTKeyStore {
-    private static let appIDService = "talktype-doubao-appid"
-    private static let tokenService = "talktype-doubao-token"
+    private static let apiKeyService = "talktype-doubao-api-key"
 
-    static func credentials() -> (appID: String, accessToken: String)? {
-        guard let appID = read(appIDService), let token = read(tokenService) else { return nil }
-        return (appID, token)
-    }
+    static func apiKey() -> String? { read(apiKeyService) }
 
-    static var isConfigured: Bool { credentials() != nil }
+    static var isConfigured: Bool { apiKey() != nil }
 
     @discardableResult
-    static func store(appID: String, accessToken: String) -> Bool {
-        let id = appID.trimmingCharacters(in: .whitespacesAndNewlines)
-        let token = accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !id.isEmpty, !token.isEmpty else { return false }
-        return write(id, to: appIDService) && write(token, to: tokenService)
+    static func store(apiKey: String) -> Bool {
+        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return false }
+        return write(key, to: apiKeyService)
     }
 
-    static func clear() {
-        delete(appIDService)
-        delete(tokenService)
-    }
+    static func clear() { delete(apiKeyService) }
 
-    /// 上一代管线的 key（OpenRouter 转写、Groq 润色）故意留着：上个 release 还是能回退的
-    /// 版本，删掉它的凭证等于把回退变成重新配置。真的不再需要时再调这个。
+    /// v3 是不可逆的产品收敛：旧豆包双凭证、旧 provider 和 Whisper 时代的聚合项都不再读。
     static func removeLegacyKeys() {
-        for service in ["talktype-asr-openrouter", "talktype-groq", "talktype-asr-openai",
+        for service in ["talktype-doubao-appid", "talktype-doubao-token",
+                        "talktype-asr-openrouter", "talktype-groq", "talktype-asr-openai",
                         "talktype-asr-dashscope", "talktype-asr-groq", "talktype-asr-custom",
                         "talktype-stt-grok", "talktype-stt-elevenlabs",
-                        "talktype-stt-soniox", "talktype-stt-openai"] {
+                        "talktype-stt-soniox", "talktype-stt-openai",
+                        AppIdentity.legacyKeychainService] {
             delete(service)
         }
     }

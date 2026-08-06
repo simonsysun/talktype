@@ -21,9 +21,10 @@ final class DoubaoSTTClientTests: XCTestCase {
         return URLSession(configuration: config)
     }
 
-    private func respond(_ code: Int, _ json: String) -> (HTTPURLResponse, Data) {
+    private func respond(_ code: Int, _ json: String,
+                         headers: [String: String]? = nil) -> (HTTPURLResponse, Data) {
         (HTTPURLResponse(url: DoubaoSTTClient.endpoint, statusCode: code,
-                         httpVersion: nil, headerFields: nil)!, Data(json.utf8))
+                         httpVersion: nil, headerFields: headers)!, Data(json.utf8))
     }
 
     private func decodedBody(_ request: URLRequest) throws -> [String: Any] {
@@ -33,13 +34,14 @@ final class DoubaoSTTClientTests: XCTestCase {
 
     // MARK: - Request
 
-    func testHeadersCarryBothCredentialsAndTheTurboResourceID() {
-        let request = DoubaoSTTClient.makeRequest(appID: "app-1", accessToken: "tok-1", wav: wav,
+    func testHeadersCarryTheSingleAPIKeyAndTurboResourceID() {
+        let request = DoubaoSTTClient.makeRequest(apiKey: "key-1", wav: wav,
                                                   terms: [], timeout: 10, requestID: "req-1")
         XCTAssertEqual(request.url, DoubaoSTTClient.endpoint)
         XCTAssertEqual(request.httpMethod, "POST")
-        XCTAssertEqual(request.value(forHTTPHeaderField: "X-Api-App-Key"), "app-1")
-        XCTAssertEqual(request.value(forHTTPHeaderField: "X-Api-Access-Key"), "tok-1")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-Api-Key"), "key-1")
+        XCTAssertNil(request.value(forHTTPHeaderField: "X-Api-App-Key"))
+        XCTAssertNil(request.value(forHTTPHeaderField: "X-Api-Access-Key"))
         XCTAssertEqual(request.value(forHTTPHeaderField: "X-Api-Resource-Id"), "volc.bigasr.auc_turbo",
                        "标准版的 resource id 会把请求路由到提交+轮询那条路")
         XCTAssertEqual(request.value(forHTTPHeaderField: "X-Api-Request-Id"), "req-1")
@@ -47,7 +49,7 @@ final class DoubaoSTTClientTests: XCTestCase {
     }
 
     func testAudioIsBase64WAVWithMatchingFormatFields() throws {
-        let request = DoubaoSTTClient.makeRequest(appID: "a", accessToken: "t", wav: wav,
+        let request = DoubaoSTTClient.makeRequest(apiKey: "k", wav: wav,
                                                   terms: [], timeout: 10, requestID: "r")
         let audio = try XCTUnwrap(try decodedBody(request)["audio"] as? [String: Any])
         XCTAssertEqual(audio["data"] as? String, wav.base64EncodedString())
@@ -57,19 +59,20 @@ final class DoubaoSTTClientTests: XCTestCase {
         XCTAssertEqual(audio["channel"] as? Int, 1)
     }
 
-    /// 本地后处理已经全部删掉，所以标点和口语数字转写只能靠这两个开关。
-    func testPunctuationAndNumberNormalisationAreBothOn() throws {
-        let request = DoubaoSTTClient.makeRequest(appID: "a", accessToken: "t", wav: wav,
+    /// 本地后处理已经全部删掉，所以可直接粘贴的文字只能靠这三个原生开关。
+    func testNativeFormattingAndSemanticSmoothingAreOn() throws {
+        let request = DoubaoSTTClient.makeRequest(apiKey: "k", wav: wav,
                                                   terms: [], timeout: 10, requestID: "r")
         let fields = try XCTUnwrap(try decodedBody(request)["request"] as? [String: Any])
         XCTAssertEqual(fields["model_name"] as? String, "bigmodel")
         XCTAssertEqual(fields["enable_punc"] as? Bool, true)
         XCTAssertEqual(fields["enable_itn"] as? Bool, true)
+        XCTAssertEqual(fields["enable_ddc"] as? Bool, true)
     }
 
     /// 火山把热词放在一个 JSON *字符串* 里，不是嵌套对象——写成对象会被静默忽略。
     func testHotwordsAreAJSONStringNotANestedObject() throws {
-        let request = DoubaoSTTClient.makeRequest(appID: "a", accessToken: "t", wav: wav,
+        let request = DoubaoSTTClient.makeRequest(apiKey: "k", wav: wav,
                                                   terms: ["Kubernetes", "P95"], timeout: 10,
                                                   requestID: "r")
         let fields = try XCTUnwrap(try decodedBody(request)["request"] as? [String: Any])
@@ -82,9 +85,9 @@ final class DoubaoSTTClientTests: XCTestCase {
         XCTAssertEqual(hotwords.map { $0["word"] }, ["Kubernetes", "P95"])
     }
 
-    /// 词库为空时不带 corpus：万一极速版不认这个字段，没有词库的听写不该跟着一起失败。
+    /// 词库为空时不带 corpus：没有词就不传无意义的结构。
     func testNoCorpusFieldWhenThereAreNoTerms() throws {
-        let request = DoubaoSTTClient.makeRequest(appID: "a", accessToken: "t", wav: wav,
+        let request = DoubaoSTTClient.makeRequest(apiKey: "k", wav: wav,
                                                   terms: [], timeout: 10, requestID: "r")
         let fields = try XCTUnwrap(try decodedBody(request)["request"] as? [String: Any])
         XCTAssertNil(fields["corpus"])
@@ -133,16 +136,41 @@ final class DoubaoSTTClientTests: XCTestCase {
 
     func testASuccessfulDictationRoundTrip() throws {
         MockURLProtocol.handler = { _ in self.respond(200, #"{"result": {"text": "好的"}}"#) }
-        let client = DoubaoSTTClient(appID: "a", accessToken: "t", session: mockSession())
+        let client = DoubaoSTTClient(apiKey: "k", session: mockSession())
         XCTAssertEqual(try client.transcribe(wav: wav, terms: [], timeout: 5), "好的")
     }
 
     func testRejectedCredentialsSaySoInsteadOfShowingAStatusCode() {
         MockURLProtocol.handler = { _ in self.respond(401, "{}") }
-        let client = DoubaoSTTClient(appID: "a", accessToken: "bad", session: mockSession())
+        let client = DoubaoSTTClient(apiKey: "bad", session: mockSession())
         XCTAssertThrowsError(try client.transcribe(wav: wav, terms: [], timeout: 5)) { error in
             let message = (error as? STTError)?.userMessage ?? ""
-            XCTAssertTrue(message.contains("App ID"), "got: \(message)")
+            XCTAssertTrue(message.contains("API Key"), "got: \(message)")
+        }
+    }
+
+    func testMissingServiceGrantExplainsWhatToEnable() {
+        MockURLProtocol.handler = { _ in
+            self.respond(401, "", headers: ["X-Api-Message": "requested grant not found"])
+        }
+        let client = DoubaoSTTClient(apiKey: "valid-project-key", session: mockSession())
+        XCTAssertThrowsError(try client.transcribe(wav: wav, terms: [], timeout: 5)) { error in
+            let message = (error as? STTError)?.userMessage ?? ""
+            XCTAssertTrue(message.contains("录音文件识别大模型 极速版"), "got: \(message)")
+        }
+    }
+
+    func testProviderErrorInSuccessfulHTTPHeadersIsNotTreatedAsEmptyText() {
+        MockURLProtocol.handler = { _ in
+            self.respond(200, "", headers: [
+                "X-Api-Status-Code": "45000030",
+                "X-Api-Message": "requested grant not found",
+            ])
+        }
+        let client = DoubaoSTTClient(apiKey: "valid-project-key", session: mockSession())
+        XCTAssertThrowsError(try client.transcribe(wav: wav, terms: [], timeout: 5)) { error in
+            let message = (error as? STTError)?.userMessage ?? ""
+            XCTAssertTrue(message.contains("录音文件识别大模型 极速版"), "got: \(message)")
         }
     }
 

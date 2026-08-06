@@ -34,9 +34,9 @@ together. You can also [browse and join existing discussions](https://github.com
 A dictation is one API call: record, send, paste. Nothing runs in between — no cleanup pass,
 no local model — so whatever 豆包 returns is exactly what lands at your cursor.
 
-Speech recognition is 豆包 (Volcengine) 大模型录音文件识别极速版. Punctuation and spoken-number
-normalisation ("百分之九十五" → "95%") are both switched on, because nothing downstream would
-add them.
+Speech recognition is 豆包 (Volcengine) 大模型录音文件识别极速版. Its native punctuation,
+spoken-number normalisation ("百分之九十五" → "95%"), and semantic smoothing are switched on;
+there is no second LLM rewriting your words afterwards.
 
 **Privacy, precisely:**
 
@@ -45,7 +45,7 @@ add them.
 | Audio + your vocabulary terms | Yes — to Volcengine, subject to its data policy |
 | Anything else | Nothing. No account, no telemetry, no subscription. |
 
-The only credentials are your own Volcengine App ID and Access Token, in the macOS Keychain.
+The only credential is your own project-scoped Volcengine API Key, in the macOS Keychain.
 There is no offline mode: no network means a clear error, not a fallback.
 
 ---
@@ -59,8 +59,9 @@ There is no offline mode: no network means a clear error, not a fallback.
    signed with a paid certificate. Right-click the app ▸ **Open** ▸ **Open**, and macOS remembers.
 2. **Allow two permissions.** The microphone, and "paste on your behalf". Both are required;
    TalkType can't grant them for you.
-3. **Paste your key.** The dialog opens by itself on first launch: App ID and Access Token,
-   both from the Volcengine console ▸ 语音技术 ▸ 应用管理.
+3. **Paste your key.** The dialog opens by itself on first launch. Get the single key from the
+   new Doubao Voice console ▸ **API Key 管理** — not IAM's “API访问密钥”. The project must have
+   **录音文件识别大模型 极速版** enabled.
 
 Press **⌘⇧Space** and start talking.
 
@@ -75,8 +76,8 @@ Press **⌘⇧Space** and start talking.
 - **Vocabulary** — add names and terms the model keeps mishearing; they are sent to 豆包 as
   hot words. Nothing is rewritten locally afterwards, so a term that still comes out wrong is
   telling you something real about the model.
-- **API Key** — menu bar ▸ API Key…. Saved as typed; a wrong one announces itself on the first
-  dictation. Leave the token blank when re-editing to keep the stored one.
+- **API Key** — menu bar ▸ API Key…. A wrong one announces itself on the first dictation; leave
+  the field blank when re-editing to keep the stored key.
 - **Clipboard** — every transcript is also left on your clipboard, so ⌘V always works as a
   manual fallback.
 
@@ -86,9 +87,10 @@ Press **⌘⇧Space** and start talking.
   TalkType isn't signed with a paid certificate — so a new version looks like a different app.
   TalkType spots this and offers a **Fix This** button; click it and switch TalkType back on when
   macOS asks. *(Releases from v2.0.2 share one certificate, so this shouldn't recur.)*
-- **"还没填 API Key"?** Menu bar ▸ API Key…, fill in both fields.
-- **"App ID 或 Access Token 不对"?** Volcengine answered and said no — usually a stray space or
-  a token from the wrong app.
+- **"还没填 API Key"?** Menu bar ▸ API Key…, paste the one project key.
+- **"API Key 不对"?** Volcengine rejected it — usually a stray space or an IAM key instead of
+  the key from the Doubao Voice console.
+- **"requested grant not found"?** Enable **录音文件识别大模型 极速版** for that project.
 - **Chinese and English run together without a space?** That is the raw output. Nothing
   normalises it any more; that is deliberate, so the model's real behaviour is visible.
 
@@ -111,10 +113,9 @@ base64'd in the body, and the transcript comes back in the same response. Volcen
 streaming interface is a WebSocket binary-frame protocol; the flash endpoint
 (`volc.bigasr.auc_turbo`) is plain HTTP, which is all dictation needs.
 
-Hot words go in `request.corpus.context` as a JSON *string*, not a nested object. That format
-comes from the streaming docs and is unverified on the flash endpoint, so it is only attached
-when the vocabulary is non-empty — if it turns out to be rejected, dictation without a
-vocabulary still works.
+Hot words go in `request.corpus.context` as a JSON *string*, not a nested object. The flash
+endpoint accepts it; a live A/B corrected “Cloud Code” to “Claude Code”. It is only attached when
+the vocabulary is non-empty.
 
 Setting `TALKTYPE_STATE_DIR` points config and vocabulary somewhere else, which is how you
 trial a setup without touching your real one.

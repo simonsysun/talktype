@@ -74,10 +74,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         // Load config
         config = ConfigManager.load()
         ConfigManager.save(config)
-        // The OpenRouter and Groq keys from the old pipeline are deliberately left alone.
-        // While the four providers are being compared, the previous release is still a
-        // live fallback — deleting its credentials would make going back a re-setup.
-        // `STTKeyStore.removeLegacyKeys()` does the cleanup once that stops being true.
+        STTKeyStore.removeLegacyKeys()
 
         // Initialize stores
         vocabularyStore = VocabularyStore()
@@ -102,12 +99,12 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         // Check mic permission (passive)
         dictationManager.checkMicPermission()
 
-        // Request accessibility
-        let accessibilityGranted = TextInserter.accessibilityGranted(prompt: true)
+        // Check accessibility without throwing another first-launch prompt on top of the
+        // API-key dialog. The first transcript is always copied, then offers a focused fix.
+        let accessibilityGranted = TextInserter.accessibilityGranted(prompt: false)
         if !accessibilityGranted {
             Log.write("[perm] accessibility NOT granted")
             print("  Pasting will not work until granted.")
-            notifyInfo("Accessibility not granted. Dictation will only copy to the clipboard.")
         }
 
         // Prepare audio engine
@@ -136,20 +133,14 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
             syncLaunchAtLogin()
         }
 
-        let mode = hotkeyManager.captureMode.rawValue
         print()
         print("Ready!")
         print("  \(hotkeyDisplayString()) -> Dictation (speak -> type)")
-        print("  Hotkey capture: \(mode)")
         print("  豆包 API Key: \(dictationManager.isConfigured ? "已填" : "未填")")
         if config.silenceAutoStopEnabled {
             print("  Silence auto-stop: \(config.silenceAutoStopSeconds)s")
         }
         print()
-
-        if hotkeyManager.captureMode == .monitor {
-            notifyError("Hotkey cannot override macOS until Accessibility is enabled. Open Accessibility Settings from the tray.")
-        }
 
         // Ask for the key straight away when it is missing — it is the one problem that
         // makes every dictation fail and that retrying cannot fix.
@@ -160,7 +151,6 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         dictationManager.shutdown()
-        hotkeyManager.cleanup()
     }
 
     // MARK: - Menu bar setup
@@ -311,58 +301,41 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
                                : "Microphone: \(sender.title).")
     }
 
-    /// Persist a config change made from the menu bar. The Setup window keeps its own
-    /// copy, and any edit there sends that copy back wholesale through onConfigChanged —
-    /// so it must be kept in step or a stale copy would silently revert menu changes.
+    /// Persist a config change made from the menu bar.
     private func persistConfig() {
         ConfigManager.save(config)
     }
 
     // MARK: - API key
 
-    /// One dialog, two fields. There is no settings window any more: a key and two system
-    /// permissions did not justify one, and the permissions announce themselves when they
-    /// are actually needed.
+    /// One secure field. The old App ID + Access Token pair belonged to the retired console;
+    /// the current 豆包 interface accepts one project-scoped API Key.
     @objc private func promptForAPIKey() {
         NSApp.activate(ignoringOtherApps: true)
 
-        let stored = STTKeyStore.credentials()
+        let stored = STTKeyStore.apiKey()
         let alert = NSAlert()
         alert.messageText = "豆包 API Key"
-        alert.informativeText = "火山引擎控制台 ▸ 语音技术 ▸ 应用管理，复制 App ID 和 Access Token。"
+        alert.informativeText =
+            "豆包语音新版控制台 ▸ API Key 管理。不是「访问控制」里的 API 访问密钥。"
         alert.addButton(withTitle: "保存")
         alert.addButton(withTitle: "取消")
         if stored != nil { alert.addButton(withTitle: "删除") }
 
-        let appIDField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 22))
-        appIDField.placeholderString = "App ID"
-        // The App ID is not a secret and is the easier of the two to mistype, so it comes
-        // back prefilled; the token never does.
-        appIDField.stringValue = stored?.appID ?? ""
-
-        let tokenField = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 22))
-        tokenField.placeholderString = stored == nil ? "Access Token" : "Access Token（已保存，留空则不改）"
-
-        let stack = NSStackView(views: [appIDField, tokenField])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 8
-        stack.frame = NSRect(x: 0, y: 0, width: 300, height: 52)
-        alert.accessoryView = stack
-        alert.window.initialFirstResponder = appIDField.stringValue.isEmpty ? appIDField : tokenField
+        let keyField = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 22))
+        keyField.placeholderString = stored == nil ? "API Key" : "API Key（已保存，留空则不改）"
+        alert.accessoryView = keyField
+        alert.window.initialFirstResponder = keyField
 
         switch alert.runModal() {
         case .alertFirstButtonReturn:
-            let appID = appIDField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            let typedToken = tokenField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            // Leaving the token blank on a re-edit means "keep the one I already saved",
-            // which is the only way to fix a typo'd App ID without re-pasting the token.
-            let token = typedToken.isEmpty ? (stored?.accessToken ?? "") : typedToken
-            guard !appID.isEmpty, !token.isEmpty else {
-                notifyError("App ID 和 Access Token 都要填。")
+            let typed = keyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            let apiKey = typed.isEmpty ? (stored ?? "") : typed
+            guard !apiKey.isEmpty else {
+                notifyError("API Key 不能为空。")
                 return
             }
-            guard STTKeyStore.store(appID: appID, accessToken: token) else {
+            guard STTKeyStore.store(apiKey: apiKey) else {
                 notifyError("存到钥匙串失败。")
                 return
             }
@@ -502,7 +475,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
     private func hotkeyDisplayString() -> String {
         guard let shortcut = KeyboardShortcuts.getShortcut(for: .dictation) else {
-            return "Cmd+Shift+Space"
+            return "Not set"
         }
         var parts: [String] = []
         let mods = shortcut.modifiers
@@ -620,7 +593,6 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
     @objc private func quitApp() {
         dictationManager.shutdown()
-        hotkeyManager.cleanup()
         NSApp.terminate(nil)
     }
 

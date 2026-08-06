@@ -3,18 +3,18 @@
 Single source of truth for what we're doing and what's done.
 Design rationale → `PLAN.md`. Shipped history → `CHANGELOG.md`. Don't duplicate them here.
 
-Last reviewed: 2026-08-05
+Last reviewed: 2026-08-06
 
-**Current focus: macOS, Qwen3-ASR via OpenRouter cloud or local, with optional Groq polish.**
+**Current focus: macOS, one Doubao flash-recognition call, no local engine or polish layer.**
 iOS is parked by decision (2026-08-02).
 
 ---
 
 ## State of the project
 
-- **macOS app (`TalkType/`)** — v2.3.2, shipped. One model (Qwen3-ASR) via OpenRouter cloud or
-  local MLX sidecar with automatic offline fallback; Groq polish restored (text only, optional);
-  Setup has two keys (OpenRouter + Groq) and the local engine install; signed releases.
+- **macOS app (`TalkType/`)** — v3.0.0 candidate. Hotkey → record → one Doubao flash HTTP call →
+  paste. One project API Key in Keychain; native punctuation, ITN and DDC enabled; vocabulary is
+  sent as hot words. No local model, fallback, provider switch, polish model or settings window.
 - **iOS keyboard (`TalkTypeKeyboard/`) + companion app (`TalkTypeiOS/`)** — written 2026-04-07/08,
   then paused. **Never compiled, never run on a device.** Everything under "Parked: iOS" is a
   hypothesis until the targets build.
@@ -23,66 +23,35 @@ iOS is parked by decision (2026-08-02).
 
 ## Now — macOS
 
-Collect real usage issues for at least a week and ship them as one tested batch. Do not cut a
-release for each small improvement; exceptions are crashes, security/privacy issues, data loss,
-or an upstream service breaking production.
+Collect real usage issues for at least a week and ship them as one tested batch. Keep this small;
+exceptions are crashes, security/privacy issues, data loss, or an upstream break.
 
-1. [x] **First overlay appearance still has a brief disturbed edge.** On the first appearance
-       after the app loads, nearby pixels still move slightly, then settle quickly; later use is
-       good enough. Reproduce cold-start versus subsequent appearances and separate Liquid Glass
-       warm-up from the remaining fade before changing anything.
-       Candidate installed 2026-08-05: the glass is fully materialized before the panel appears;
-       the whole-glass fade-in is gone. Simon's field check found no remaining pixel disturbance.
-2. [x] **Manual stop can lose the final spoken character.** Even when the hotkey is pressed just
-       after speaking ends, the last character is often absent. Reproduce with fixed phrases and
-       measured pauses, then verify whether stopping the audio tap fails to drain its final buffer.
-       Do not hide the loss by guessing text in post-processing.
-       Candidate installed 2026-08-05: manual stop keeps one measured tap quantum, then drains any
-       callback already in flight before snapshotting. The deterministic race test is green, and
-       Simon confirmed the final spoken character is now captured clearly.
-3. [ ] **Optional support link.** Choose and configure a donation provider, then add one quiet
+1. [ ] **Optional support link.** Choose and configure a donation provider, then add one quiet
        “Support TalkType” link to the README/GitHub page. Keep the app free and open source; make
        payment clearly voluntary. Decide separately whether to offer a crypto-wallet address.
-4. [ ] **Resolve the TalkType name collision before wider promotion.** CareScribe already ships an
+2. [ ] **Resolve the TalkType name collision before wider promotion.** CareScribe already ships an
        active commercial dictation product named TalkType for Mac, Windows, web, and mobile
        (`talk-type.com`), with overlapping vocabulary and polish features. Open source plus
        voluntary donations does not itself require a rename, but this same-market collision is a
        real discoverability and possible trademark risk. Research a distinct name before putting
        meaningful promotion behind the project; do not rush-rename the current installed app.
-5. [ ] **Verify vocabulary through the polish stage.** Current order is ASR → optional Groq polish
-       → conservative client-side vocabulary correction; saved terms are not included in the
-       polish prompt. Test whether a compact canonical-term list helps preserve spelling without
-       making the model insert terms that were never spoken.
-       Candidate installed 2026-08-05: active terms are structured as optional approved spellings
-       in Polish. Six live Groq acceptance cases passed, including `cloud code` → `Claude Code`
-       and a negative case that did not insert either saved term. A deterministic guard also
-       rejects an English product name if no matching spoken form exists. Early field use looks
-       good; keep open because `cloud` / `Claude` is a genuine contextual homophone, and do not
-       tune it without repeated real failures.
-6. [ ] **Improve the polish prompt without regressing a 95/100 experience.** Build a small
-       regression set from Simon's real corrections, compare the current prompt with candidates,
-       and ship only if meaning preservation, completeness, mixed-language text, and punctuation
-       are all no worse. Prefer no change over an unmeasured “smarter” prompt.
-       Candidate installed 2026-08-05: ambiguity now defaults to preserving words. A live test
-       caught the model deleting the meaningful `那个` in `那个文件`; an explicit boundary fixed it
-       and the same six-case suite then passed. Still needs Simon's real correction set.
-7. [ ] Deferred: overlay draggability. It is `ignoresMouseEvents = true` and fixed
+3. [ ] **Build a tiny real-speech regression set before tuning the model request.** Include
+       Chinese-primary, English-primary, mixed technical terms, numbers and self-correction.
+       Current live checks: 1.2–1.8 s; hot words changed “Cloud Code” to “Claude Code”.
+4. [ ] Deferred: overlay draggability. It is `ignoresMouseEvents = true` and fixed
        bottom-centre. Simon asked for it to move to the bottom (done) but has not said
        whether he wants to drag it.
-8. [ ] Deferred: filler-word cleanup is `PostProcessor.tidySpeech`, the fallback when Groq
-       polish is off or unreachable (polish was restored in 2.3.0). Revisit only if the tidy
-       proves weak.
-9. The signing certificate's backup lives in `secrets/`, which `.gitignore` covers — verified
+5. The signing certificate's backup lives in `secrets/`, which `.gitignore` covers — verified
    that `git add -A` cannot stage it. Do not move it anywhere `.gitignore` does not reach.
    Losing it costs one extra grant for everyone, once, and nothing else.
-10. [ ] **Measure long-recording stop latency before changing the audio thread model.** The
+6. [ ] **Measure long-recording stop latency before changing the audio thread model.** The
         33-tap resampler currently runs during `recorder.stop()` on the main thread. Profile
         Release builds with 60 s and 180 s recordings; move only flattening/resampling off-main
         if the UI blocks for more than 50 ms, while keeping AVAudioEngine shutdown on main.
 
 ---
 
-## ASR decision (2026-08-02)
+## Historical ASR decision (2026-08-02, superseded by v3)
 
 Benchmarked 14 cloud models plus local Qwen3-ASR on one real recording of Simon's voice
 (Chinese-primary with embedded English). Measurements, not vendor claims:

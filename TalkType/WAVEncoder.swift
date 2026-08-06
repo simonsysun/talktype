@@ -1,6 +1,6 @@
 import Foundation
 
-/// Turns the recorder's float samples into the 16-bit mono WAV every provider accepts.
+/// Turns the recorder's float samples into the 16-bit mono WAV the speech API accepts.
 ///
 /// The PCM block is converted once and appended in a single bulk copy rather than one
 /// `Data.append` per sample. Measured on Apple silicon this is ~20x faster but saves only

@@ -5,28 +5,25 @@ import Foundation
 /// 火山的流式接口走 WebSocket 二进制帧，极速版是普通的一次 HTTP POST，音频 base64 放在
 /// body 里，同步返回文字。听写只需要后者。
 ///
-/// `enable_punc`（标点）和 `enable_itn`（口语数字 → 书面形式，"百分之九十五" → "95%"）都
-/// 显式打开：TalkType 已经没有任何本地后处理，这两项是文字能不能直接粘贴的分界线。
+/// 标点、口语数字规整和语义顺滑都显式打开：TalkType 已经没有任何本地后处理，这三个开关
+/// 决定返回结果能不能直接粘贴。
 struct DoubaoSTTClient {
     static let endpoint = URL(string: "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash")!
     /// 极速版专用的 resource id；标准版是 `volc.bigasr.auc`，走的是提交 + 轮询两步。
     static let resourceID = "volc.bigasr.auc_turbo"
     static let modelName = "bigmodel"
 
-    let appID: String
-    let accessToken: String
+    let apiKey: String
     private let session: URLSession?
 
-    init(appID: String, accessToken: String, session: URLSession? = nil) {
-        self.appID = appID
-        self.accessToken = accessToken
+    init(apiKey: String, session: URLSession? = nil) {
+        self.apiKey = apiKey
         self.session = session
     }
 
     func transcribe(wav: Data, terms: [String], timeout: TimeInterval) throws -> String {
         let session = self.session ?? STTTransport.makeSession(timeout: timeout)
-        let request = Self.makeRequest(appID: appID, accessToken: accessToken, wav: wav,
-                                       terms: terms, timeout: timeout,
+        let request = Self.makeRequest(apiKey: apiKey, wav: wav, terms: terms, timeout: timeout,
                                        requestID: UUID().uuidString)
         let data = try STTTransport.run(request, session: session, timeout: timeout)
         return try Self.parse(data)
@@ -34,13 +31,12 @@ struct DoubaoSTTClient {
 
     // MARK: - Request
 
-    static func makeRequest(appID: String, accessToken: String, wav: Data, terms: [String],
+    static func makeRequest(apiKey: String, wav: Data, terms: [String],
                             timeout: TimeInterval, requestID: String) -> URLRequest {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(appID, forHTTPHeaderField: "X-Api-App-Key")
-        request.setValue(accessToken, forHTTPHeaderField: "X-Api-Access-Key")
+        request.setValue(apiKey, forHTTPHeaderField: "X-Api-Key")
         request.setValue(resourceID, forHTTPHeaderField: "X-Api-Resource-Id")
         request.setValue(requestID, forHTTPHeaderField: "X-Api-Request-Id")
         request.setValue("-1", forHTTPHeaderField: "X-Api-Sequence")
@@ -54,11 +50,12 @@ struct DoubaoSTTClient {
             "model_name": modelName,
             "enable_punc": true,
             "enable_itn": true,
+            "enable_ddc": true,
         ]
         if let context = hotwordContext(terms) {
             // 火山把热词塞在一个 JSON *字符串* 里，不是嵌套对象。这个格式来自流式接口文档；
-            // 极速版是否同样接受尚未实测，所以只在真的有词时才带上——万一被拒，没有词库的
-            // 听写不会跟着一起失败。
+            // 已用极速版实测：它会把 "Cloud Code" 拉回 "Claude Code"。只在真的有词时带上，
+            // 避免每次请求多传一块无意义的结构。
             requestFields["corpus"] = ["context": context]
         }
 

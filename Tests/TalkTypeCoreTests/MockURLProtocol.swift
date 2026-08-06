@@ -1,7 +1,7 @@
 import Foundation
 
-/// URLProtocol stub so the cloud/local clients can be exercised end-to-end against a
-/// deterministic, local "server" — success, HTTP errors, timeouts, and connection
+/// URLProtocol stub so the 豆包 client can be exercised end-to-end against a deterministic,
+/// local "server" — success, HTTP errors, timeouts, and connection
 /// failures, without any real network.
 final class MockURLProtocol: URLProtocol {
     static var handler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
