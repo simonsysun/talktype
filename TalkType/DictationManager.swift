@@ -3,9 +3,8 @@ import Cocoa
 
 /// Central state machine: idle -> recording -> processing -> idle
 ///
-/// The whole pipeline is: record, send the WAV to 豆包, paste what comes back. Nothing runs
-/// between the API and the text field — no polish pass, no local tidy, no fallback engine.
-/// What 豆包 returns is what lands in the document.
+/// The whole pipeline is: stream audio to 豆包 while recording, paste the final response. The
+/// file endpoint is a reliability fallback only. Nothing rewrites what 豆包 returns.
 final class DictationManager {
     enum State {
         case idle
@@ -23,6 +22,8 @@ final class DictationManager {
     private weak var trayDelegate: TrayDelegate?
 
     private let configLock = NSLock()
+    private let streamLock = NSLock()
+    private var activeStream: DoubaoStreamingSession?
     private var sessionID: Int = 0
     private var clipboardHintShown = false
     private var microphoneGranted = false
@@ -50,6 +51,9 @@ final class DictationManager {
         self.recorder.onLevel = { [weak self] level in
             self?.onAudioLevel(level)
         }
+        self.recorder.onSamples = { [weak self] samples, sampleRate in
+            self?.appendToActiveStream(samples, sampleRate: sampleRate)
+        }
     }
 
     func setTrayDelegate(_ delegate: TrayDelegate?) {
@@ -69,6 +73,7 @@ final class DictationManager {
     }
 
     func shutdown() {
+        takeActiveStream()?.cancel()
         recorder.shutdown()
     }
 
@@ -164,10 +169,27 @@ final class DictationManager {
         // now so it is actually drawn instead of queued behind the wait.
         CATransaction.flush()
         trayDelegate?.setRecording(true)
+
+        // Open the WebSocket before the first mic buffer arrives. A failure here is not fatal:
+        // the captured WAV still goes through the already-proven file endpoint at stop.
+        configLock.lock()
+        let streamClient = client
+        let streamTimeout = config.sttTimeoutSeconds
+        configLock.unlock()
+        if let streamClient = streamClient {
+            do {
+                let terms = vocabularyStore.getActiveVocabulary()
+                setActiveStream(try streamClient.startStreaming(terms: terms,
+                                                                timeout: streamTimeout))
+            } catch {
+                Log.write("[stt] could not start stream — file fallback: \(error.localizedDescription)")
+            }
+        }
         do {
             try recorder.start()
             sessionID += 1
         } catch {
+            takeActiveStream()?.cancel()
             state = .idle
             trayDelegate?.setRecording(false)
             trayDelegate?.setProcessing(false)
@@ -207,6 +229,7 @@ final class DictationManager {
             guard self.state == .processing, self.sessionID == session else { return }
 
             let capture = self.recorder.stopCapture()
+            let stream = self.takeActiveStream()
             let targetSampleRate = self.recorder.targetSampleRate
             let minSamples = Int(0.12 * Double(self.config.sampleRate))
             let minRMS = self.config.minTranscribeRms
@@ -230,6 +253,7 @@ final class DictationManager {
                 }
 
                 guard audio.count >= minSamples else {
+                    stream?.cancel()
                     Log.write("[dict] too short: samples=\(audio.count)")
                     self.trayDelegate?.notifyInfo("Recording too short.")
                     return
@@ -240,6 +264,7 @@ final class DictationManager {
                 Log.write("[dict] samples=\(audio.count) rms=\(String(format: "%.5f", rms)) device=\(self.recorder.captureDeviceName ?? "?")")
 
                 if rms == 0 {
+                    stream?.cancel()
                     print("[audio] all-zero audio - microphone access likely blocked")
                     self.microphoneGranted = false
                     Log.write("[dict] all-zero audio — mic blocked")
@@ -249,6 +274,7 @@ final class DictationManager {
                 }
 
                 if Double(rms) < minRMS {
+                    stream?.cancel()
                     Log.write("[dict] no speech detected (rms below \(self.config.minTranscribeRms))")
                     self.trayDelegate?.notifyInfo("No speech detected. Speak louder or check microphone input.")
                     return
@@ -262,16 +288,29 @@ final class DictationManager {
                     let client = self.client
                     self.configLock.unlock()
 
-                    guard let client = client else { throw STTError.missingKey }
-
-                    let wav = WAVEncoder.encode(samples: audio, sampleRate: cfg.sampleRate)
                     let terms = self.vocabularyStore.getActiveVocabulary()
-                    let started = Date()
-                    let text = try client.transcribe(wav: wav, terms: terms,
-                                                     timeout: cfg.sttTimeoutSeconds)
-                    let elapsed = Date().timeIntervalSince(started)
-                    print("[stt] \(String(format: "%.2f", elapsed))s chars=\(text.count)")
-                    Log.write("[stt] \(String(format: "%.2f", elapsed))s chars=\(text.count)")
+                    let text: String
+                    if let stream = stream {
+                        let started = Date()
+                        do {
+                            text = try stream.finish(timeout: cfg.sttTimeoutSeconds)
+                            let elapsed = Date().timeIntervalSince(started)
+                            print("[stt] stream \(String(format: "%.2f", elapsed))s chars=\(text.count)")
+                            Log.write("[stt] stream \(String(format: "%.2f", elapsed))s chars=\(text.count)")
+                        } catch {
+                            let elapsed = Date().timeIntervalSince(started)
+                            Log.write("[stt] stream failed after \(String(format: "%.2f", elapsed))s — file fallback: \(error.localizedDescription)")
+                            guard let client = client else { throw error }
+                            text = try self.transcribeFileFallback(
+                                client: client, audio: audio, sampleRate: cfg.sampleRate,
+                                terms: terms, timeout: cfg.sttTimeoutSeconds)
+                        }
+                    } else {
+                        guard let client = client else { throw STTError.missingKey }
+                        text = try self.transcribeFileFallback(
+                            client: client, audio: audio, sampleRate: cfg.sampleRate,
+                            terms: terms, timeout: cfg.sttTimeoutSeconds)
+                    }
 
                     guard !text.isEmpty else {
                         Log.write("[dict] 豆包 returned empty text")
@@ -291,6 +330,41 @@ final class DictationManager {
                 }
             }
         }
+    }
+
+    private func appendToActiveStream(_ samples: [Float], sampleRate: Int) {
+        streamLock.lock()
+        let stream = activeStream
+        streamLock.unlock()
+        stream?.append(samples: samples, sampleRate: sampleRate)
+    }
+
+    private func setActiveStream(_ stream: DoubaoStreamingSession) {
+        streamLock.lock()
+        let previous = activeStream
+        activeStream = stream
+        streamLock.unlock()
+        previous?.cancel()
+    }
+
+    private func takeActiveStream() -> DoubaoStreamingSession? {
+        streamLock.lock()
+        let stream = activeStream
+        activeStream = nil
+        streamLock.unlock()
+        return stream
+    }
+
+    private func transcribeFileFallback(client: DoubaoSTTClient, audio: [Float],
+                                        sampleRate: Int, terms: [String],
+                                        timeout: TimeInterval) throws -> String {
+        let wav = WAVEncoder.encode(samples: audio, sampleRate: sampleRate)
+        let started = Date()
+        let text = try client.transcribe(wav: wav, terms: terms, timeout: timeout)
+        let elapsed = Date().timeIntervalSince(started)
+        print("[stt] file \(String(format: "%.2f", elapsed))s chars=\(text.count)")
+        Log.write("[stt] file \(String(format: "%.2f", elapsed))s chars=\(text.count)")
+        return text
     }
 
     // MARK: - Delivery

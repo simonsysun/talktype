@@ -29,14 +29,15 @@ together. You can also [browse and join existing discussions](https://github.com
 
 ---
 
-## One API call
+## One recognition, no rewrite
 
-A dictation is one API call: record, send, paste. Nothing runs in between — no cleanup pass,
-no local model — so whatever 豆包 returns is exactly what lands at your cursor.
+A dictation is one recognition: stream while you speak, finalise, paste. Nothing rewrites the
+result — no cleanup pass, no local model — so whatever 豆包 returns lands at your cursor.
 
-Speech recognition is 豆包 (Volcengine) 大模型录音文件识别极速版. Its native punctuation,
-spoken-number normalisation ("百分之九十五" → "95%"), and semantic smoothing are switched on;
-there is no second LLM rewriting your words afterwards.
+Speech recognition is 豆包 (Volcengine) 流式语音识别 2.0. Its native punctuation, spoken-number
+normalisation ("百分之九十五" → "95%"), and semantic smoothing are switched on. If the live
+connection fails, TalkType retries once through 录音文件识别 2.0 极速版; neither path adds a
+second LLM.
 
 **Privacy, precisely:**
 
@@ -61,7 +62,7 @@ There is no offline mode: no network means a clear error, not a fallback.
    TalkType can't grant them for you.
 3. **Paste your key.** The dialog opens by itself on first launch. Get the single key from the
    new Doubao Voice console ▸ **API Key 管理** — not IAM's “API访问密钥”. The project must have
-   **录音文件识别大模型 极速版** enabled.
+   both **流式语音识别 2.0** and **录音文件识别 2.0** enabled.
 
 Press **⌘⇧Space** and start talking.
 
@@ -90,7 +91,7 @@ Press **⌘⇧Space** and start talking.
 - **"还没填 API Key"?** Menu bar ▸ API Key…, paste the one project key.
 - **"API Key 不对"?** Volcengine rejected it — usually a stray space or an IAM key instead of
   the key from the Doubao Voice console.
-- **"requested grant not found"?** Enable **录音文件识别大模型 极速版** for that project.
+- **"requested grant not found"?** Enable **流式语音识别 2.0** and **录音文件识别 2.0** for that project.
 - **Chinese and English run together without a space?** That is the raw output. Nothing
   normalises it any more; that is deliberate, so the model's real behaviour is visible.
 
@@ -108,14 +109,13 @@ Press **⌘⇧Space** and start talking.
 
 ## Under the hood
 
-One POST to `openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash` with the WAV
-base64'd in the body, and the transcript comes back in the same response. Volcengine's
-streaming interface is a WebSocket binary-frame protocol; the flash endpoint
-(`volc.bigasr.auc_turbo`) is plain HTTP, which is all dictation needs.
+The microphone's mono PCM is resampled to 16 kHz and sent in 200 ms binary WebSocket frames to
+`/api/v3/sauc/bigmodel_nostream` using 流式语音识别 2.0 (`volc.seedasr.sauc.duration`). The last
+audio frame is marked final when recording stops. If the socket fails, the captured WAV is sent
+to `/api/v3/auc/bigmodel/recognize/flash` (`volc.bigasr.auc_turbo`) as a same-provider fallback.
 
-Hot words go in `request.corpus.context` as a JSON *string*, not a nested object. The flash
-endpoint accepts it; a live A/B corrected “Cloud Code” to “Claude Code”. It is only attached when
-the vocabulary is non-empty.
+Hot words go in `request.corpus.context` as a JSON *string*, not a nested object. They are attached
+only when the vocabulary is non-empty.
 
 Setting `TALKTYPE_STATE_DIR` points config and vocabulary somewhere else, which is how you
 trial a setup without touching your real one.

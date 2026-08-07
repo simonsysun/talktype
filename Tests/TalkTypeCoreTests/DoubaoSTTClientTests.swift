@@ -109,6 +109,90 @@ final class DoubaoSTTClientTests: XCTestCase {
         XCTAssertEqual((parsed["hotwords"] as? [[String: String]])?.count, 100)
     }
 
+    // MARK: - Streaming 2.0
+
+    func testStreamingUsesTheEnabled2Point0ResourceAndProjectAPIKey() {
+        let request = DoubaoStreamProtocol.makeRequest(
+            apiKey: "key-2", connectID: "connection-1", timeout: 12)
+
+        XCTAssertEqual(request.url, DoubaoStreamProtocol.endpoint)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-Api-Key"), "key-2")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-Api-Resource-Id"),
+                       "volc.seedasr.sauc.duration")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-Api-Connect-Id"), "connection-1")
+    }
+
+    func testStreamingConfigKeepsNativeFormattingAndHotwords() throws {
+        let frame = try DoubaoStreamProtocol.configFrame(terms: ["Claude Code", "P95"])
+        XCTAssertEqual(Array(frame.prefix(4)), [0x11, 0x10, 0x10, 0x00])
+
+        let payloadSize = Int(frame.readUInt32BE(at: 4))
+        XCTAssertEqual(payloadSize, frame.count - 8)
+        let body = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: frame.subdata(in: 8..<frame.count))
+                as? [String: Any])
+        let audio = try XCTUnwrap(body["audio"] as? [String: Any])
+        XCTAssertEqual(audio["format"] as? String, "pcm")
+        XCTAssertEqual(audio["rate"] as? Int, 16000)
+        XCTAssertEqual(audio["bits"] as? Int, 16)
+        XCTAssertEqual(audio["channel"] as? Int, 1)
+
+        let fields = try XCTUnwrap(body["request"] as? [String: Any])
+        XCTAssertEqual(fields["model_name"] as? String, "bigmodel")
+        XCTAssertEqual(fields["enable_punc"] as? Bool, true)
+        XCTAssertEqual(fields["enable_itn"] as? Bool, true)
+        XCTAssertEqual(fields["enable_ddc"] as? Bool, true)
+        let corpus = try XCTUnwrap(fields["corpus"] as? [String: Any])
+        XCTAssertEqual(corpus["context"] as? String,
+                       DoubaoSTTClient.hotwordContext(["Claude Code", "P95"]))
+    }
+
+    func testStreamingAudioFrameMarksOnlyTheLastPacketFinal() {
+        let pcm = Data([0x01, 0x02, 0x03, 0x04])
+        let ordinary = DoubaoStreamProtocol.audioFrame(pcm, isFinal: false)
+        let final = DoubaoStreamProtocol.audioFrame(pcm, isFinal: true)
+
+        XCTAssertEqual(Array(ordinary.prefix(4)), [0x11, 0x20, 0x00, 0x00])
+        XCTAssertEqual(Array(final.prefix(4)), [0x11, 0x22, 0x00, 0x00])
+        XCTAssertEqual(ordinary.readUInt32BE(at: 4), 4)
+        XCTAssertEqual(ordinary.suffix(4), pcm)
+    }
+
+    func testStreamingFinalResponseReturnsTrimmedText() throws {
+        let payload = Data(#"{"result":{"text":"  流式更快。  "}}"#.utf8)
+        let frame = DoubaoStreamProtocol.testServerFrame(
+            messageType: 0x9, flags: 0x2, payload: payload)
+
+        let parsed = try DoubaoStreamProtocol.parseServerFrame(frame)
+        XCTAssertTrue(parsed.isFinal)
+        XCTAssertEqual(parsed.text, "流式更快。")
+    }
+
+    func testStreamingProviderErrorKeepsCodeAndMessage() {
+        let payload = Data("invalid audio format".utf8)
+        let frame = DoubaoStreamProtocol.testServerFrame(
+            messageType: 0xF, flags: 0, payload: payload, errorCode: 45_000_151)
+
+        XCTAssertThrowsError(try DoubaoStreamProtocol.parseServerFrame(frame)) { error in
+            let message = (error as? STTError)?.userMessage ?? ""
+            XCTAssertTrue(message.contains("45000151"), "got: \(message)")
+            XCTAssertTrue(message.contains("invalid audio format"), "got: \(message)")
+        }
+    }
+
+    func testPCM16PacketizerEmitsTwoHundredMillisecondPackets() {
+        var packetizer = StreamingPCM16Packetizer()
+        let first = packetizer.append(samples: Array(repeating: 0.5, count: 1_600),
+                                      sampleRate: 16_000)
+        let second = packetizer.append(samples: Array(repeating: -0.5, count: 1_600),
+                                       sampleRate: 16_000)
+
+        XCTAssertTrue(first.isEmpty)
+        XCTAssertEqual(second.count, 1)
+        XCTAssertEqual(second[0].count, 6_400)
+        XCTAssertTrue(packetizer.finish().isEmpty)
+    }
+
     // MARK: - Response
 
     func testTranscriptComesFromResultText() throws {
@@ -170,7 +254,7 @@ final class DoubaoSTTClientTests: XCTestCase {
         let client = DoubaoSTTClient(apiKey: "valid-project-key", session: mockSession())
         XCTAssertThrowsError(try client.transcribe(wav: wav, terms: [], timeout: 5)) { error in
             let message = (error as? STTError)?.userMessage ?? ""
-            XCTAssertTrue(message.contains("录音文件识别大模型 极速版"), "got: \(message)")
+            XCTAssertTrue(message.contains("录音文件识别 2.0"), "got: \(message)")
         }
     }
 
@@ -184,7 +268,7 @@ final class DoubaoSTTClientTests: XCTestCase {
         let client = DoubaoSTTClient(apiKey: "valid-project-key", session: mockSession())
         XCTAssertThrowsError(try client.transcribe(wav: wav, terms: [], timeout: 5)) { error in
             let message = (error as? STTError)?.userMessage ?? ""
-            XCTAssertTrue(message.contains("录音文件识别大模型 极速版"), "got: \(message)")
+            XCTAssertTrue(message.contains("录音文件识别 2.0"), "got: \(message)")
         }
     }
 
@@ -199,7 +283,7 @@ final class DoubaoSTTClientTests: XCTestCase {
         let client = DoubaoSTTClient(apiKey: "valid-project-key", session: mockSession())
         XCTAssertThrowsError(try client.transcribe(wav: wav, terms: [], timeout: 5)) { error in
             let message = (error as? STTError)?.userMessage ?? ""
-            XCTAssertTrue(message.contains("录音文件识别大模型 极速版"), "got: \(message)")
+            XCTAssertTrue(message.contains("录音文件识别 2.0"), "got: \(message)")
         }
     }
 

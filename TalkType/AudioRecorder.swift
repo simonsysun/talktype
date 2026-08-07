@@ -79,6 +79,9 @@ final class AudioRecorder {
 
     let targetSampleRate: Int
     var onLevel: ((Float) -> Void)?
+    /// Hardware-rate mono chunks for consumers that need to work during capture (streaming STT).
+    /// The callback must return quickly; AudioRecorder waits for it before closing a recording.
+    var onSamples: (([Float], Int) -> Void)?
 
     #if os(macOS)
     /// UID of the input device to capture from. nil or unknown means follow the system
@@ -310,6 +313,7 @@ final class AudioRecorder {
 
         let ptr = channelData[0]
         let arr = Array(UnsafeBufferPointer(start: ptr, count: frameLength))
+        onSamples?(arr, bufferRate)
         captureBuffer.finishChunk(arr)
 
         if let onLevel = onLevel {

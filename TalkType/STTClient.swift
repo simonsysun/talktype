@@ -45,7 +45,7 @@ enum STTError: LocalizedError {
     private static func focusedProviderMessage(_ detail: String) -> String? {
         let lower = detail.lowercased()
         if lower.contains("requested grant not found") {
-            return "这个豆包项目还没开通「录音文件识别大模型 极速版」。"
+            return "这个豆包项目还没开通对应的「流式语音识别 2.0」或「录音文件识别 2.0」。"
         }
         if lower.contains("invalid x-api-key") || lower.contains("invalid api key") {
             return "豆包 API Key 不对。菜单栏 ▸ API Key… 重填。"

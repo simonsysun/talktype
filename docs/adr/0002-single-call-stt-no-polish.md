@@ -3,7 +3,8 @@
 一次听写就是一次 API 调用：录音、把 WAV POST 给豆包、粘贴返回的文字。provider 和输入框之间
 什么都不跑。
 
-Status: accepted (2026-08-05), supersedes [ADR-0001](0001-cloud-first-engine-with-offline-fallback.md)
+Status: accepted (2026-08-05), supersedes [ADR-0001](0001-cloud-first-engine-with-offline-fallback.md).
+The transport choice below was superseded by [ADR-0003](0003-streaming-stt-with-file-fallback.md).
 
 ## 为什么
 
