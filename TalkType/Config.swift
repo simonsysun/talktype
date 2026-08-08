@@ -10,7 +10,6 @@ struct AppConfig: Codable {
     var silenceAutoStopEnabled: Bool = true
     var silenceAutoStopSeconds: Double = 20
     var silenceRmsThreshold: Double = 0.008
-    var minTranscribeRms: Double = 0.012
     /// UID of the microphone to record from. Empty means follow the system default.
     var inputDeviceUID: String = ""
 
@@ -21,7 +20,6 @@ struct AppConfig: Codable {
         case silenceAutoStopEnabled = "silence_auto_stop_enabled"
         case silenceAutoStopSeconds = "silence_auto_stop_seconds"
         case silenceRmsThreshold = "silence_rms_threshold"
-        case minTranscribeRms = "min_transcribe_rms"
         case inputDeviceUID = "input_device_uid"
     }
 
@@ -39,7 +37,6 @@ struct AppConfig: Codable {
         silenceAutoStopEnabled = try c.decodeIfPresent(Bool.self, forKey: .silenceAutoStopEnabled) ?? d.silenceAutoStopEnabled
         silenceAutoStopSeconds = try c.decodeIfPresent(Double.self, forKey: .silenceAutoStopSeconds) ?? d.silenceAutoStopSeconds
         silenceRmsThreshold = try c.decodeIfPresent(Double.self, forKey: .silenceRmsThreshold) ?? d.silenceRmsThreshold
-        minTranscribeRms = try c.decodeIfPresent(Double.self, forKey: .minTranscribeRms) ?? d.minTranscribeRms
         inputDeviceUID = try c.decodeIfPresent(String.self, forKey: .inputDeviceUID) ?? d.inputDeviceUID
     }
 }

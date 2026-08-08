@@ -247,8 +247,7 @@ class KeyboardViewController: UIInputViewController {
                 }
 
                 let rms = AudioRecorder.calculateRMS(audio)
-                let config = ConfigManager.load()
-                if rms < Float(config.minTranscribeRms) { state = .idle; return }
+                if !TranscriptionAudioGate.shouldTranscribe(rms: rms) { state = .idle; return }
 
                 var text = try await transcriber.transcribeAsync(
                     audio: audio,

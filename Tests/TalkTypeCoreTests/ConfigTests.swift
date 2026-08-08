@@ -36,6 +36,11 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(try decode("{}").silenceAutoStopSeconds, AppConfig().silenceAutoStopSeconds)
     }
 
+    func testRetiredLoudnessGateIsIgnoredInExistingConfig() throws {
+        let config = try decode("{\"min_transcribe_rms\": 0.012, \"launch_at_login\": true}")
+        XCTAssertTrue(config.launchAtLogin)
+    }
+
     func testRoundTrip() throws {
         var config = AppConfig()
         config.sttTimeoutSeconds = 30

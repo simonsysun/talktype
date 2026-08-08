@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Quiet speech reaches recognition.** Removed the fixed local RMS cutoff that discarded real
+  low-volume recordings before finalising 豆包 STT. Exact all-zero captures are still treated as
+  microphone failures; every other signal is left to the speech recognizer.
+
 ## v3.0.0 — 2026-08-06
 
 TalkType 现在就是一层壳：录音、发给豆包、粘贴。中间什么都没有。

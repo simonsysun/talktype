@@ -88,12 +88,14 @@ final class AudioRecorderTests: XCTestCase {
         XCTAssertEqual(AudioRecorder.calculateRMS(samples), 0.7071, accuracy: 1e-3)
     }
 
-    /// Silence detection compares RMS against these config defaults, so their
-    /// ordering is the invariant: quiet-but-real speech must clear the transcribe bar.
-    func testSilenceThresholdsAreOrdered() {
-        let config = AppConfig()
-        XCTAssertLessThan(config.silenceRmsThreshold, config.minTranscribeRms,
-                          "auto-stop must trigger below the transcribe cutoff, not above it")
+    /// Regression from a real failed dictation: the microphone captured non-zero speech at
+    /// RMS 0.00601, but the old 0.012 loudness gate cancelled STT before the API could see it.
+    func testQuietNonzeroCaptureStillReachesSpeechRecognition() {
+        XCTAssertTrue(TranscriptionAudioGate.shouldTranscribe(rms: 0.00601))
+    }
+
+    func testAllZeroCaptureStillDoesNotReachSpeechRecognition() {
+        XCTAssertFalse(TranscriptionAudioGate.shouldTranscribe(rms: 0))
     }
 
     // MARK: - resample

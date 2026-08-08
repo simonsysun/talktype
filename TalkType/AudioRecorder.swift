@@ -73,6 +73,15 @@ struct CapturedAudio {
     }
 }
 
+/// Exact zero means the capture path failed. Any non-zero signal belongs with the speech
+/// recognizer: a fixed local loudness threshold cannot distinguish a quiet voice from noise,
+/// and the streaming recognizer has already received the audio by the time this runs.
+enum TranscriptionAudioGate {
+    static func shouldTranscribe(rms: Float) -> Bool {
+        rms > 0
+    }
+}
+
 /// Records audio using AVAudioEngine. Engine created once, tap installed/removed per session.
 final class AudioRecorder {
     private static let requestedTapFrames: AVAudioFrameCount = 2048

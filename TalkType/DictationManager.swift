@@ -232,7 +232,6 @@ final class DictationManager {
             let stream = self.takeActiveStream()
             let targetSampleRate = self.recorder.targetSampleRate
             let minSamples = Int(0.12 * Double(self.config.sampleRate))
-            let minRMS = self.config.minTranscribeRms
 
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 guard let self = self else { return }
@@ -263,20 +262,13 @@ final class DictationManager {
                 print("[audio] captured samples=\(audio.count) rms=\(String(format: "%.5f", rms))")
                 Log.write("[dict] samples=\(audio.count) rms=\(String(format: "%.5f", rms)) device=\(self.recorder.captureDeviceName ?? "?")")
 
-                if rms == 0 {
+                if !TranscriptionAudioGate.shouldTranscribe(rms: rms) {
                     stream?.cancel()
                     print("[audio] all-zero audio - microphone access likely blocked")
                     self.microphoneGranted = false
                     Log.write("[dict] all-zero audio — mic blocked")
                     self.trayDelegate?.notifyError("Microphone blocked. Enable in System Settings -> Privacy -> Microphone.")
                     DispatchQueue.main.async { self.openMicSettings() }
-                    return
-                }
-
-                if Double(rms) < minRMS {
-                    stream?.cancel()
-                    Log.write("[dict] no speech detected (rms below \(self.config.minTranscribeRms))")
-                    self.trayDelegate?.notifyInfo("No speech detected. Speak louder or check microphone input.")
                     return
                 }
 
