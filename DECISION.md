@@ -46,8 +46,11 @@ implementation notes (`TODO.md`, `CONTEXT.md`, `PLAN.md`, `docs/adr/*`). The sam
 facts drifted across files and cost agents repeated reconciliation.
 
 **Consequence:** Agents must not invent competing root management files. Retired
-files remain recoverable from Git and must not route new work. Depth stays
-lightweight for a personal macOS app; roles stay full-strength.
+filenames (`TODO.md`, `CONTEXT.md`, `PLAN.md`, `docs/adr/*`) were removed after
+migration; recover prior text only from Git history, never as live authority.
+Depth stays lightweight for a personal macOS app; roles stay full-strength.
+Process failure modes (false completion, competing trackers, inferred reversals)
+are enforced in `AGENTS.md` must/must-not lists, not only in prose.
 
 **Revisit when:** A genuine constraint makes literal conformance unsafe or
 impossible, with explicit human approval recorded here.

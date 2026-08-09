@@ -105,12 +105,12 @@ design (D003).
 ## Completed Stage — Repository knowledge migration
 
 **Outcome:** Root governance files and directories are the only project-management
-authorities. `TODO.md`, `CONTEXT.md`, `PLAN.md`, and `docs/adr/*` are retired
-redirect stubs; full prior text remains in Git history. Physical deletion of
-stubs can follow Simon's confirmation.
+authorities. Competing `TODO.md`, `CONTEXT.md`, `PLAN.md`, and `docs/adr/*` were
+removed after content landed in the canonical owners; full prior text remains in
+Git history. Agent process constraints were hardened to Petal-level must/must-not
+lists.
 
-**Evidence:** This file set and repository links after the migration commit.
+**Evidence:** Governance commits on `main` after 2026-08-09.
 
 **Residual:** Old filenames may still appear inside historical research notes;
-those notes are not current instructions. Stub files still exist on disk until
-explicitly removed.
+those notes are not current instructions.

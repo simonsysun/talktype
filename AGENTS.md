@@ -67,6 +67,22 @@ demos, mocks, or fallbacks as live capability.
 - **Secrets stay out of Git.** `secrets/` is gitignored; never move signing
   material into a tracked path.
 - **No telemetry or account system** unless PRODUCT reverses.
+- **A design that contradicts `PRODUCT.md` is a reversal.** Present it to Simon as
+  one; never ship it as a feature.
+
+## First Principles
+
+Before adding a provider, rewrite layer, settings surface, stage, or proof:
+
+1. **Does this improve the hotkey → speak → text-at-cursor loop?** Work that does
+   not is downstream at best.
+2. **Does this make provider quality more visible, or hide it?** Hiding quality
+   with polish or dual engines needs an explicit decision.
+3. **What does this let us delete or stop doing?** A second abstraction or proof
+   does not compensate for a missing product-bearing link.
+
+Work in small end-to-end slices. Prefer one honest path over parallel half-built
+options.
 
 ## Required Reading and Search
 
@@ -81,26 +97,59 @@ Read in this order:
 7. `docs/` — only narrow references with a current consumer (e.g. assets).
 8. Code, tests, Git, `CHANGELOG.md` — implementation and release evidence.
 
+Research is synthesis; source materials are labeled raw inputs. Neither becomes
+product truth until the accepted implication reaches `PRODUCT.md` or
+`DECISION.md`.
+
 **Agents must:**
 
+- check every proposed stage against the product mainline and active decisions;
+- discuss an unsettled next stage with Simon before expanding it in `NOW.md`;
+- define one bounded outcome and usually two to five testable done predicates
+  before substantial implementation (add non-goals and negative coverage when
+  consequence warrants it);
 - search existing research and sources before adding material;
 - put accepted product implications in `PRODUCT.md`, durable tradeoffs in
   `DECISION.md`, and restart state in `NOW.md`;
-- keep durable context in the repository when the task authorizes those writes;
+- keep durable context in the repository when the task authorizes those writes,
+  in the same coherent change as the state it describes when practical;
 - use English for new project artifacts, commits, and PR text; source quotes may
   remain in their original language; `DEVLOG.md` preserves Simon's voice.
 
 **Agents must not:**
 
+- infer a product reversal from chat, code, a fixture, demo, or an old research
+  file;
+- fabricate a complete fixed roadmap when only the next stage is understood;
+- keep multiple vague primary goals active at once;
+- lower or redefine a blocked predicate to claim completion;
 - invent a second product spec, decision log, tracker, research index, or
   harness-specific process;
 - create a new root or project-management Markdown file when an existing role can
   hold the content; discuss a genuinely new role with Simon first;
 - treat `DEVLOG.md` as authority or update it automatically;
-- rewrite historical research or superseded decisions to match today's language;
+- rewrite historical research, source material, or superseded decisions to match
+  today's language;
 - leave material decisions, blockers, acceptance results, or restart points only
   in chat;
-- present iOS, offline mode, multi-provider, or polish as live without PRODUCT.
+- present iOS, offline mode, multi-provider, polish, or fixtures/demos as live
+  capability without PRODUCT.
+
+## Harness Neutrality
+
+Whichever harness Simon starts is the integrator for that session. Do not rewrite
+this file, the tracker, or the process to favor one harness, and do not create a
+competing process.
+
+The session integrator owns intent, scope, shared governance files
+(`PRODUCT.md`, `DECISION.md`, `NOW.md`, `AGENTS.md`, `README.md` /
+`README.zh-CN.md`), integration, and every final claim. Helper agents return
+bounded findings or task-owned diffs; they do not silently edit governance files.
+Helper output is evidence, not verdict — verify load-bearing findings before
+acting on them or repeating them to Simon.
+
+Exact model, sandbox, or routing settings may live in harness configuration. They
+are not project truth and must not replace this workflow.
 
 ## Rolling Stage Loop
 
@@ -148,12 +197,6 @@ Review is input, not verdict. The integrator verifies load-bearing findings.
 - **Still require explicit confirmation:** force-push, history rewrite, remote
   deletes, unexpected remotes, tracked-file mass deletion outside an authorized
   migration, credential/security config edits.
-
-## Shared File Ownership
-
-The session integrator owns `PRODUCT.md`, `DECISION.md`, `NOW.md`, `AGENTS.md`,
-`README.md` / `README.zh-CN.md`, and final claims. Helpers return bounded findings
-or task-owned diffs; they do not silently edit governance files.
 
 ## Finish Work
 

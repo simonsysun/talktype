@@ -10,8 +10,7 @@ Narrow technical or asset references that still have a current consumer.
 **This directory does not:**
 
 - store product contracts, decisions, task state, or research synthesis;
-- act as a landfill for old plans or ADRs (those roles belong to root governance files).
+- act as a landfill for old plans or ADRs.
 
-`docs/adr/*` files are **retired stubs** pointing at root `DECISION.md`. Do not add new ADRs here.
-
-`PRODUCT.md` wins any product-level conflict.
+Decisions live only in root [`DECISION.md`](../DECISION.md). Do not recreate
+`docs/adr/` or a second decision log. `PRODUCT.md` wins any product-level conflict.
