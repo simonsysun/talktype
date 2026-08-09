@@ -127,12 +127,13 @@ cd talktype
 
 ## 一起把 TalkType 做好
 
-TalkType **免费**，也 **不收打赏 / 赞助 / 付费解锁**。靠什么继续做？  
-**真实使用 + [GitHub Issues](https://github.com/simonsysun/talktype/issues)**——新功能和修复基本按 Issue 里的真实需求往前推。
+TalkType 靠**真实日用**才会变好。哪里不顺、哪个词总听错、有半成品想法——  
+请丢到 **[GitHub Issue](https://github.com/simonsysun/talktype/issues/new)** 里。
 
-哪里不顺、哪个词总听错、有半成品想法——  
-欢迎 **[开 Issue](https://github.com/simonsysun/talktype/issues/new)**。  
-Bug、吐槽、一句话建议都可以，不用先想完整方案。
+这是我们主要看的地方：Bug、吐槽、一句话建议都可以，不用先想完整方案。  
+有问题就放 Issue，我们可以一起讨论、一起改。
+
+也欢迎[看看已有讨论](https://github.com/simonsysun/talktype/issues)。
 
 ---
 
