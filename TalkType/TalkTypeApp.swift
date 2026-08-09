@@ -76,6 +76,9 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         config = ConfigManager.load()
         ConfigManager.save(config)
         STTKeyStore.removeLegacyKeys()
+        // Repair Keychain ACLs so API keys stop re-prompting the login password every time.
+        // Legacy / CLI-created items may ask once here; afterwards this app is trusted.
+        STTKeyStore.rewireAccessIfNeeded()
 
         // Initialize stores
         vocabularyStore = VocabularyStore()
