@@ -127,8 +127,12 @@ cd talktype
 
 ## 一起把 TalkType 做好
 
-真实日用才能发现边角。哪里不顺、哪个词总听错、有想法——  
-欢迎 **[开 Issue](https://github.com/simonsysun/talktype/issues/new)**（bug、半成品想法、小感受都行）。
+TalkType **免费**，也 **不收打赏 / 赞助 / 付费解锁**。靠什么继续做？  
+**真实使用 + [GitHub Issues](https://github.com/simonsysun/talktype/issues)**——新功能和修复基本按 Issue 里的真实需求往前推。
+
+哪里不顺、哪个词总听错、有半成品想法——  
+欢迎 **[开 Issue](https://github.com/simonsysun/talktype/issues/new)**。  
+Bug、吐槽、一句话建议都可以，不用先想完整方案。
 
 ---
 

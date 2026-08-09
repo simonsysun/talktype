@@ -127,8 +127,13 @@ cd talktype
 
 ## Help shape TalkType
 
-Real daily use finds the sharp edges. If something feels off, a word is always misheard, or you have an idea —  
-**[open an issue](https://github.com/simonsysun/talktype/issues/new)** (bugs, rough ideas, tiny notes all welcome).
+TalkType is free and has **no donations / tips / paid unlocks**. What makes it better is
+**real use and [GitHub Issues](https://github.com/simonsysun/talktype/issues)** — that is how
+features and fixes get prioritized.
+
+If something feels off, a word is always misheard, or you have an idea (even half-formed):  
+**[open an issue](https://github.com/simonsysun/talktype/issues/new)**.  
+Bugs, rough ideas, and tiny usability notes all count. You do not need a complete design.
 
 ---
 
