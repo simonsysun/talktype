@@ -25,13 +25,13 @@ Stage labels: `DONE`, `ACTIVE`, `NEXT`, `LATER`, `BLOCKED`.
 
 ## Resume Here
 
-**Current state:** Governance migration is complete. Product is macOS-only v3.0.0
-line: hotkey → Doubao stream (file flash fallback) → paste; no local engine or
-polish. Open product work is a small real-usage batch, not a new architecture.
+**Current state:** Product remains macOS Doubao-only v3 (D003). Stage-0 Grok STT
+spike is complete on existing clips: Grok REST+keyterms is competitive and
+faster on file path; Chinese works best-effort; **not** default yet.
 
-**Resume with:** Continue the real-usage observation window. Do not open large
-feature work unless a crash, security/privacy issue, data loss, or upstream break
-forces it. Before wider promotion, treat name-collision research as a gate.
+**Resume with:** (1) Simon taste call on Stage-0 — open Stage 1 exclusive switch
+or keep Doubao-only. (2) Continue real-usage observation. Do not wire Grok into
+the app without an explicit product decision.
 
 ## Stage Map
 
@@ -40,13 +40,19 @@ forces it. Before wider promotion, treat name-collision research as a gate.
    current `TalkType/` sources.
 2. **DONE — Repository governance migration.** Canonical files and directories match
    the portable standard; competing trackers retired to Git history.
-3. **ACTIVE — Real-usage batch (macOS).** Collect daily-use issues for at least a
+3. **DONE — Grok STT Stage-0 spike (evidence only).** Direct `api.x.ai` vs Doubao
+   file on riverside clips; tool `scripts/stt_spike.py`; synthesis
+   `research/2026-08-09-grok-stt-stage0-spike.md`. Residual: only two clips;
+   owner paste-taste still open; no app change.
+4. **ACTIVE — Real-usage batch (macOS).** Collect daily-use issues for at least a
    week; ship one small tested batch. Keep scope tight.
-4. **NEXT — Pre-promotion gates.** Optional support link decision; TalkType name
+5. **NEXT — Optional: Grok exclusive-switch decision.** Only if Simon accepts
+   Stage-0 conditional pass; default stays Doubao; product reversal vs D003.
+6. **NEXT — Pre-promotion gates.** Optional support link decision; TalkType name
    collision research before meaningful promotion.
-5. **LATER — Speech regression micro-set.** Tiny real-speech set before further
+7. **LATER — Speech regression micro-set.** Tiny real-speech set before further
    request tuning (CN-primary, EN-primary, mixed terms, numbers, self-correction).
-6. **LATER — Parked iOS.** Only after an explicit product un-park decision (D001).
+8. **LATER — Parked iOS.** Only after an explicit product un-park decision (D001).
 
 ## Active Stage — Real-usage batch (macOS)
 
