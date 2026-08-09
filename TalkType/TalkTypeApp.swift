@@ -15,6 +15,7 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
 
     // Menu items needing dynamic updates
     private var apiKeyItem: NSMenuItem!
+    private var providerMenu: NSMenu!
     private var vocabMenu: NSMenu!
     private var launchItem: NSMenuItem!
     private var inputMenu: NSMenu!
@@ -133,7 +134,8 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         print()
         print("Ready!")
         print("  \(hotkeyDisplayString()) -> Dictation (speak -> type)")
-        print("  豆包 API Key: \(dictationManager.isConfigured ? "已填" : "未填")")
+        print("  Provider: \(config.sttProvider.menuTitle)")
+        print("  API Key: \(dictationManager.isConfigured ? "已填" : "未填")")
         if config.silenceAutoStopEnabled {
             print("  Silence auto-stop: \(config.silenceAutoStopSeconds)s")
         }
@@ -170,6 +172,12 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         let hotkeyItem = NSMenuItem(title: "Change Hotkey...", action: #selector(openHotkeySettings), keyEquivalent: "")
         hotkeyItem.target = self
         menu.addItem(hotkeyItem)
+
+        providerMenu = NSMenu()
+        let providerItem = NSMenuItem(title: "Speech Provider", action: nil, keyEquivalent: "")
+        providerItem.submenu = providerMenu
+        menu.addItem(providerItem)
+        refreshProviderMenu()
 
         apiKeyItem = NSMenuItem(title: "API Key…", action: #selector(promptForAPIKey), keyEquivalent: "")
         apiKeyItem.target = self
@@ -309,18 +317,62 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
         ConfigManager.save(config)
     }
 
+    // MARK: - Speech provider (exclusive switch)
+
+    private func refreshProviderMenu() {
+        providerMenu.removeAllItems()
+        for provider in STTProvider.allCases {
+            let item = NSMenuItem(
+                title: provider.menuTitle,
+                action: #selector(selectProvider(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = provider.rawValue
+            item.state = config.sttProvider == provider ? .on : .off
+            providerMenu.addItem(item)
+        }
+    }
+
+    @objc private func selectProvider(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let provider = STTProvider(rawValue: raw),
+              provider != config.sttProvider
+        else {
+            refreshProviderMenu()
+            return
+        }
+        config.sttProvider = provider
+        persistConfig()
+        dictationManager.reloadConfig(config)
+        refreshProviderMenu()
+        refreshAPIKeyItem()
+        notifyInfo("Speech provider: \(provider.menuTitle)")
+        if !dictationManager.isConfigured {
+            promptForAPIKey()
+        }
+    }
+
     // MARK: - API key
 
-    /// One secure field. The old App ID + Access Token pair belonged to the retired console;
-    /// the current 豆包 interface accepts one project-scoped API Key.
+    /// Secure field for the **active** provider only. 豆包 and Grok keys live in separate
+    /// Keychain items and never substitute for each other.
     @objc private func promptForAPIKey() {
         NSApp.activate(ignoringOtherApps: true)
 
-        let stored = STTKeyStore.apiKey()
+        let provider = config.sttProvider
+        let stored = STTKeyStore.apiKey(for: provider)
         let alert = NSAlert()
-        alert.messageText = "豆包 API Key"
-        alert.informativeText =
-            "豆包语音新版控制台 ▸ API Key 管理。不是「访问控制」里的 API 访问密钥。"
+        switch provider {
+        case .doubao:
+            alert.messageText = "豆包 API Key"
+            alert.informativeText =
+                "豆包语音新版控制台 ▸ API Key 管理。不是「访问控制」里的 API 访问密钥。"
+        case .grok:
+            alert.messageText = "xAI API Key"
+            alert.informativeText =
+                "console.x.ai ▸ API Keys。用于 Grok Speech-to-Text；与豆包 Key 分开存放。"
+        }
         alert.addButton(withTitle: "保存")
         alert.addButton(withTitle: "取消")
         if stored != nil { alert.addButton(withTitle: "删除") }
@@ -339,32 +391,34 @@ final class TalkTypeApp: NSObject, NSApplicationDelegate {
                 return
             }
             guard !apiKey.allSatisfy({ $0 == "*" }) else {
-                notifyError("复制的是遮罩值。请先在豆包控制台显示完整 API Key。")
+                notifyError("复制的是遮罩值。请先在控制台显示完整 API Key。")
                 return
             }
             guard !apiKey.contains(where: { $0.isWhitespace }) else {
                 notifyError("API Key 里有空格或换行。请只复制完整 Key。")
                 return
             }
-            guard STTKeyStore.store(apiKey: apiKey) else {
+            guard STTKeyStore.store(apiKey: apiKey, for: provider) else {
                 notifyError("存到钥匙串失败。")
                 return
             }
             dictationManager.reloadConfig(config)
             refreshAPIKeyItem()
-            notifyInfo("API Key 已保存。按 \(hotkeyDisplayString()) 开始说。")
+            notifyInfo("\(provider.shortName) API Key 已保存。按 \(hotkeyDisplayString()) 开始说。")
         case .alertThirdButtonReturn:
-            STTKeyStore.clear()
+            STTKeyStore.clear(provider)
             dictationManager.reloadConfig(config)
             refreshAPIKeyItem()
-            notifyInfo("API Key 已删除。")
+            notifyInfo("\(provider.shortName) API Key 已删除。")
         default:
             break
         }
     }
 
     private func refreshAPIKeyItem() {
-        apiKeyItem?.title = (dictationManager?.isConfigured ?? false) ? "API Key…" : "API Key…（未填）"
+        let name = config.sttProvider.shortName
+        let filled = dictationManager?.isConfigured ?? false
+        apiKeyItem?.title = filled ? "API Key…（\(name)）" : "API Key…（\(name) 未填）"
     }
 
     // MARK: - Vocabulary

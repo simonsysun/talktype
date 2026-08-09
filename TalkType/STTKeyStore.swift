@@ -1,25 +1,40 @@
 import Foundation
 import Security
 
-/// 豆包新版控制台只发一个 API Key。TalkType 也只存这一项，避免把旧版 App ID / Token 或
-/// 火山 IAM 的 AK/SK 混进来。
+/// One Keychain item per exclusive STT provider. Never reuse a retired service name that
+/// `removeLegacyKeys` still deletes on launch.
 enum STTKeyStore {
-    private static let apiKeyService = "talktype-doubao-api-key"
+    private static let doubaoService = "talktype-doubao-api-key"
+    private static let xaiService = "talktype-xai-api-key"
 
-    static func apiKey() -> String? { read(apiKeyService) }
-
-    static var isConfigured: Bool { apiKey() != nil }
-
-    @discardableResult
-    static func store(apiKey: String) -> Bool {
-        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return false }
-        return write(key, to: apiKeyService)
+    static func apiKey(for provider: STTProvider) -> String? {
+        read(service(for: provider))
     }
 
-    static func clear() { delete(apiKeyService) }
+    static func isConfigured(_ provider: STTProvider) -> Bool {
+        apiKey(for: provider) != nil
+    }
 
-    /// v3 是不可逆的产品收敛：旧豆包双凭证、旧 provider 和 Whisper 时代的聚合项都不再读。
+    @discardableResult
+    static func store(apiKey: String, for provider: STTProvider) -> Bool {
+        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return false }
+        return write(key, to: service(for: provider))
+    }
+
+    static func clear(_ provider: STTProvider) {
+        delete(service(for: provider))
+    }
+
+    private static func service(for provider: STTProvider) -> String {
+        switch provider {
+        case .doubao: return doubaoService
+        case .grok: return xaiService
+        }
+    }
+
+    /// v3 cleaned old multi-provider keys. Keep wiping those names so a stale secret cannot
+    /// be mistaken for the new exclusive-switch stores.
     static func removeLegacyKeys() {
         for service in ["talktype-doubao-appid", "talktype-doubao-token",
                         "talktype-asr-openrouter", "talktype-groq", "talktype-asr-openai",

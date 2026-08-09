@@ -12,32 +12,36 @@ enum STTError: LocalizedError {
     case emptyResponse
     case timedOut
 
+    /// Set by the active exclusive provider before an STT call so tray copy names it.
+    static var providerLabel: String = "语音服务"
+
     var errorDescription: String? { userMessage }
 
     var userMessage: String {
+        let name = Self.providerLabel
         switch self {
         case .missingKey:
-            return "还没填 API Key。菜单栏 ▸ API Key… 填一下。"
+            return "还没填 \(name) API Key。菜单栏 ▸ API Key… 填一下。"
         case .unreachable(let detail):
-            return "连不上豆包：\(detail)"
+            return "连不上\(name)：\(detail)"
         case .timedOut:
-            return "豆包超时了。检查网络。"
+            return "\(name)超时了。检查网络。"
         case .emptyResponse:
-            return "豆包没返回文字。"
+            return "\(name)没返回文字。"
         case .rejected(let detail):
             if let focused = Self.focusedProviderMessage(detail) { return focused }
-            return "豆包拒绝了这次请求：\(detail.prefix(200))"
+            return "\(name)拒绝了这次请求：\(detail.prefix(200))"
         case .badStatus(let code, let body):
             if let focused = Self.focusedProviderMessage(body) { return focused }
             switch code {
             case 401, 403:
-                return "豆包 API Key 不对。菜单栏 ▸ API Key… 重填。"
+                return "\(name) API Key 不对。菜单栏 ▸ API Key… 重填。"
             case 429:
                 return "请求太频繁，或额度用完了。"
             case 413:
-                return "录音太长，豆包拒收。"
+                return "录音太长，\(name)拒收。"
             default:
-                return "豆包出错（\(code)）：\(body.prefix(200))"
+                return "\(name)出错（\(code)）：\(body.prefix(200))"
             }
         }
     }
@@ -48,7 +52,7 @@ enum STTError: LocalizedError {
             return "这个豆包项目还没开通对应的「流式语音识别 2.0」或「录音文件识别 2.0」。"
         }
         if lower.contains("invalid x-api-key") || lower.contains("invalid api key") {
-            return "豆包 API Key 不对。菜单栏 ▸ API Key… 重填。"
+            return "\(providerLabel) API Key 不对。菜单栏 ▸ API Key… 重填。"
         }
         if lower.contains("app key not found") {
             return "豆包 API Key 不对。菜单栏 ▸ API Key… 重填。"
@@ -94,7 +98,7 @@ enum STTTransport {
                     failure = STTError.badStatus(code: http.statusCode, body: detail)
                     return
                 }
-                // The v3 speech API also reports provider failures in headers while HTTP is 200.
+                // 豆包 v3 also reports provider failures in headers while HTTP is 200.
                 if !apiStatus.isEmpty, apiStatus != "20000000" {
                     failure = STTError.rejected(detail)
                     return

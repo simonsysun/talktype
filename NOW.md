@@ -25,13 +25,12 @@ Stage labels: `DONE`, `ACTIVE`, `NEXT`, `LATER`, `BLOCKED`.
 
 ## Resume Here
 
-**Current state:** Product remains macOS Doubao-only v3 (D003). Stage-0 Grok STT
-spike is complete on existing clips: Grok REST+keyterms is competitive and
-faster on file path; Chinese works best-effort; **not** default yet.
+**Current state:** Exclusive STT switch is implemented (D006): menu 豆包 default /
+Grok optional; no cross-provider failover. Owner should run a few real Grok
+dictations after pasting the xAI key, then continue the real-usage window.
 
-**Resume with:** (1) Simon taste call on Stage-0 — open Stage 1 exclusive switch
-or keep Doubao-only. (2) Continue real-usage observation. Do not wire Grok into
-the app without an explicit product decision.
+**Resume with:** Build/run the app → Speech Provider ▸ Grok → paste xAI key →
+daily use. Log only material issues. Promotion still gated on name collision.
 
 ## Stage Map
 
@@ -40,19 +39,20 @@ the app without an explicit product decision.
    current `TalkType/` sources.
 2. **DONE — Repository governance migration.** Canonical files and directories match
    the portable standard; competing trackers retired to Git history.
-3. **DONE — Grok STT Stage-0 spike (evidence only).** Direct `api.x.ai` vs Doubao
-   file on riverside clips; tool `scripts/stt_spike.py`; synthesis
-   `research/2026-08-09-grok-stt-stage0-spike.md`. Residual: only two clips;
-   owner paste-taste still open; no app change.
-4. **ACTIVE — Real-usage batch (macOS).** Collect daily-use issues for at least a
+3. **DONE — Grok STT Stage-0 spike.** Direct `api.x.ai` vs Doubao file; synthesis
+   `research/2026-08-09-grok-stt-stage0-spike.md`.
+4. **DONE — Grok exclusive switch (Stage 1).** Menu bar provider pick; Grok REST
+   + keyterms; separate Keychain; D006 / PRODUCT / README updated. Residual:
+   owner live acceptance on Grok; Chinese still best-effort on xAI; no Grok stream.
+5. **ACTIVE — Real-usage batch (macOS).** Collect daily-use issues for at least a
    week; ship one small tested batch. Keep scope tight.
-5. **NEXT — Optional: Grok exclusive-switch decision.** Only if Simon accepts
-   Stage-0 conditional pass; default stays Doubao; product reversal vs D003.
 6. **NEXT — Pre-promotion gates.** Optional support link decision; TalkType name
    collision research before meaningful promotion.
-7. **LATER — Speech regression micro-set.** Tiny real-speech set before further
+7. **LATER — Grok stream (same provider only).** Only if REST release latency
+   bothers after quality is accepted.
+8. **LATER — Speech regression micro-set.** Tiny real-speech set before further
    request tuning (CN-primary, EN-primary, mixed terms, numbers, self-correction).
-8. **LATER — Parked iOS.** Only after an explicit product un-park decision (D001).
+9. **LATER — Parked iOS.** Only after an explicit product un-park decision (D001).
 
 ## Active Stage — Real-usage batch (macOS)
 
@@ -68,12 +68,12 @@ any crash/privacy/upstream exceptions fixed promptly and the rest batched.
 - [ ] No known crash, security/privacy, data-loss, or upstream-break issue remains
       untracked here.
 
-**Non-goals:** provider bake-offs, multi-engine returns, iOS revive, large UI
-redesign, automatic session diaries.
+**Non-goals:** more STT providers, cross-provider auto-failover, iOS revive, large
+UI redesign, automatic session diaries.
 
 **Negative / fail-closed:** Do not call promotion-ready while the commercial
-name-collision item is unaddressed. Do not reintroduce polish/local engine without
-a new decision.
+name-collision item is unaddressed. Do not reintroduce polish/local engine or
+provider cascade without a new decision.
 
 **Next action:** Use TalkType daily; log only material issues into this stage
 (or fix immediately if they are crash/privacy/data-loss/upstream).

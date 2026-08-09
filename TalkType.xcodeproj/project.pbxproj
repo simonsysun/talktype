@@ -37,6 +37,7 @@
 		A10036 /* STTKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10036; };
 		A10037 /* WAVEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10037; };
 		A10038 /* DoubaoSTTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10038; };
+		A10039 /* GrokSTTClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10039; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -93,6 +94,7 @@
 		B10036 /* STTKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = STTKeyStore.swift; sourceTree = "<group>"; };
 		B10037 /* WAVEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WAVEncoder.swift; sourceTree = "<group>"; };
 		B10038 /* DoubaoSTTClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubaoSTTClient.swift; sourceTree = "<group>"; };
+		B10039 /* GrokSTTClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokSTTClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -150,6 +152,7 @@
 				B10036 /* STTKeyStore.swift */,
 				B10037 /* WAVEncoder.swift */,
 				B10038 /* DoubaoSTTClient.swift */,
+				B10039 /* GrokSTTClient.swift */,
 				B10013 /* Info.plist */,
 				B10014 /* TalkType.entitlements */,
 				B10015 /* Assets.xcassets */,
@@ -325,6 +328,7 @@
 				A10018 /* AudioDevices.swift in Sources */,
 				A10022 /* Log.swift in Sources */,
 				A10038 /* DoubaoSTTClient.swift in Sources */,
+				A10039 /* GrokSTTClient.swift in Sources */,
 				A10031 /* STTClient.swift in Sources */,
 				A10036 /* STTKeyStore.swift in Sources */,
 				A10037 /* WAVEncoder.swift in Sources */,

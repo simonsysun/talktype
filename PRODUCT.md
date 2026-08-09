@@ -68,60 +68,66 @@ is billed by the provider the user configures.
 
 - macOS 13+ menu-bar app built from `TalkType.xcodeproj`;
 - global hotkey dictation into the focused text field (synthesized paste, clipboard fallback);
-- one speech provider: 豆包 / Volcengine;
-  - default: 流式语音识别 2.0 (`bigmodel_nostream`), audio uploaded while speaking;
-  - same-provider fallback: 录音文件识别 2.0 极速版 when the stream fails;
-- native provider punctuation, ITN, and semantic smoothing (`enable_punc` / `enable_itn` /
-  `enable_ddc`);
-- user vocabulary sent as hot words on the same recognition request;
-- one project API key in the macOS Keychain (`X-Api-Key`);
+- exclusive speech provider switch (menu bar): **one active provider per dictation**, never
+  automatic cascade between providers;
+  - **豆包 / Volcengine (default):** 流式语音识别 2.0 (`bigmodel_nostream`) while speaking;
+    same-provider file flash (录音文件识别 2.0 极速版) only if the stream fails; native
+    `enable_punc` / `enable_itn` / `enable_ddc`; vocabulary as hot words;
+  - **Grok / xAI (optional):** REST file STT after stop (`POST /v1/stt`); vocabulary as
+    `keyterm`; no post-STT rewrite; Chinese is best-effort (not on xAI's official formatting
+    language list);
+- user vocabulary on the active recognition request only (Doubao hot words or Grok keyterms);
+- one API key **per provider** in the macOS Keychain (Doubao `X-Api-Key` / xAI Bearer);
 - microphone selection (including system default / Bluetooth devices).
 
 ### Non-goals (current)
 
 - offline / local ASR engine;
-- multi-provider picker or second polish model;
+- automatic failover between providers, or a second polish model after STT;
 - iOS keyboard product (parked; code may exist but is not product truth until accepted);
 - accounts, sync, team features, telemetry;
-- automatic filler-word policy beyond what the provider returns natively.
+- automatic filler-word policy beyond what the active provider returns natively.
 
 ## Authority and Refusal Model
 
 | Actor | Owns | Does not own |
 | --- | --- | --- |
-| User | API key, vocabulary, hotkey, mic choice, when to dictate | Changing TalkType's product boundary by configuration alone |
-| TalkType app | Recording, transport, paste insertion, clear error reporting | Rewriting meaning after recognition; storing audio beyond the dictation path |
-| 豆包 / Volcengine | Speech recognition result and its data policy for audio + hot words | Local app behavior, keychain storage, paste into other apps |
+| User | Active provider, that provider's API key, vocabulary, hotkey, mic, when to dictate | Cross-provider auto-routing; product boundary changes by config alone |
+| TalkType app | Recording, transport for the active provider, paste, clear errors | Rewriting meaning after recognition; storing audio beyond the dictation path |
+| Active STT provider | Recognition result and its data policy for audio + vocabulary terms | Local app behavior, keychain storage, paste into other apps |
 | macOS (TCC) | Mic and Accessibility/paste permission | Dictation quality |
 
 **Privacy, precisely:**
 
 | What | Leaves the Mac? |
 | --- | --- |
-| Audio for the active dictation + vocabulary terms | Yes — to Volcengine under its policy |
+| Audio for the active dictation + vocabulary terms | Yes — to the **selected** provider (Volcengine or xAI) under that provider's policy |
 | Everything else | No account, no telemetry, no subscription identity |
 
-No offline mode: no network is a clear error, not a silent downgrade.
+No offline mode: no network is a clear error, not a silent downgrade. Providers never
+fall back into each other.
 
 ## Domain Language
 
 | Term | Meaning | Avoid |
 | --- | --- | --- |
 | **Dictation** | One full cycle: hotkey start → speak → stop/pause → text at cursor | "Session" for the whole cycle |
-| **Speech recognition / STT** | The Doubao streaming call, with file flash as same-provider fallback | Multi-engine pipelines unless product reverses |
-| **API Key** | Single project key from the Doubao Voice console (`X-Api-Key`) | Old App ID + Access Token pair; IAM “API访问密钥” |
-| **Vocabulary** | User word list sent as hot words on the recognition request | Local post-rewrite dictionary |
+| **Speech recognition / STT** | The active exclusive provider call (Doubao stream+file, or Grok REST file) | Auto cascade across providers; multi-engine pipelines |
+| **API Key** | Key for the active provider (Doubao Voice console or xAI console) | Using one provider's key for the other; IAM “API访问密钥” for Doubao |
+| **Vocabulary** | User word list sent as Doubao hot words or Grok keyterms on the same request | Local post-rewrite dictionary |
 | **Polish** | Any second model or local rewrite after STT | Treating provider-native punc/ITN/DDC as a separate polish product |
 
 ## Intended Product Flow
 
 ```
-press hotkey → record (+ stream PCM) → release / pause
-  → finalise recognition → paste at cursor (clipboard always holds text)
+press hotkey → record (+ stream PCM if Doubao) → release / pause
+  → finalise recognition (active provider only) → paste at cursor
+  (clipboard always holds text)
 ```
 
-Expected UI surfaces: menu bar control, recording overlay, hotkey change, API key entry,
-microphone menu, vocabulary list. No settings window product is required for the core loop.
+Expected UI surfaces: menu bar control, recording overlay, provider switch, hotkey change,
+API key entry for the active provider, microphone menu, vocabulary list. No settings window
+product is required for the core loop.
 
 ## Success and Validation
 
@@ -142,7 +148,7 @@ Validation layers (not interchangeable):
 Any of the following is a product reversal and needs an explicit decision, not a quiet PR:
 
 - reintroducing a local engine or offline mode;
-- adding a second STT provider or post-STT rewrite layer;
+- automatic cross-provider failover, a third STT provider, or a post-STT rewrite layer;
 - shipping iOS as a supported product;
 - collecting telemetry or requiring accounts;
 - changing the privacy table above.

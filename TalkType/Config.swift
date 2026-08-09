@@ -1,5 +1,26 @@
 import Foundation
 
+/// One active speech provider per dictation. Never cascade across providers.
+enum STTProvider: String, Codable, CaseIterable {
+    case doubao
+    case grok
+
+    var menuTitle: String {
+        switch self {
+        case .doubao: return "豆包 (Volcengine)"
+        case .grok: return "Grok (xAI)"
+        }
+    }
+
+    /// Short name for tray errors and logs.
+    var shortName: String {
+        switch self {
+        case .doubao: return "豆包"
+        case .grok: return "Grok"
+        }
+    }
+}
+
 struct AppConfig: Codable {
     // The hotkey itself is owned by the KeyboardShortcuts library (UserDefaults), not this file.
     var sampleRate: Int = 16000
@@ -12,6 +33,8 @@ struct AppConfig: Codable {
     var silenceRmsThreshold: Double = 0.008
     /// UID of the microphone to record from. Empty means follow the system default.
     var inputDeviceUID: String = ""
+    /// Exclusive STT provider. Default remains 豆包 (D003 + D006).
+    var sttProvider: STTProvider = .doubao
 
     enum CodingKeys: String, CodingKey {
         case sampleRate = "sample_rate"
@@ -21,6 +44,7 @@ struct AppConfig: Codable {
         case silenceAutoStopSeconds = "silence_auto_stop_seconds"
         case silenceRmsThreshold = "silence_rms_threshold"
         case inputDeviceUID = "input_device_uid"
+        case sttProvider = "stt_provider"
     }
 
     init() {}
@@ -38,6 +62,12 @@ struct AppConfig: Codable {
         silenceAutoStopSeconds = try c.decodeIfPresent(Double.self, forKey: .silenceAutoStopSeconds) ?? d.silenceAutoStopSeconds
         silenceRmsThreshold = try c.decodeIfPresent(Double.self, forKey: .silenceRmsThreshold) ?? d.silenceRmsThreshold
         inputDeviceUID = try c.decodeIfPresent(String.self, forKey: .inputDeviceUID) ?? d.inputDeviceUID
+        if let raw = try c.decodeIfPresent(String.self, forKey: .sttProvider),
+           let provider = STTProvider(rawValue: raw) {
+            sttProvider = provider
+        } else {
+            sttProvider = d.sttProvider
+        }
     }
 }
 

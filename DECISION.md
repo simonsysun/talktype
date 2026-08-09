@@ -31,6 +31,34 @@ changes, add a new entry and mark the old one `Superseded`; do not rewrite the
 old rationale. `Evidence` is optional and should normally link to one research
 synthesis when research carried the choice.
 
+## D006 — Exclusive STT switch: Doubao default, optional Grok (xAI)
+
+**Date:** 2026-08-09 · **Status:** Active · **Type:** Product / Architecture
+
+**Extends:** D003 (still one recognition call, no polish); does **not** restore
+multi-engine auto-fallback (D002)
+
+**Decision:** Menu-bar **exclusive** provider switch between 豆包 (default) and
+Grok / xAI. One dictation uses exactly one provider. No automatic cascade if the
+active provider fails. Grok v1 is REST file STT after stop with vocabulary as
+`keyterm`; Doubao keeps stream + same-provider file flash. Separate Keychain
+items per provider (`talktype-doubao-api-key`, `talktype-xai-api-key`).
+
+**Why:** Stage-0 direct-xAI spike showed Grok REST+keyterms competitive on mixed
+CN/EN clips and lower file latency, while bare Grok lost entities. An optional
+path makes quality visible without hiding Doubao behind failover. Chinese remains
+undocumented on xAI's formatting language list, so Doubao stays default.
+
+**Consequence:** PRODUCT privacy table is per selected provider. Errors and API
+Key dialogs name the active provider. Do not invent a large provider-plugin
+framework for two clients. Grok stream is optional later only if release latency
+hurts after quality is accepted.
+
+**Revisit when:** Daily use shows Grok systematically better (consider default
+swap) or worse (remove menu item); or xAI documents Chinese formatting with SLA.
+
+**Evidence:** `research/2026-08-09-grok-stt-stage0-spike.md`
+
 ## D005 — Adopt portable project governance
 
 **Date:** 2026-08-09 · **Status:** Active · **Type:** Process

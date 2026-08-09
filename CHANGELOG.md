@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+
+- **Exclusive speech provider switch.** Menu bar ▸ Speech Provider: **豆包 (default)** or
+  **Grok (xAI)**. One dictation uses exactly one provider — no cross-provider auto-fallback.
+  Grok path is REST file STT with vocabulary as `keyterm`; Doubao keeps stream + file flash.
+  Separate Keychain keys per provider.
+
 ### Fixed
 
 - **Quiet speech reaches recognition.** Removed the fixed local RMS cutoff that discarded real

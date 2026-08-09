@@ -3,8 +3,9 @@ import Cocoa
 
 /// Central state machine: idle -> recording -> processing -> idle
 ///
-/// The whole pipeline is: stream audio to 豆包 while recording, paste the final response. The
-/// file endpoint is a reliability fallback only. Nothing rewrites what 豆包 returns.
+/// One exclusive STT provider per dictation (config.sttProvider). 豆包 streams while
+/// recording with same-provider file fallback; Grok is REST file only. Nothing rewrites
+/// provider text, and providers never cascade into each other.
 final class DictationManager {
     enum State {
         case idle
@@ -16,7 +17,8 @@ final class DictationManager {
 
     private var config: AppConfig
     private let recorder: AudioRecorder
-    private var client: DoubaoSTTClient?
+    private var doubaoClient: DoubaoSTTClient?
+    private var grokClient: GrokSTTClient?
     private let vocabularyStore: VocabularyStore
     private let overlay: OverlayWindow
     private weak var trayDelegate: TrayDelegate?
@@ -40,7 +42,11 @@ final class DictationManager {
         self.config = config
         self.vocabularyStore = vocabularyStore
         self.overlay = overlay
-        self.client = Self.makeClient(config)
+        var doubao: DoubaoSTTClient?
+        var grok: GrokSTTClient?
+        Self.applyClients(config, doubao: &doubao, grok: &grok)
+        self.doubaoClient = doubao
+        self.grokClient = grok
 
         self.recorder = AudioRecorder(
             sampleRate: config.sampleRate,
@@ -95,18 +101,33 @@ final class DictationManager {
     func reloadConfig(_ newConfig: AppConfig) {
         configLock.lock()
         config = newConfig
-        client = Self.makeClient(newConfig)
+        Self.applyClients(newConfig, doubao: &doubaoClient, grok: &grokClient)
         configLock.unlock()
         applyInputSelection()
     }
 
-    /// Nil until the API Key is stored — the one failure retrying cannot fix.
-    private static func makeClient(_ config: AppConfig) -> DoubaoSTTClient? {
-        guard let apiKey = STTKeyStore.apiKey() else { return nil }
-        return DoubaoSTTClient(apiKey: apiKey)
+    /// Build only the active provider's client — the other stays nil so a missing
+    /// alternate key cannot accidentally be used.
+    private static func applyClients(_ config: AppConfig,
+                                     doubao: inout DoubaoSTTClient?,
+                                     grok: inout GrokSTTClient?) {
+        doubao = nil
+        grok = nil
+        switch config.sttProvider {
+        case .doubao:
+            if let key = STTKeyStore.apiKey(for: .doubao) {
+                doubao = DoubaoSTTClient(apiKey: key)
+            }
+        case .grok:
+            if let key = STTKeyStore.apiKey(for: .grok) {
+                grok = GrokSTTClient(apiKey: key)
+            }
+        }
     }
 
-    var isConfigured: Bool { STTKeyStore.isConfigured }
+    var isConfigured: Bool { STTKeyStore.isConfigured(config.sttProvider) }
+
+    var activeProvider: STTProvider { config.sttProvider }
 
     /// Empty config UID means Automatic: follow the system default, including a
     /// Bluetooth headset — see `AudioDevices.automaticInput`. An explicit pick wins.
@@ -170,10 +191,11 @@ final class DictationManager {
         CATransaction.flush()
         trayDelegate?.setRecording(true)
 
-        // Open the WebSocket before the first mic buffer arrives. A failure here is not fatal:
-        // the captured WAV still goes through the already-proven file endpoint at stop.
+        // 豆包 only: open the WebSocket before the first mic buffer. Failure is not fatal —
+        // the captured WAV still goes through the same-provider file endpoint at stop.
+        // Grok v1 has no stream path (REST file after stop).
         configLock.lock()
-        let streamClient = client
+        let streamClient = config.sttProvider == .doubao ? doubaoClient : nil
         let streamTimeout = config.sttTimeoutSeconds
         configLock.unlock()
         if let streamClient = streamClient {
@@ -277,35 +299,29 @@ final class DictationManager {
                     // request must not freeze menu actions that reload the config.
                     self.configLock.lock()
                     let cfg = self.config
-                    let client = self.client
+                    let doubao = self.doubaoClient
+                    let grok = self.grokClient
                     self.configLock.unlock()
 
+                    STTError.providerLabel = cfg.sttProvider.shortName
                     let terms = self.vocabularyStore.getActiveVocabulary()
                     let text: String
-                    if let stream = stream {
-                        let started = Date()
-                        do {
-                            text = try stream.finish(timeout: cfg.sttTimeoutSeconds)
-                            let elapsed = Date().timeIntervalSince(started)
-                            print("[stt] stream \(String(format: "%.2f", elapsed))s chars=\(text.count)")
-                            Log.write("[stt] stream \(String(format: "%.2f", elapsed))s chars=\(text.count)")
-                        } catch {
-                            let elapsed = Date().timeIntervalSince(started)
-                            Log.write("[stt] stream failed after \(String(format: "%.2f", elapsed))s — file fallback: \(error.localizedDescription)")
-                            guard let client = client else { throw error }
-                            text = try self.transcribeFileFallback(
-                                client: client, audio: audio, sampleRate: cfg.sampleRate,
-                                terms: terms, timeout: cfg.sttTimeoutSeconds)
-                        }
-                    } else {
-                        guard let client = client else { throw STTError.missingKey }
-                        text = try self.transcribeFileFallback(
-                            client: client, audio: audio, sampleRate: cfg.sampleRate,
+                    switch cfg.sttProvider {
+                    case .doubao:
+                        text = try self.transcribeDoubao(
+                            stream: stream, client: doubao, audio: audio,
+                            sampleRate: cfg.sampleRate, terms: terms,
+                            timeout: cfg.sttTimeoutSeconds)
+                    case .grok:
+                        stream?.cancel()
+                        guard let grok = grok else { throw STTError.missingKey }
+                        text = try self.transcribeGrok(
+                            client: grok, audio: audio, sampleRate: cfg.sampleRate,
                             terms: terms, timeout: cfg.sttTimeoutSeconds)
                     }
 
                     guard !text.isEmpty else {
-                        Log.write("[dict] 豆包 returned empty text")
+                        Log.write("[dict] \(cfg.sttProvider.shortName) returned empty text")
                         self.trayDelegate?.notifyInfo("No text recognized. Try speaking more clearly.")
                         return
                     }
@@ -347,15 +363,51 @@ final class DictationManager {
         return stream
     }
 
-    private func transcribeFileFallback(client: DoubaoSTTClient, audio: [Float],
-                                        sampleRate: Int, terms: [String],
-                                        timeout: TimeInterval) throws -> String {
+    private func transcribeDoubao(stream: DoubaoStreamingSession?, client: DoubaoSTTClient?,
+                                  audio: [Float], sampleRate: Int, terms: [String],
+                                  timeout: TimeInterval) throws -> String {
+        if let stream = stream {
+            let started = Date()
+            do {
+                let text = try stream.finish(timeout: timeout)
+                let elapsed = Date().timeIntervalSince(started)
+                print("[stt] doubao stream \(String(format: "%.2f", elapsed))s chars=\(text.count)")
+                Log.write("[stt] doubao stream \(String(format: "%.2f", elapsed))s chars=\(text.count)")
+                return text
+            } catch {
+                let elapsed = Date().timeIntervalSince(started)
+                Log.write("[stt] doubao stream failed after \(String(format: "%.2f", elapsed))s — file fallback: \(error.localizedDescription)")
+                guard let client = client else { throw error }
+                return try transcribeDoubaoFile(client: client, audio: audio,
+                                                sampleRate: sampleRate, terms: terms,
+                                                timeout: timeout)
+            }
+        }
+        guard let client = client else { throw STTError.missingKey }
+        return try transcribeDoubaoFile(client: client, audio: audio, sampleRate: sampleRate,
+                                        terms: terms, timeout: timeout)
+    }
+
+    private func transcribeDoubaoFile(client: DoubaoSTTClient, audio: [Float],
+                                      sampleRate: Int, terms: [String],
+                                      timeout: TimeInterval) throws -> String {
         let wav = WAVEncoder.encode(samples: audio, sampleRate: sampleRate)
         let started = Date()
         let text = try client.transcribe(wav: wav, terms: terms, timeout: timeout)
         let elapsed = Date().timeIntervalSince(started)
-        print("[stt] file \(String(format: "%.2f", elapsed))s chars=\(text.count)")
-        Log.write("[stt] file \(String(format: "%.2f", elapsed))s chars=\(text.count)")
+        print("[stt] doubao file \(String(format: "%.2f", elapsed))s chars=\(text.count)")
+        Log.write("[stt] doubao file \(String(format: "%.2f", elapsed))s chars=\(text.count)")
+        return text
+    }
+
+    private func transcribeGrok(client: GrokSTTClient, audio: [Float], sampleRate: Int,
+                                terms: [String], timeout: TimeInterval) throws -> String {
+        let wav = WAVEncoder.encode(samples: audio, sampleRate: sampleRate)
+        let started = Date()
+        let text = try client.transcribe(wav: wav, terms: terms, timeout: timeout)
+        let elapsed = Date().timeIntervalSince(started)
+        print("[stt] grok file \(String(format: "%.2f", elapsed))s chars=\(text.count)")
+        Log.write("[stt] grok file \(String(format: "%.2f", elapsed))s chars=\(text.count)")
         return text
     }
 

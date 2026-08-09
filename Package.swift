@@ -32,6 +32,7 @@ let package = Package(
                 "AudioRecorder.swift",
                 "Config.swift",
                 "DoubaoSTTClient.swift",
+                "GrokSTTClient.swift",
                 "Log.swift",
                 "STTClient.swift",
                 "TextInserter.swift",

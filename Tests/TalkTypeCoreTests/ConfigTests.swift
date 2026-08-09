@@ -29,6 +29,21 @@ final class ConfigTests: XCTestCase {
         """
         let config = try decode(legacy)
         XCTAssertEqual(config.inputDeviceUID, "AppleHDA:1", "surviving settings are kept")
+        XCTAssertEqual(config.sttProvider, .doubao,
+                       "unknown historical provider values fall back to doubao")
+    }
+
+    func testSttProviderRoundTrip() throws {
+        var config = AppConfig()
+        config.sttProvider = .grok
+        let data = try JSONEncoder().encode(config)
+        let back = try JSONDecoder().decode(AppConfig.self, from: data)
+        XCTAssertEqual(back.sttProvider, .grok)
+    }
+
+    func testKnownSttProviderDecodes() throws {
+        let config = try decode(#"{"stt_provider":"grok"}"#)
+        XCTAssertEqual(config.sttProvider, .grok)
     }
 
     func testEmptyObjectYieldsDefaults() throws {

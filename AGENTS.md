@@ -60,8 +60,8 @@ demos, mocks, or fallbacks as live capability.
 
 - **macOS product only until PRODUCT says otherwise.** Dormant iOS targets are not
   live scope.
-- **One recognition path.** Doubao stream with same-provider file fallback; no
-  silent second rewrite layer.
+- **One recognition path per dictation.** Exclusive provider switch (Doubao default
+  or Grok); never auto-cascade providers; no silent second rewrite layer.
 - **Provider output is product truth for text.** Do not reintroduce polish or a
   local engine without an explicit decision.
 - **Secrets stay out of Git.** `secrets/` is gitignored; never move signing

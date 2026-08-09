@@ -44,23 +44,27 @@ together. You can also [browse and join existing discussions](https://github.com
 
 ## One recognition, no rewrite
 
-A dictation is one recognition: stream while you speak, finalise, paste. Nothing rewrites the
-result — no cleanup pass, no local model — so whatever 豆包 returns lands at your cursor.
+A dictation is one recognition on **one** provider: record, finalise, paste. Nothing rewrites
+the result — no cleanup pass, no local model. You pick the provider in the menu bar; TalkType
+never fails over from one cloud to another behind your back.
 
-Speech recognition is 豆包 (Volcengine) 流式语音识别 2.0. Its native punctuation, spoken-number
-normalisation ("百分之九十五" → "95%"), and semantic smoothing are switched on. If the live
-connection fails, TalkType retries once through 录音文件识别 2.0 极速版; neither path adds a
-second LLM.
+**Default — 豆包 (Volcengine):** 流式语音识别 2.0 while you speak; if the live connection fails,
+one retry through 录音文件识别 2.0 极速版. Native punctuation, spoken-number normalisation, and
+semantic smoothing stay on. Vocabulary is sent as hot words.
+
+**Optional — Grok (xAI):** REST file transcription after you stop (`POST /v1/stt`). Vocabulary
+is sent as `keyterm`. Chinese works in practice but is **not** on xAI's official formatting
+language list (best-effort, no SLA).
 
 **Privacy, precisely:**
 
 | What | Leaves your Mac? |
 |---|---|
-| Audio + your vocabulary terms | Yes — to Volcengine, subject to its data policy |
+| Audio + your vocabulary terms | Yes — to the **provider you selected** (Volcengine or xAI) |
 | Anything else | Nothing. No account, no telemetry, no subscription. |
 
-The only credential is your own project-scoped Volcengine API Key, in the macOS Keychain.
-There is no offline mode: no network means a clear error, not a fallback.
+Each provider's API key is stored separately in the macOS Keychain. No offline mode: no network
+means a clear error, not a silent downgrade.
 
 ---
 
@@ -73,9 +77,11 @@ There is no offline mode: no network means a clear error, not a fallback.
    signed with a paid certificate. Right-click the app ▸ **Open** ▸ **Open**, and macOS remembers.
 2. **Allow two permissions.** The microphone, and "paste on your behalf". Both are required;
    TalkType can't grant them for you.
-3. **Paste your key.** The dialog opens by itself on first launch. Get the single key from the
-   new Doubao Voice console ▸ **API Key 管理** — not IAM's “API访问密钥”. The project must have
-   both **流式语音识别 2.0** and **录音文件识别 2.0** enabled.
+3. **Paste your key.** The dialog opens by itself on first launch for the default provider
+   (豆包). Get the key from the Doubao Voice console ▸ **API Key 管理** — not IAM's
+   “API访问密钥”. The project must have both **流式语音识别 2.0** and **录音文件识别 2.0**
+   enabled. To try Grok later: menu bar ▸ **Speech Provider** ▸ Grok, then paste an xAI key
+   from [console.x.ai](https://console.x.ai).
 
 Press **⌘⇧Space** and start talking.
 
@@ -87,11 +93,12 @@ Press **⌘⇧Space** and start talking.
 - **Microphone** — pick one, or Automatic (follows the system default, including a Bluetooth
   headset; recording through a Bluetooth mic switches the link into headset mode, so playback
   drops to 24 kHz mono for a while).
-- **Vocabulary** — add names and terms the model keeps mishearing; they are sent to 豆包 as
-  hot words. Nothing is rewritten locally afterwards, so a term that still comes out wrong is
-  telling you something real about the model.
-- **API Key** — menu bar ▸ API Key…. A wrong one announces itself on the first dictation; leave
-  the field blank when re-editing to keep the stored key.
+- **Speech Provider** — menu bar ▸ Speech Provider: 豆包 (default) or Grok (xAI). Exclusive —
+  only the selected path runs.
+- **Vocabulary** — names and terms the model keeps mishearing. Sent as Doubao hot words or
+  Grok keyterms on the same request. Nothing is rewritten locally afterwards.
+- **API Key** — menu bar ▸ API Key… for the **active** provider. A wrong one announces itself
+  on the first dictation; leave the field blank when re-editing to keep the stored key.
 - **Clipboard** — every transcript is also left on your clipboard, so ⌘V always works as a
   manual fallback.
 
