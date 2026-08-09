@@ -8,6 +8,19 @@
 
 这是一个中英混说的人做给自己用的软件，所以**一句话里中英文混着说，它就是能听懂**——你不用切换语言，说到哪算哪。
 
+## 项目文档（贡献者 / Agent）
+
+| 文件 | 用途 |
+| --- | --- |
+| [`PRODUCT.md`](./PRODUCT.md) | 当前产品合同 |
+| [`DECISION.md`](./DECISION.md) | 重要决策与原因 |
+| [`NOW.md`](./NOW.md) | 唯一任务 tracker 与重启点 |
+| [`DEVLOG.md`](./DEVLOG.md) | Simon 可选个人开发日志 |
+| [`AGENTS.md`](./AGENTS.md) | 所有 AI coding agent 的工作流程 |
+| [`CHANGELOG.md`](./CHANGELOG.md) | 已发布版本历史 |
+| [`research/`](./research/) | 有日期的 research 综合 |
+| [`source-materials/`](./source-materials/) | 原材料 provenance（隐私字节可能仅本地） |
+
 ```
 按快捷键 → 说话 → 再按一下 / 停顿 → 文字出现在光标处
 ```
@@ -97,7 +110,7 @@ cd talktype
 ./scripts/build.sh install
 ```
 
-`swift test` 不需要 Xcode 就能跑逻辑测试。`TODO.md` 记录做完了什么、还差什么。仓库里还有一个从未编译、暂时搁置的 iOS 键盘扩展。
+`swift test` 不需要 Xcode 就能跑逻辑测试。`NOW.md` 记录当前阶段与下一步。仓库里还有一个从未编译、暂时搁置的 iOS 键盘扩展。
 
 ## 协议
 

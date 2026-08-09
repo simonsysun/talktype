@@ -8,6 +8,19 @@
 again (or pause) — the words land where your cursor is. Slack, Notes, email, terminal…
 anywhere you can type, you can talk.
 
+## Project docs (for contributors and agents)
+
+| File | Purpose |
+| --- | --- |
+| [`PRODUCT.md`](./PRODUCT.md) | Current product contract |
+| [`DECISION.md`](./DECISION.md) | Durable decisions and why |
+| [`NOW.md`](./NOW.md) | Only task tracker and restart point |
+| [`DEVLOG.md`](./DEVLOG.md) | Simon's optional personal development log |
+| [`AGENTS.md`](./AGENTS.md) | Required workflow for every AI coding agent |
+| [`CHANGELOG.md`](./CHANGELOG.md) | Shipped release history |
+| [`research/`](./research/) | Dated research synthesis |
+| [`source-materials/`](./source-materials/) | Labeled source provenance (private bytes may be local-only) |
+
 Built by someone who thinks in two languages at once, so **mixing Chinese and English in one
 sentence just works** — 你不用切换语言，说到哪算哪.
 
@@ -130,8 +143,8 @@ cd talktype
 ./scripts/build.sh install
 ```
 
-`swift test` runs the logic tests without Xcode. `TODO.md` tracks what is done and what isn't.
-An iOS keyboard extension exists in the repository but is parked and never compiled.
+`swift test` runs the logic tests without Xcode. `NOW.md` tracks what is active and what
+is next. An iOS keyboard extension exists in the repository but is parked and never compiled.
 
 ## Licence
 

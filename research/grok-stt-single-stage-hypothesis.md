@@ -1,5 +1,12 @@
 # Grok STT 能否替代 TalkType 的多层语音管线？
 
+**Status:** historical research note; not current product fact  
+**Access date:** 2026-08-05  
+**Scope:** whether Grok STT could replace a multi-stage STT+polish pipeline
+
+> **状态标注（2026-08-09）：** 当前产品是豆包单路径（`DECISION.md` D003–D004）。本文不是
+> 现行架构说明；旧 ADR/TODO 链接已失效，以根目录治理文件为准。
+>
 > **结论已撤回（2026-08-05）。** 下面「95% 效果」那一栏的负面判断，依据是 repo 里两轮 raw
 > 实测——而那两轮走的是 **OpenRouter 的 `x-ai/grok-stt-1.0` 路由，不是 xAI direct
 > `POST /v1/stt`，并且没有记录是否传过 `language` / `format` / `keyterm`**。xAI 明确要求
@@ -10,8 +17,7 @@
 > 真实含义是「没有 SLA、没承诺中文 formatting」，不是「中文不准」。
 >
 > **下面第 1 节的官方事实（价格、端点、格式、限流、参数语义）仍然有效**，其余判断不要再当
-> 结论引用。当前架构决策见 [ADR-0002](../adr/0002-single-call-stt-no-polish.md)：四个
-> provider 已经接进 app，答案靠实测，不靠文档。
+> 结论引用。
 
 研究日期：2026-08-05
 范围：xAI 官方文档、公告、价格与条款；必要的原始研究；TalkType repo 内已有实测。没有使用二手评测来判断质量。
@@ -57,7 +63,7 @@
 
 来源：[STT model page](https://docs.x.ai/developers/models/speech-to-text) / [xAI Pricing](https://docs.x.ai/developers/pricing)
 
-按 TalkType 以前统一使用的 30 min/day 场景：REST 约 **$1.50/月**，Streaming 约 **$3.00/月**。当前 repo 记录的 OpenRouter Qwen 约 $0.13/h，即约 $1.95/月；所以单看 ASR，REST 只省约 $0.45/月，并不是数量级变化。[repo ASR research](../../TODO.md)
+按 TalkType 以前统一使用的 30 min/day 场景：REST 约 **$1.50/月**，Streaming 约 **$3.00/月**。当前 repo 记录的 OpenRouter Qwen 约 $0.13/h，即约 $1.95/月；所以单看 ASR，REST 只省约 $0.45/月，并不是数量级变化。（历史 ASR 笔记原在已退役的 `TODO.md`，见 Git history。）
 
 当前 polish 使用 Groq 上的 `qwen/qwen3.6-27b`；Groq 官方价是 $0.60/M input tokens、$3.00/M output tokens，标称约 500 tokens/s。实际每小时成本取决于每段 dictation 的长度、system prompt 重复次数和输出长度，repo 没有完整 token telemetry，不能精确声称省多少。[Groq pricing](https://groq.com/pricing) / [Groq model page](https://console.groq.com/docs/model/qwen/qwen3.6-27b) / [TextRefiner.swift](../../TalkType/TextRefiner.swift)
 
@@ -246,7 +252,7 @@ TalkType 当前实测是最直接的产品证据：
 - 本轮保留的两条 direct-xAI 结果是 **0.470641 s / 0.680167 s**，速度非常强，但关键实体错误集中：`Claude → Cloud`、`GPT-4o → GBD 四楼`；以及 `ASR-Flash → ASR-Flex`、`xAI → xia`、`Claude → call/Craw`。artifact 没记录 request 是否启用了 `format` / `language` / `keyterm`。因此它支持“低延迟”判断，也说明 baseline request 的实体质量不够，**但不等于 explicit-keyterm arm 已经失败**；[direct-xAI artifact（gitignored local evidence）](../../bakeoff-results/grok-20260803.json)
 - 当前 Qwen cloud 约 2 s，本地 Qwen 0.3–0.9 s，现有 polish 是 optional、失败时 deterministic tidy fallback。
 
-来源：[TODO.md — ASR decision / OpenRouter 实测](../../TODO.md) / [TextRefiner.swift](../../TalkType/TextRefiner.swift) / [README](../../README.md)
+来源：历史 `TODO.md` ASR decision / OpenRouter 实测（Git history） / 当时的 TextRefiner.swift（已删） / [README](../README.md)
 
 这些结果和最新官方支持表相互印证：现有失败更像 capability boundary，不像偶发 provider integration 问题。
 

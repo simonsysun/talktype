@@ -1,9 +1,14 @@
 # 单次 STT API：native polish 候选短名单
 
-> **状态（2026-08-05）：** 本文的短名单已落地为代码。ElevenLabs、Grok、Soniox、OpenAI 四家
-> 都已接进 app，可在菜单栏一键切换，polish 层和本地引擎已删除。见
-> [ADR-0002](../adr/0002-single-call-stt-no-polish.md)。下面两处判断在落地前已修正，正文中
-> 标注为「已修正」。
+**Status:** historical research note; not current product fact  
+**Access date:** 2026-08-05  
+**Scope:** vendor shortlist for single-call STT with native formatting
+
+> **状态标注（2026-08-09）：** 本文保留为当时短名单证据。产品后来收敛为单一豆包路径
+> （见根目录 `DECISION.md` D003–D004），不要把文中「四家都已接进 app」当作当前产品事实。
+>
+> **历史标注（2026-08-05）：** 短名单一度驱动多 provider 实验；polish 层和本地引擎删除的方向
+> 仍成立。下面两处判断在落地前已修正，正文中标注为「已修正」。
 
 **日期：** 2026-08-05  
 **决策对象：** TalkType（中文为主、中英混说、极简架构、价格敏感）  

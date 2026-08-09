@@ -14,6 +14,9 @@ dist/
 # Never publish: the code-signing private key lives here.
 secrets/
 
-# Recordings are private; never commit Simon's voice.
+# Recordings and private bake-off outputs; never commit Simon's voice.
+# Local path: source-materials/2026-08-03-asr-bakeoff/{audio,results}/
+source-materials/**/audio/
+source-materials/**/results/
 docs/bakeoff/audio/
 bakeoff-results/

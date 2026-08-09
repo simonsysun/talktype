@@ -1,45 +1,6 @@
-# 一次语音识别调用，没有润色层
+# Retired ADR — see DECISION.md D003
 
-一次听写就是一次 API 调用：录音、把 WAV POST 给豆包、粘贴返回的文字。provider 和输入框之间
-什么都不跑。
+This ADR is **retired** (2026-08-09). Content merged into [`DECISION.md`](../../DECISION.md)
+as **D003**.
 
-Status: accepted (2026-08-05), supersedes [ADR-0001](0001-cloud-first-engine-with-offline-fallback.md).
-The transport choice below was superseded by [ADR-0003](0003-streaming-stt-with-file-fallback.md).
-
-## 为什么
-
-旧管线有四段：云端 ASR（连不上时退到本地 4 GB MLX 引擎）、Groq 上的 LLM 润色、本地确定性
-清理、词库规范化。它之所以存在，是因为当年的 ASR 返回的是逐字、无标点、不能直接粘贴的文本。
-
-这个前提已经过期。现在的 provider 把清理做进了转写里——豆包的 `enable_punc`、`enable_itn`
-和 `enable_ddc` 直接给标点、「百分之九十五 → 95%」和语义顺滑。在这之上再加一层润色，等于多
-一个模型、多一份延迟、多一套失败模式，以及多一次改写你原话的机会。
-
-## 考虑过的选项
-
-- **保留管线，把 provider 换掉** —— 否决：润色层会盖住 provider 之间的真实差异，而那正是要看的。
-- **接四家可切换（ElevenLabs / Grok / Soniox / OpenAI）** —— 一度实现，随即否决：厂商文档和
-  第三方评测都证明不了「中文夹英文术语」这个场景谁更强，四份适配换来的是四份未验证的猜测。
-- **只接一家，用真实使用来判断** —— 选定。豆包（火山引擎），因为它是手上已有 key 的那家。
-
-## 结果
-
-- **provider 的选择就是产品本身。** 它返回什么就粘贴什么，选错了立刻能看出来，不会被清理层吸收。
-- **完全没有离线听写。** 本地引擎已删，没网就是明确报错。可接受：本地引擎常驻约 4 GB，而且很少
-  真的走到那条路。
-- **文字质量可能比上个 release 差**，差在润色层过去掩盖掉的地方——中英空格、半角标点、自我
-  纠正（「A，不对，B」）。`PostProcessor` 里有一部分是确定性规则，这次一并删了；代码在 git
-  历史里，等真实使用暴露出哪些症状还在，再按症状补回来。
-- **要换 provider 就是加一个文件。** `DoubaoSTTClient` 没有藏在协议后面——只有一个实现的协议
-  是空架子。真要加第二家时，那时候才知道抽象该长什么样。
-
-## 接口选择
-
-火山的流式接口走 WebSocket 二进制帧协议；**极速版**（`volc.bigasr.auc_turbo`）是普通的一次
-HTTP POST，音频 base64 放 body 里，同步返回文字。听写只需要后者，所以整个 WebSocket 分支都
-不必实现。
-
-鉴权只发新版控制台的项目 API Key（`X-Api-Key`），不再保存旧版 App ID + Access Token。
-
-热词走 `request.corpus.context`，而且它是一个 JSON **字符串**、不是嵌套对象。极速版已通过线上
-A/B 验证：加入 `Claude Code` 后，原本的「Cloud Code」能被纠正。只在词库非空时才带上。
+Do not update this file. Historical content remains in Git history.
