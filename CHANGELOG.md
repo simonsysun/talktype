@@ -2,18 +2,31 @@
 
 ## Unreleased
 
+## v3.1.0 — 2026-08-09
+
+Open-source download path matches daily use: dual exclusive STT providers, clearer README,
+fresh signed release build.
+
 ### Added
 
 - **Exclusive speech provider switch.** Menu bar ▸ Speech Provider: **豆包 (default)** or
   **Grok (xAI)**. One dictation uses exactly one provider — no cross-provider auto-fallback.
   Grok path is REST file STT with vocabulary as `keyterm`; Doubao keeps stream + file flash.
   Separate Keychain keys per provider.
+- Stage-0 research tooling: `scripts/stt_spike.py` (not required for end users).
 
 ### Fixed
 
 - **Quiet speech reaches recognition.** Removed the fixed local RMS cutoff that discarded real
   low-volume recordings before finalising 豆包 STT. Exact all-zero captures are still treated as
   microphone failures; every other signal is left to the speech recognizer.
+- **Keychain re-prompts.** API keys are stored with an app-trusted ACL and cached in memory so
+  the login keychain password is not requested on every dictation or menu open.
+
+### Docs
+
+- README (EN/中文) rewritten for download-and-use: dual keys, privacy, cost, troubleshooting.
+- GitHub release ships `TalkType-3.1.0.zip` for non-developers.
 
 ## v3.0.0 — 2026-08-06
 

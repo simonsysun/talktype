@@ -4,104 +4,109 @@
 
 ![TalkType logo](docs/assets/talktype-logo.png)
 
-**用说的，代替打字。** 在 Mac 上任何地方按一下快捷键开始说，再按一下（或停顿）——文字就落在光标处。Slack、备忘录、邮件、终端……凡是能打字的地方，都能说。
+**用说的，代替打字。** 在 Mac 上任意处按快捷键开始说，再按一下（或停顿）——文字落在光标处。Slack、备忘录、邮件、终端……能打字的地方都能说。
 
-这是一个中英混说的人做给自己用的软件，所以**一句话里中英文混着说，它就是能听懂**——你不用切换语言，说到哪算哪。
+为**一句话里中英混说**的人做的：不用切换输入法语言。
 
-## 项目文档（贡献者 / Agent）
+```
+按快捷键 → 说话 → 再按 / 停顿 → 文字出现在光标处
+```
 
-| 文件 | 用途 |
+**App 免费（MIT）。** 你自己准备语音 API Key，用量按对应云厂商计费。没有 TalkType 账号、没有订阅、没有遥测。
+
+---
+
+## 安装（大约 5 分钟）
+
+**需要：** macOS 13 及以上
+
+1. **下载**最新 macOS 安装包：  
+   **[⬇ Releases](https://github.com/simonsysun/talktype/releases/latest)**  
+   解压 → 把 `TalkType.app` 拖进 **「应用程序」**。
+
+2. **第一次打开。** 免费软件没有苹果付费开发者证书，系统可能拦：  
+   右键 TalkType → **打开** → **打开**。之后会记住。
+
+3. **两个权限**（弹出时都要允许）：
+   - **麦克风**
+   - **辅助功能**（才能替你粘贴）
+
+4. **填 API Key**（缺 key 时会自动弹窗）：
+
+   | Provider | 菜单 | 去哪拿 Key | 说明 |
+   | --- | --- | --- | --- |
+   | **豆包 / 火山**（默认） | API Key… | [豆包语音控制台](https://console.volcengine.com/) → **API Key 管理**（不是 IAM「API 访问密钥」）。开通 **流式语音识别 2.0** 和 **录音文件识别 2.0**。 | 边说边传；流式失败才用同家文件识别重试 |
+   | **Grok / xAI**（可选） | Speech Provider → Grok，再 API Key… | [console.x.ai](https://console.x.ai) → API Keys | 松键后 REST 转写。中文实际能用，但不在 xAI 官方 formatting 语言表（best-effort） |
+
+按 **⌘⇧Space** 开始说。快捷键可在菜单栏随时改。
+
+---
+
+## 做什么 / 不做什么
+
+- **一次听写 = 一次识别**——没有第二层「润色」模型，也没有几 GB 本地引擎。
+- **同一时间只用一个云**——菜单栏 **Speech Provider** 选豆包或 Grok；**不会**在两家之间偷偷切换。
+- **词库**——常听错的名字/术语；豆包作热词，Grok 作 `keyterm`。识别后不做本地改写。
+- **剪贴板**——每次结果都会复制一份，⌘V 永远能兜底。
+
+### 隐私
+
+| 什么 | 会离开 Mac 吗 |
 | --- | --- |
-| [`PRODUCT.md`](./PRODUCT.md) | 当前产品合同 |
-| [`DECISION.md`](./DECISION.md) | 重要决策与原因 |
-| [`NOW.md`](./NOW.md) | 唯一任务 tracker 与重启点 |
-| [`DEVLOG.md`](./DEVLOG.md) | Simon 可选个人开发日志 |
-| [`AGENTS.md`](./AGENTS.md) | 所有 AI coding agent 的工作流程 |
-| [`CHANGELOG.md`](./CHANGELOG.md) | 已发布版本历史 |
-| [`research/`](./research/) | 有日期的 research 综合 |
-| [`source-materials/`](./source-materials/) | 原材料 provenance（隐私字节可能仅本地） |
+| 本次听写的音频 + 词库术语 | **会**——发给**你选中的**厂商（火山或 xAI），按其政策处理 |
+| 其它一切 | **不会**——无 TalkType 账号、无遥测、无订阅身份 |
 
-```
-按快捷键 → 说话 → 再按一下 / 停顿 → 文字出现在光标处
-```
-
----
-
-## 一起把 TalkType 做好
-
-TalkType 要靠真实使用才能继续变好，尤其是一个人很难发现的那些小细节。如果哪里不顺、某个词总是听错，或者你想到一个能让听写更适合自己工作方式的功能，**欢迎直接[提交 GitHub Issue](https://github.com/simonsysun/talktype/issues/new)**。
-
-Bug、还没成形的想法、功能建议，甚至一个很小的使用感受都可以。你不需要会写代码，也不需要先想好完整方案；我们可以一起讨论、一起把它做出来。也欢迎[看看并加入已有讨论](https://github.com/simonsysun/talktype/issues)。
-
----
-
-## 一次识别，不再改写
-
-一次听写就是**一个** provider 上的一次识别：录音、结束、粘贴。中间没有润色、没有本地模型。provider 在菜单栏里选，TalkType 不会在两家云之间偷偷切换。
-
-**默认 — 豆包（火山引擎）：** 边说边走流式语音识别 2.0；流式失败才用录音文件识别 2.0 极速版重试一次。原生标点、口语数字转写和语义顺滑打开。词库作热词。
-
-**可选 — Grok（xAI）：** 松键后走 REST 文件转写。词库作 `keyterm`。中文实际能用，但不在 xAI 官方 formatting 语言表上（best-effort，无 SLA）。
-
-**隐私，说精确点：**
-
-| 什么 | 会离开你的 Mac 吗 |
-|---|---|
-| 音频 + 你的词库术语 | 会——发给**你选中的** provider（火山或 xAI） |
-| 其它一切 | 没有了。没有账号、没有遥测、没有订阅。 |
-
-每个 provider 的 API Key 分开存在钥匙串。没有离线模式：没网就是明确报错。
-
----
-
-## 快速上手——大约 3 分钟
-
-**你需要：** macOS 13 以上。
-
-1. **下载并打开。** [⬇ 下载最新版](https://github.com/simonsysun/talktype/releases/latest)——解压，拖进"应用程序"。第一次打开 macOS 会拒绝——免费软件没买付费证书。右键点 App ▸ **打开** ▸ **打开**，之后它就记住了。
-2. **给两个权限。** 麦克风，以及"允许帮你粘贴"。两个都必须给，TalkType 没法替你同意。
-3. **填 API Key。** 第一次启动会为默认的豆包弹出对话框。去豆包语音新版控制台 ▸ **API Key 管理**拿一个项目 Key——不是「访问控制」里的「API 访问密钥」。项目要开通**流式语音识别 2.0**和**录音文件识别 2.0**。以后要试 Grok：菜单栏 ▸ **Speech Provider** ▸ Grok，再贴 xAI Key。
-
-按 **⌘⇧Space** 开始说。
+没有离线模式：没网就是明确报错。
 
 ---
 
 ## 使用手册
 
-- **快捷键**——默认 ⌘⇧Space；在菜单栏"更改快捷键…"里改。
-- **麦克风**——指定一个，或选自动（跟随系统默认，包括蓝牙耳机；用蓝牙麦录音时链路切到耳机模式，播放会降到 24kHz 单声道一段时间）。
-- **Speech Provider**——菜单栏里豆包（默认）或 Grok（xAI），二选一，不自动跨家兜底。
-- **词库**——模型老听错的名字和术语。豆包作热词，Grok 作 keyterm。**之后不再做本地纠正**。
-- **API Key**——菜单栏 ▸ API Key…，针对**当前** provider。填错了会在第一次听写时说清楚；再打开留空就是「保持原来的 Key」。
-- **剪贴板**——每段转写也会留在剪贴板上，⌘V 永远是兜底。
+| 项目 | 位置 |
+| --- | --- |
+| 快捷键 | 菜单栏 → 更改快捷键…（默认 ⌘⇧Space） |
+| 语音厂商 | 菜单栏 → Speech Provider |
+| API Key（当前厂商） | 菜单栏 → API Key… |
+| 麦克风 | 菜单栏 → Microphone（或自动） |
+| 词库 | 菜单栏 → Vocabulary |
+| 开机启动 | 菜单栏 → Launch at Login |
+
+**蓝牙提示：** 用蓝牙耳机麦录音时，系统常切到耳机模式，播放可能降到 24 kHz 单声道一段时间——这是 macOS 行为，不是 TalkType 单独的锅。
+
+---
 
 ## 常见问题
 
-- **更新之后不粘贴了？** macOS 把"允许粘贴"权限绑定在具体版本上，TalkType 没有付费证书，所以新版本在 macOS 眼里是另一个 App。TalkType 会自己发现并给你 **Fix This** 按钮；点它，然后在 macOS 询问时重新打开 TalkType。（v2.0.2 起共用一张证书签名，以后更新不会再这样。）
-- **提示"还没填 API Key"？** 菜单栏 ▸ API Key…，粘贴那一个项目 Key。
-- **提示"API Key 不对"？** 通常是多了个空格，或者拿成了「访问控制」里的 IAM Key。
-- **提示"requested grant not found"？** 给这个项目开通**流式语音识别 2.0**和**录音文件识别 2.0**。
-- **中英文之间没空格？** 那就是原始输出。现在没有任何本地规范化——这是故意的，为的是让模型的真实表现暴露出来。
+| 现象 | 处理 |
+| --- | --- |
+| 系统不让打开 | 右键 → 打开 → 打开（未付费签名） |
+| 更新后不能粘贴 | 点 **Fix This**，在 隐私 → 辅助功能 里重新打开 TalkType。共用同一签名证书的版本可保住授权 |
+| 「还没填 API Key」 | 菜单栏 → API Key…（**当前** provider） |
+| 豆包 key 不对 / grant not found | 用语音控制台项目 Key（不是 IAM）；开通流式 + 录音文件 2.0 |
+| Grok key 不对 | 从 console.x.ai 贴完整 Key（不要空格/星号遮罩） |
+| AirPods 起录失败 | 再试一次，或麦克风改成 Mac 内置；蓝牙切换本身不稳定 |
+| 中英文中间没空格 | 就是模型原文——故意不做本地改写 |
+
+---
+
+## 费用
+
+- **TalkType：** 免费。
+- **语音 API：** 按你选的厂商计费（豆包 / xAI 各自账单）。每天几分钟听写通常很便宜；以控制台最新标价为准。
+
+---
 
 ## 和别的方案比
 
-| | TalkType | 苹果自带听写 | Wispr Flow / Superwhisper |
-|---|---|---|---|
-| 价格 | App 免费；豆包用量按其套餐 | 免费 | 订阅制 |
-| 离线可用 | 不支持 | 部分 | 通常要联网 |
-| 声音离开电脑 | 会 | 有时 | 通常会 |
-| 中英混说 | 支持 | 很差 | 看产品 |
-| 去掉口头禅 | 豆包原生怎么做就怎么样 | 不会 | 会 |
-| 自定义词库 | 有 | 有限 | 有 |
+| | TalkType | 苹果听写 | Wispr Flow / Superwhisper |
+| --- | --- | --- | --- |
+| 价格 | App 免费；STT 按你的 Key 计费 | 免费 | 订阅 |
+| 离线 | 否 | 部分 | 通常上云 |
+| 声音离开电脑 | 会（到你选的厂商） | 有时 | 通常会 |
+| 中英混说 | 是 | 差 | 看产品 |
 | 开源 | 是（MIT） | 否 | 否 |
 
-## 内部实现
-
-麦克风的单声道 PCM 会重采样到 16 kHz，每 200 ms 用 WebSocket 二进制帧发给 `/api/v3/sauc/bigmodel_nostream`，使用流式语音识别 2.0（`volc.seedasr.sauc.duration`）。停止录音时，最后一帧标记为结束。连接失败才把完整 WAV 发给录音文件识别 2.0 极速版（`volc.bigasr.auc_turbo`）兜底。
-
-热词放在 `request.corpus.context`，而且它是一个 JSON **字符串**、不是嵌套对象。只在词库非空时才带上。
-
-设置 `TALKTYPE_STATE_DIR` 可以把配置和词库指到别处，用来试新配置而不动你正在用的那套。
+---
 
 ## 从源码构建
 
@@ -109,12 +114,37 @@ Bug、还没成形的想法、功能建议，甚至一个很小的使用感受�
 git clone https://github.com/simonsysun/talktype.git
 cd talktype
 
-./scripts/make-signing-cert.sh   # 可选，一次：让权限在更新后仍然有效
-./scripts/build.sh install
+./scripts/make-signing-cert.sh   # 可选，一次：更新后辅助功能权限更稳
+./scripts/build.sh install       # Release → /Applications/TalkType.app
+# 或: ./scripts/build.sh release  # 额外打出 dist/TalkType-<version>.zip
 ```
 
-`swift test` 不需要 Xcode 就能跑逻辑测试。`NOW.md` 记录当前阶段与下一步。仓库里还有一个从未编译、暂时搁置的 iOS 键盘扩展。
+- 逻辑测试（不必开 Xcode GUI）：`swift test`
+- 打包：`scripts/build.sh`、`scripts/make-signing-cert.sh`
+- 仓库里有搁置的 iOS 键盘目标，**不是**当前 macOS 产品。
+
+---
+
+## 一起把 TalkType 做好
+
+真实日用才能发现边角。哪里不顺、哪个词总听错、有想法——  
+欢迎 **[开 Issue](https://github.com/simonsysun/talktype/issues/new)**（bug、半成品想法、小感受都行）。
+
+---
+
+## 项目文档（贡献者 / Agent）
+
+| 文件 | 用途 |
+| --- | --- |
+| [`PRODUCT.md`](./PRODUCT.md) | 产品合同 |
+| [`DECISION.md`](./DECISION.md) | 重要决策 |
+| [`NOW.md`](./NOW.md) | 任务与重启点 |
+| [`AGENTS.md`](./AGENTS.md) | Agent 工作流 |
+| [`CHANGELOG.md`](./CHANGELOG.md) | 版本历史 |
+| [`research/`](./research/) | 研究笔记 |
+
+---
 
 ## 协议
 
-MIT——随便用。
+[MIT](./LICENSE)——随便用。

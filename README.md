@@ -4,141 +4,109 @@
 
 ![TalkType logo](docs/assets/talktype-logo.png)
 
-**Talk instead of typing.** Press a hotkey anywhere on your Mac and start talking; press it
-again (or pause) — the words land where your cursor is. Slack, Notes, email, terminal…
-anywhere you can type, you can talk.
+**Talk instead of typing.** Press a hotkey anywhere on your Mac, speak, press again (or pause) — the words land where your cursor is. Slack, Notes, email, terminal… anywhere you can type, you can talk.
 
-## Project docs (for contributors and agents)
-
-| File | Purpose |
-| --- | --- |
-| [`PRODUCT.md`](./PRODUCT.md) | Current product contract |
-| [`DECISION.md`](./DECISION.md) | Durable decisions and why |
-| [`NOW.md`](./NOW.md) | Only task tracker and restart point |
-| [`DEVLOG.md`](./DEVLOG.md) | Simon's optional personal development log |
-| [`AGENTS.md`](./AGENTS.md) | Required workflow for every AI coding agent |
-| [`CHANGELOG.md`](./CHANGELOG.md) | Shipped release history |
-| [`research/`](./research/) | Dated research synthesis |
-| [`source-materials/`](./source-materials/) | Labeled source provenance (private bytes may be local-only) |
-
-Built by someone who thinks in two languages at once, so **mixing Chinese and English in one
-sentence just works** — 你不用切换语言，说到哪算哪.
+Built for people who mix **Chinese and English in one sentence** — no language switching.
 
 ```
-press hotkey → talk → press again / pause → text appears at your cursor
+press hotkey → talk → press again / pause → text at cursor
 ```
+
+**Free app (MIT).** You bring your own speech API key; usage is billed by that provider. No TalkType account, no subscription, no telemetry.
 
 ---
 
-## Help shape TalkType
+## Install (about 5 minutes)
 
-TalkType gets better through real daily use — especially the small details one person cannot
-discover alone. If something feels off, a word is repeatedly misheard, or you have an idea that
-would make dictation fit your workflow better, **please [open a GitHub issue](https://github.com/simonsysun/talktype/issues/new)**.
+**Needs:** macOS 13+
 
-Bug reports, rough ideas, feature requests, and tiny usability observations are all welcome. You
-do not need to know how to code or arrive with a complete solution. We can work out what to build
-together. You can also [browse and join existing discussions](https://github.com/simonsysun/talktype/issues).
+1. **Download** the latest macOS build:  
+   **[⬇ Releases](https://github.com/simonsysun/talktype/releases/latest)**  
+   Unzip → drag `TalkType.app` into **Applications**.
+
+2. **Open it the first time.** Free apps are not signed with a paid Apple Developer certificate, so macOS may block the first open:  
+   right-click TalkType → **Open** → **Open**. After that it remembers.
+
+3. **Allow two permissions** when asked:
+   - **Microphone**
+   - **Accessibility** (so TalkType can paste for you)
+
+4. **Paste an API key** for the provider you want (dialog opens if missing):
+
+   | Provider | Menu | Where to get a key | Notes |
+   | --- | --- | --- | --- |
+   | **豆包 / Volcengine** (default) | API Key… | [Doubao Voice console](https://console.volcengine.com/) → **API Key 管理** (not IAM “API访问密钥”). Enable **流式语音识别 2.0** and **录音文件识别 2.0**. | Streams while you speak; same-provider file retry if the stream fails. |
+   | **Grok / xAI** (optional) | Speech Provider → Grok, then API Key… | [console.x.ai](https://console.x.ai) → API Keys | REST after you stop. Chinese works in practice but is **not** on xAI’s official formatting language list (best-effort). |
+
+Press **⌘⇧Space** and start talking. Change the hotkey anytime from the menu bar.
 
 ---
 
-## One recognition, no rewrite
+## What it does (and does not)
 
-A dictation is one recognition on **one** provider: record, finalise, paste. Nothing rewrites
-the result — no cleanup pass, no local model. You pick the provider in the menu bar; TalkType
-never fails over from one cloud to another behind your back.
+- **One recognition per dictation** — no second “polish” model, no local multi‑GB engine.
+- **One cloud provider at a time** — pick 豆包 or Grok in **Speech Provider**. TalkType never fails over between them behind your back.
+- **Vocabulary** — names the model mishears; sent as Doubao hot words or Grok `keyterm`s. Nothing rewrites text after STT.
+- **Clipboard** — every transcript is also copied, so ⌘V always works as a backup.
 
-**Default — 豆包 (Volcengine):** 流式语音识别 2.0 while you speak; if the live connection fails,
-one retry through 录音文件识别 2.0 极速版. Native punctuation, spoken-number normalisation, and
-semantic smoothing stay on. Vocabulary is sent as hot words.
-
-**Optional — Grok (xAI):** REST file transcription after you stop (`POST /v1/stt`). Vocabulary
-is sent as `keyterm`. Chinese works in practice but is **not** on xAI's official formatting
-language list (best-effort, no SLA).
-
-**Privacy, precisely:**
+### Privacy
 
 | What | Leaves your Mac? |
-|---|---|
-| Audio + your vocabulary terms | Yes — to the **provider you selected** (Volcengine or xAI) |
-| Anything else | Nothing. No account, no telemetry, no subscription. |
+| --- | --- |
+| Audio for this dictation + vocabulary terms | **Yes** — to the provider **you selected** (Volcengine or xAI), under that provider’s policy |
+| Everything else | **No** — no TalkType account, no telemetry, no subscription identity |
 
-Each provider's API key is stored separately in the macOS Keychain. No offline mode: no network
-means a clear error, not a silent downgrade.
-
----
-
-## Quick start — about 5 minutes
-
-**You need:** macOS 13 or newer.
-
-1. **Download and open.** [⬇ Latest release](https://github.com/simonsysun/talktype/releases/latest) —
-   unzip, drag to Applications. The first time you open it, macOS will refuse — free apps aren't
-   signed with a paid certificate. Right-click the app ▸ **Open** ▸ **Open**, and macOS remembers.
-2. **Allow two permissions.** The microphone, and "paste on your behalf". Both are required;
-   TalkType can't grant them for you.
-3. **Paste your key.** The dialog opens by itself on first launch for the default provider
-   (豆包). Get the key from the Doubao Voice console ▸ **API Key 管理** — not IAM's
-   “API访问密钥”. The project must have both **流式语音识别 2.0** and **录音文件识别 2.0**
-   enabled. To try Grok later: menu bar ▸ **Speech Provider** ▸ Grok, then paste an xAI key
-   from [console.x.ai](https://console.x.ai).
-
-Press **⌘⇧Space** and start talking.
+No offline mode: no network → a clear error.
 
 ---
 
 ## Manual
 
-- **Hotkey** — default ⌘⇧Space; change it from the menu bar (Change Hotkey…).
-- **Microphone** — pick one, or Automatic (follows the system default, including a Bluetooth
-  headset; recording through a Bluetooth mic switches the link into headset mode, so playback
-  drops to 24 kHz mono for a while).
-- **Speech Provider** — menu bar ▸ Speech Provider: 豆包 (default) or Grok (xAI). Exclusive —
-  only the selected path runs.
-- **Vocabulary** — names and terms the model keeps mishearing. Sent as Doubao hot words or
-  Grok keyterms on the same request. Nothing is rewritten locally afterwards.
-- **API Key** — menu bar ▸ API Key… for the **active** provider. A wrong one announces itself
-  on the first dictation; leave the field blank when re-editing to keep the stored key.
-- **Clipboard** — every transcript is also left on your clipboard, so ⌘V always works as a
-  manual fallback.
+| Item | Where |
+| --- | --- |
+| Hotkey | Menu bar → Change Hotkey… (default ⌘⇧Space) |
+| Speech provider | Menu bar → Speech Provider |
+| API key (active provider) | Menu bar → API Key… |
+| Microphone | Menu bar → Microphone (or Automatic) |
+| Vocabulary | Menu bar → Vocabulary |
+| Launch at login | Menu bar → Launch at Login |
+
+**Bluetooth tip:** Recording through a Bluetooth headset often switches the link into headset mode; system playback may drop to 24 kHz mono for a while. That is macOS behavior, not a TalkType bug.
+
+---
 
 ## Troubleshooting
 
-- **Stopped pasting after an update?** macOS ties the paste permission to the exact build, and
-  TalkType isn't signed with a paid certificate — so a new version looks like a different app.
-  TalkType spots this and offers a **Fix This** button; click it and switch TalkType back on when
-  macOS asks. *(Releases from v2.0.2 share one certificate, so this shouldn't recur.)*
-- **"还没填 API Key"?** Menu bar ▸ API Key…, paste the one project key.
-- **"API Key 不对"?** Volcengine rejected it — usually a stray space or an IAM key instead of
-  the key from the Doubao Voice console.
-- **"requested grant not found"?** Enable **流式语音识别 2.0** and **录音文件识别 2.0** for that project.
-- **Chinese and English run together without a space?** That is the raw output. Nothing
-  normalises it any more; that is deliberate, so the model's real behaviour is visible.
+| Symptom | What to try |
+| --- | --- |
+| macOS won’t open the app | Right-click → Open → Open (unsigned free build) |
+| Stopped pasting after an update | Menu bar / prompt → **Fix This**, re-enable TalkType under Privacy → Accessibility. Builds that share the same signing cert keep the grant. |
+| “还没填 API Key” | Menu bar → API Key… for the **current** provider |
+| Doubao: wrong key / “requested grant not found” | Use the Voice console project key (not IAM); enable 流式 + 录音文件识别 2.0 |
+| Grok: wrong key | Paste a full xAI API key from console.x.ai (no spaces / masked `***`) |
+| AirPods won’t start recording | Retry once, or switch Microphone to the MacBook mic; Bluetooth handoff is flaky on macOS |
+| CN/EN stuck together with no space | Raw model output by design — no local rewrite |
+
+---
+
+## Cost
+
+- **TalkType:** free.
+- **Speech API:** pay the provider you choose (豆包 and xAI bill separately for STT usage). A few minutes of dictation per day is typically cheap; check each console for current rates.
+
+---
 
 ## How it compares
 
 | | TalkType | Apple Dictation | Wispr Flow / Superwhisper |
-|---|---|---|---|
-| Price | Free app; Doubao usage billed separately | Free | Subscription |
+| --- | --- | --- | --- |
+| Price | Free app; STT billed by your provider | Free | Subscription |
 | Offline | No | Partly | Usually cloud |
-| Voice leaves your Mac | Yes | Sometimes | Usually |
+| Voice leaves your Mac | Yes (to the provider you pick) | Sometimes | Usually |
 | Mixed Chinese + English | Yes | Poorly | Varies |
-| Removes filler words | Whatever 豆包 does natively | No | Yes |
-| Custom vocabulary | Yes | Limited | Yes |
 | Open source | Yes (MIT) | No | No |
 
-## Under the hood
-
-The microphone's mono PCM is resampled to 16 kHz and sent in 200 ms binary WebSocket frames to
-`/api/v3/sauc/bigmodel_nostream` using 流式语音识别 2.0 (`volc.seedasr.sauc.duration`). The last
-audio frame is marked final when recording stops. If the socket fails, the captured WAV is sent
-to `/api/v3/auc/bigmodel/recognize/flash` (`volc.bigasr.auc_turbo`) as a same-provider fallback.
-
-Hot words go in `request.corpus.context` as a JSON *string*, not a nested object. They are attached
-only when the vocabulary is non-empty.
-
-Setting `TALKTYPE_STATE_DIR` points config and vocabulary somewhere else, which is how you
-trial a setup without touching your real one.
+---
 
 ## Building from source
 
@@ -146,13 +114,45 @@ trial a setup without touching your real one.
 git clone https://github.com/simonsysun/talktype.git
 cd talktype
 
-./scripts/make-signing-cert.sh   # optional, once: keeps permissions valid across updates
-./scripts/build.sh install
+./scripts/make-signing-cert.sh   # optional, once: keep Accessibility across rebuilds
+./scripts/build.sh install       # Release build → /Applications/TalkType.app
+# or: ./scripts/build.sh release # also writes dist/TalkType-<version>.zip
 ```
 
-`swift test` runs the logic tests without Xcode. `NOW.md` tracks what is active and what
-is next. An iOS keyboard extension exists in the repository but is parked and never compiled.
+- Logic tests (no Xcode GUI): `swift test`
+- Packaging helpers: `scripts/build.sh`, `scripts/make-signing-cert.sh`
+- An iOS keyboard target exists in the repo but is **parked** and not part of the shipping macOS product.
+
+---
+
+## Help shape TalkType
+
+Real daily use finds the sharp edges. If something feels off, a word is always misheard, or you have an idea —  
+**[open an issue](https://github.com/simonsysun/talktype/issues/new)** (bugs, rough ideas, tiny notes all welcome).
+
+---
+
+## Project docs (contributors / agents)
+
+| File | Purpose |
+| --- | --- |
+| [`PRODUCT.md`](./PRODUCT.md) | Product contract |
+| [`DECISION.md`](./DECISION.md) | Durable decisions |
+| [`NOW.md`](./NOW.md) | Task tracker / restart point |
+| [`AGENTS.md`](./AGENTS.md) | Agent workflow |
+| [`CHANGELOG.md`](./CHANGELOG.md) | Release history |
+| [`research/`](./research/) | Dated research notes |
+
+---
+
+## Under the hood (short)
+
+- **豆包:** 16 kHz PCM over WebSocket 流式语音识别 2.0 (`bigmodel_nostream`); on failure, same audio to 录音文件识别 2.0 极速版. Hot words in `request.corpus.context` as a JSON **string**.
+- **Grok:** WAV upload to `POST https://api.x.ai/v1/stt` with optional repeated `keyterm` fields (no `format`/`language=en` for mixed CN/EN).
+- Config / vocabulary live under `~/.talktype` (override with `TALKTYPE_STATE_DIR`).
+
+---
 
 ## Licence
 
-MIT — do what you like with it.
+[MIT](./LICENSE) — do what you like with it.
