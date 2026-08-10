@@ -31,6 +31,43 @@ changes, add a new entry and mark the old one `Superseded`; do not rewrite the
 old rationale. `Evidence` is optional and should normally link to one research
 synthesis when research carried the choice.
 
+## D007 — Mobile: iOS keyboard is architecturally blocked; Android is the path
+
+**Date:** 2026-08-10 · **Status:** Active · **Type:** Scope / Architecture
+
+**Extends:** D001 (macOS first, iOS parked); does **not** reverse it
+
+**Decision:** Do not build an iOS keyboard extension. If TalkType ever ships on
+mobile, the target is **Android**. Mobile stays deferred until Simon has an
+Android device (intended purchase while in Hong Kong; no date). `TalkTypeiOS/`
+and `TalkTypeKeyboard/` remain dormant and are not a resumable base.
+
+**Why:** iOS app extensions cannot record audio at all — `AVAudioSession` returns
+`AVAudioSessionErrorCodeCannotStartRecording` (561145187) for any extension, by
+design, since a sandboxed keyboard with microphone access is an audio keylogger.
+"Allow Full Access" grants network and a shared container, **not** the
+microphone. The only legal iOS architecture is container-app-records /
+keyboard-inserts across an App Group — what Wispr Flow does — and on iOS 26.4
+Apple stopped returning the user automatically, so that flow now costs a manual
+app switch per session. Android's `InputMethodService` may hold `RECORD_AUDIO`
+directly; Wispr's own Android app (Feb 2026) uses a floating overlay with no
+session bouncing. Same product, same year: the platform sets the ceiling.
+
+**Consequence:** `TalkTypeKeyboard/KeyboardViewController.swift` is not stale
+code, it is **impossible** code — it calls `requestRecordPermission` and starts
+recording inside the extension. Do not repair it; it never ran and never could.
+Android would be a Kotlin rewrite with no reuse of the Swift core. Free Apple
+provisioning cannot supply App Groups either, so even the legal iOS design
+requires the $99/yr program, which Simon declined. Deleting the dormant iOS
+targets is permitted but not required.
+
+**Revisit when:** Simon has an Android device in hand, or Apple permits
+microphone access from app extensions.
+
+**Evidence:** Apple *App Extension Programming Guide — Custom Keyboard* and
+Technical Q&A QA1872 (extensions may not record audio); Wispr Flow help doc
+"Adapting to iOS 26.4" (manual swipe-back) and its Feb 2026 Android launch.
+
 ## D006 — Exclusive STT switch: Doubao default, optional Grok (xAI)
 
 **Date:** 2026-08-09 · **Status:** Active · **Type:** Product / Architecture
