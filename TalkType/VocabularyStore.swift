@@ -1,7 +1,6 @@
 import Foundation
 
 private let defaultActiveLimit = 50
-private let maxPromptChars = 800
 
 /// Persistent vocabulary list for biasing transcription spelling. JSON storage.
 final class VocabularyStore {
@@ -40,9 +39,7 @@ final class VocabularyStore {
         let entry = VocabEntry(
             id: UUID().uuidString.prefix(8).lowercased(),
             canonical: normalized,
-            addedAt: ISO8601DateFormatter().string(from: Date()),
-            pinned: false,
-            lastUsedAt: nil
+            addedAt: ISO8601DateFormatter().string(from: Date())
         )
         entries.append(entry)
         save()
@@ -61,23 +58,14 @@ final class VocabularyStore {
         return true
     }
 
-    func getActiveVocabulary(limit: Int = defaultActiveLimit, maxChars: Int = maxPromptChars) -> [String] {
+    /// Newest first, then the provider client's own term/character budget applies.
+    func getActiveVocabulary(limit: Int = defaultActiveLimit) -> [String] {
         lock.lock()
         let snapshot = entries
         lock.unlock()
-        let sorted = snapshot.sorted { ($0.addedAt) > ($1.addedAt) }
-        var active: [String] = []
-        var totalChars = 0
-
-        for entry in sorted {
-            let word = entry.canonical
-            let extra = word.count + (active.isEmpty ? 0 : 2)
-            if !active.isEmpty && totalChars + extra > maxChars { break }
-            active.append(word)
-            totalChars += extra
-            if active.count >= limit { break }
-        }
-        return active
+        return Array(snapshot.sorted { $0.addedAt > $1.addedAt }
+            .prefix(limit)
+            .map(\.canonical))
     }
 
     // MARK: - Persistence
@@ -97,9 +85,7 @@ final class VocabularyStore {
                 return VocabEntry(
                     id: raw.id ?? UUID().uuidString.prefix(8).lowercased(),
                     canonical: canonical,
-                    addedAt: raw.addedAt ?? ISO8601DateFormatter().string(from: Date()),
-                    pinned: raw.pinned ?? false,
-                    lastUsedAt: raw.lastUsedAt
+                    addedAt: raw.addedAt ?? ISO8601DateFormatter().string(from: Date())
                 )
             }
         } catch {
@@ -116,9 +102,7 @@ final class VocabularyStore {
             VocabRawEntry(
                 id: entry.id,
                 canonical: entry.canonical,
-                addedAt: entry.addedAt,
-                pinned: entry.pinned,
-                lastUsedAt: entry.lastUsedAt
+                addedAt: entry.addedAt
             )
         })
 
@@ -143,8 +127,6 @@ struct VocabEntry {
     let id: String
     let canonical: String
     let addedAt: String
-    let pinned: Bool
-    let lastUsedAt: String?
 }
 
 enum VocabError: LocalizedError {
@@ -168,13 +150,32 @@ private struct VocabRawEntry: Codable {
     let id: String?
     let canonical: String
     let addedAt: String?
-    let pinned: Bool?
-    let lastUsedAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id, canonical
         case addedAt = "added_at"
         case pinned
         case lastUsedAt = "last_used_at"
+    }
+
+    init(id: String?, canonical: String, addedAt: String?) {
+        self.id = id
+        self.canonical = canonical
+        self.addedAt = addedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id)
+        canonical = try c.decode(String.self, forKey: .canonical)
+        addedAt = try c.decodeIfPresent(String.self, forKey: .addedAt)
+        // pinned / last_used_at are polish-era leftovers; decode-ignored on purpose.
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(id, forKey: .id)
+        try c.encode(canonical, forKey: .canonical)
+        try c.encodeIfPresent(addedAt, forKey: .addedAt)
     }
 }

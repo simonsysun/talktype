@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Removed
+
+- **Dormant iOS targets.** `TalkTypeiOS/` and `TalkTypeKeyboard/` are gone from the
+  Xcode project. They never ran (D007: iOS extensions cannot record audio) and were
+  misleading as a clone/resume surface.
+
+### Changed
+
+- **Vocabulary is a word list.** Dropped unused polish-era `pinned` / `lastUsedAt`
+  fields and the leftover prompt-character budget. Active terms are newest-first,
+  then each provider client applies its own 100×50 cap. Old `vocabulary.json` files
+  still load.
+
 ## v3.1.0 — 2026-08-09
 
 Open-source download path matches daily use: dual exclusive STT providers, clearer README,

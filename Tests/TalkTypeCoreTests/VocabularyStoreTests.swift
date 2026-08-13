@@ -78,21 +78,33 @@ final class VocabularyStoreTests: XCTestCase {
         XCTAssertEqual(store.getActiveVocabulary(limit: 50).count, 50)
     }
 
-    /// The prompt budget is what keeps the hint list from bloating the API request.
-    func testActiveVocabularyIsCappedByPromptLength() throws {
+    /// Count is the only store-side cap. Provider clients already enforce their own
+    /// term/character budgets (Doubao and Grok: 100 × 50).
+    func testActiveVocabularyDoesNotApplyAPromptCharacterBudget() throws {
         let store = makeStore()
         for i in 0..<60 { try store.add(String(repeating: "x", count: 40) + "\(i)") }
-
-        let active = store.getActiveVocabulary(limit: 50, maxChars: 200)
-        let promptLength = active.joined(separator: ", ").count
-        XCTAssertLessThanOrEqual(promptLength, 200)
-        XCTAssertFalse(active.isEmpty, "the cap must not empty the list entirely")
+        XCTAssertEqual(store.getActiveVocabulary(limit: 50).count, 50)
     }
 
-    /// A single entry longer than the whole budget must still be sent, not silently dropped.
-    func testOversizedSingleEntryIsStillIncluded() throws {
+    func testLongSingleEntryIsStillIncluded() throws {
         let store = makeStore()
         try store.add(String(repeating: "y", count: 500))
-        XCTAssertEqual(store.getActiveVocabulary(maxChars: 100).count, 1)
+        XCTAssertEqual(store.getActiveVocabulary().count, 1)
+    }
+
+    /// Pre-v3 vocabulary files carried polish-era fields. Those keys must load as a
+    /// plain word list, not fail the decode.
+    func testLegacyPinnedAndLastUsedFieldsAreIgnored() throws {
+        let path = tempDir.appendingPathComponent("vocabulary.json")
+        let json = """
+        {"version":1,"entries":[
+          {"id":"abcd1234","canonical":"Claude Code",
+           "added_at":"2026-08-01T00:00:00Z","pinned":true,
+           "last_used_at":"2026-08-02T00:00:00Z"}
+        ]}
+        """
+        try Data(json.utf8).write(to: path)
+        XCTAssertEqual(VocabularyStore(path: path).listEntries().map(\.canonical),
+                       ["Claude Code"])
     }
 }

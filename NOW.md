@@ -52,9 +52,9 @@ daily use. Log only material issues. Promotion still gated on name collision.
    bothers after quality is accepted.
 8. **LATER — Speech regression micro-set.** Tiny real-speech set before further
    request tuning (CN-primary, EN-primary, mixed terms, numbers, self-correction).
-9. **LATER — Parked mobile.** iOS keyboard is ruled out as architecturally
-   impossible; Android is the only viable target and waits on hardware (D001,
-   D007). Needs an explicit product un-park decision before any stage opens.
+9. **LATER — Mobile.** iOS keyboard is architecturally impossible and the dormant
+   targets are gone; Android is the only viable target and waits on hardware
+   (D001, D007). Needs an explicit product decision before any stage opens.
 
 ## Active Stage — Real-usage batch (macOS)
 
@@ -104,10 +104,8 @@ design (D003).
 
 ## Residuals Carried Forward
 
-- iOS targets under `TalkTypeiOS/` / `TalkTypeKeyboard/` have never been proven
-  on device and cannot be: iOS forbids microphone access from app extensions
-  (D007). Ignore for macOS work; do not try to repair them. Mobile, if it ever
-  happens, is Android and waits on hardware.
+- Dormant iOS targets were deleted (D007). Do not restore them. Mobile, if it
+  ever happens, is Android and waits on hardware.
 - Historical bake-off numbers and multi-engine designs live in `research/` and
   Git history; they do not authorize product reversals by proximity.
 - `CHANGELOG.md` remains the release history surface for humans and GitHub.

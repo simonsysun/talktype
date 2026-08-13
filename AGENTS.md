@@ -58,8 +58,8 @@ demos, mocks, or fallbacks as live capability.
 
 ## Core Invariants
 
-- **macOS product only until PRODUCT says otherwise.** Dormant iOS targets are not
-  live scope.
+- **macOS product only until PRODUCT says otherwise.** There is no iOS code in
+  the tree; do not restore the deleted targets.
 - **One recognition path per dictation.** Exclusive provider switch (Doubao default
   or Grok); never auto-cascade providers; no silent second rewrite layer.
 - **Provider output is product truth for text.** Do not reintroduce polish or a

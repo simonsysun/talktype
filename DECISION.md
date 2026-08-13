@@ -40,7 +40,7 @@ synthesis when research carried the choice.
 **Decision:** Do not build an iOS keyboard extension. If TalkType ever ships on
 mobile, the target is **Android**. Mobile stays deferred until Simon has an
 Android device (intended purchase while in Hong Kong; no date). `TalkTypeiOS/`
-and `TalkTypeKeyboard/` remain dormant and are not a resumable base.
+and `TalkTypeKeyboard/` were deleted; they are not a resumable base.
 
 **Why:** iOS app extensions cannot record audio at all — `AVAudioSession` returns
 `AVAudioSessionErrorCodeCannotStartRecording` (561145187) for any extension, by
@@ -53,13 +53,12 @@ app switch per session. Android's `InputMethodService` may hold `RECORD_AUDIO`
 directly; Wispr's own Android app (Feb 2026) uses a floating overlay with no
 session bouncing. Same product, same year: the platform sets the ceiling.
 
-**Consequence:** `TalkTypeKeyboard/KeyboardViewController.swift` is not stale
-code, it is **impossible** code — it calls `requestRecordPermission` and starts
-recording inside the extension. Do not repair it; it never ran and never could.
-Android would be a Kotlin rewrite with no reuse of the Swift core. Free Apple
-provisioning cannot supply App Groups either, so even the legal iOS design
-requires the $99/yr program, which Simon declined. Deleting the dormant iOS
-targets is permitted but not required.
+**Consequence:** The former keyboard extension was **impossible** code — it
+called `requestRecordPermission` and started recording inside the extension.
+Do not restore it from Git; it never ran and never could. Android would be a
+Kotlin rewrite with no reuse of the Swift core. Free Apple provisioning cannot
+supply App Groups either, so even the legal iOS design requires the $99/yr
+program, which Simon declined.
 
 **Revisit when:** Simon has an Android device in hand, or Apple permits
 microphone access from app extensions.
@@ -203,9 +202,10 @@ keyboard extension and companion app until the phone becomes the priority.
 were never compiled or run on device; treating them as live scope produced false
 progress and split attention.
 
-**Consequence:** iOS code may remain in tree as dormant. It is not product scope,
-not a restart target, and not a claim of mobile readiness. Resume only through
-an explicit product decision and a new `NOW.md` stage.
+**Consequence:** iOS is not product scope, not a restart target, and not a claim
+of mobile readiness. The dormant targets have been deleted; recover them only from
+Git history if needed as evidence. Resume mobile work only through an explicit
+product decision and a new `NOW.md` stage.
 
 **Revisit when:** Simon prioritises phone dictation and is willing to pay the
 Apple Developer / TestFlight setup cost.

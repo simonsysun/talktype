@@ -1,8 +1,6 @@
 import AVFoundation
 import Accelerate
-#if os(macOS)
 import CoreAudio
-#endif
 
 /// Owns captured chunks and closes them without racing an AVAudioEngine tap callback.
 /// A callback that began before hardware shutdown must be allowed to finish and become
@@ -92,14 +90,12 @@ final class AudioRecorder {
     /// The callback must return quickly; AudioRecorder waits for it before closing a recording.
     var onSamples: (([Float], Int) -> Void)?
 
-    #if os(macOS)
     /// UID of the input device to capture from. nil or unknown means follow the system
     /// default, which is also what happens when the chosen device is unplugged.
     var preferredDeviceUID: String? {
         didSet { if preferredDeviceUID != oldValue { appliedDeviceID = nil } }
     }
     private var appliedDeviceID: AudioDeviceID?
-    #endif
 
     private var engine: AVAudioEngine?
     private var hwSampleRate: Int = 48000
@@ -153,7 +149,6 @@ final class AudioRecorder {
         // profile negotiation.
         let inputNode = engine.inputNode
 
-        #if os(macOS)
         // Pin the capture device before the format is read. An empty UID means
         // Automatic: resolve the system default *now*, at capture time, so a headset
         // connected since launch is picked up without a restart. A pinned device that
@@ -186,7 +181,6 @@ final class AudioRecorder {
                 Log.write("[mic] could not select \(device.name) (OSStatus \(status)) — using system default")
             }
         }
-        #endif
 
         // Always re-read the format: Bluetooth (HFP) renegotiates asynchronously after
         // being pinned, and the value is not safe to cache across sessions (a headset
@@ -277,12 +271,6 @@ final class AudioRecorder {
         let capturedSampleRate = hwSampleRate
         captureFormatLock.unlock()
         return CapturedAudio(chunks: chunks, sampleRate: capturedSampleRate)
-    }
-
-    /// Compatibility path for the parked keyboard target. The shipping macOS app calls
-    /// `stopCapture()` and processes the result off-main.
-    func stop() -> [Float] {
-        stopCapture().samples(at: targetSampleRate)
     }
 
     func shutdown() {

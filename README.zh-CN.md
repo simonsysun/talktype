@@ -121,7 +121,7 @@ cd talktype
 
 - 逻辑测试（不必开 Xcode GUI）：`swift test`
 - 打包：`scripts/build.sh`、`scripts/make-signing-cert.sh`
-- 仓库里有搁置的 iOS 键盘目标，**不是**当前 macOS 产品。
+- 只做 macOS。仓库里没有 iOS 目标。
 
 ---
 

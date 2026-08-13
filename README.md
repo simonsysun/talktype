@@ -121,7 +121,7 @@ cd talktype
 
 - Logic tests (no Xcode GUI): `swift test`
 - Packaging helpers: `scripts/build.sh`, `scripts/make-signing-cert.sh`
-- An iOS keyboard target exists in the repo but is **parked** and not part of the shipping macOS product.
+- macOS only. There is no iOS target in this repository.
 
 ---
 

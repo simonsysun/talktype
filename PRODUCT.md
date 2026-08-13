@@ -84,7 +84,7 @@ is billed by the provider the user configures.
 
 - offline / local ASR engine;
 - automatic failover between providers, or a second polish model after STT;
-- iOS keyboard product (parked; code may exist but is not product truth until accepted);
+- iOS keyboard product (architecturally blocked; deleted from the tree — D007);
 - accounts, sync, team features, telemetry;
 - automatic filler-word policy beyond what the active provider returns natively.
 
@@ -153,5 +153,5 @@ Any of the following is a product reversal and needs an explicit decision, not a
 - collecting telemetry or requiring accounts;
 - changing the privacy table above.
 
-Parked iOS keyboard work under `TalkTypeiOS/` and `TalkTypeKeyboard/` is not current product
-scope. Treat it as dormant code until `PRODUCT.md` and `NOW.md` say otherwise.
+There is no iOS code in the tree. A future mobile product, if any, is Android and needs an
+explicit product decision before any stage opens (D001, D007).
