@@ -2,7 +2,9 @@
 
 *[中文说明](README.zh-CN.md)*
 
-![TalkType logo](docs/assets/talktype-logo.png)
+<p align="center">
+  <img src="docs/assets/talktype-logo.png" alt="TalkType" width="128" height="128">
+</p>
 
 **Talk instead of typing.** Press a hotkey anywhere on your Mac, speak, press again (or pause) — the words land where your cursor is. Slack, Notes, email, terminal… anywhere you can type, you can talk.
 
@@ -12,20 +14,21 @@ Built for people who mix **Chinese and English in one sentence** — no language
 press hotkey → talk → press again / pause → text at cursor
 ```
 
-**Free app (MIT).** You bring your own speech API key; usage is billed by that provider. No TalkType account, no subscription, no telemetry.
+**Free app (MIT).** You bring your own speech API key; usage is billed by that provider. No TalkType account, no subscription, no telemetry. Not an offline / on-device engine — audio goes to the provider you pick.
 
 ---
 
 ## Install (about 5 minutes)
 
-**Needs:** macOS 13+
+**Needs:** macOS 13+ (Intel or Apple silicon), a network connection, and a 豆包 or xAI API key.
 
 1. **Download** the latest macOS build:  
-   **[⬇ Releases](https://github.com/simonsysun/talktype/releases/latest)**  
-   Unzip → drag `TalkType.app` into **Applications**.
+   **[⬇ latest zip](https://github.com/simonsysun/talktype/releases/latest)**  
+   Unzip → drag `TalkType.app` into **Applications**. Ignore 2.x zips — those were a different, on-device product.
 
-2. **Open it the first time.** Free apps are not signed with a paid Apple Developer certificate, so macOS may block the first open:  
-   right-click TalkType → **Open** → **Open**. After that it remembers.
+2. **Open it the first time.** This build is not signed with a paid Apple Developer certificate, so macOS may block it:  
+   right-click TalkType → **Open** → **Open**.  
+   If that still fails: **System Settings → Privacy & Security** → **Open Anyway**.
 
 3. **Allow two permissions** when asked:
    - **Microphone**
@@ -79,7 +82,7 @@ No offline mode: no network → a clear error.
 
 | Symptom | What to try |
 | --- | --- |
-| macOS won’t open the app | Right-click → Open → Open (unsigned free build) |
+| macOS won’t open the app | Right-click → Open → Open. Still blocked: System Settings → Privacy & Security → Open Anyway |
 | Stopped pasting after an update | Menu bar / prompt → **Fix This**, re-enable TalkType under Privacy → Accessibility. Builds that share the same signing cert keep the grant. |
 | “还没填 API Key” | Menu bar → API Key… for the **current** provider |
 | Doubao: wrong key / “requested grant not found” | Use the Voice console project key (not IAM); enable 流式 + 录音文件识别 2.0 |
@@ -92,7 +95,9 @@ No offline mode: no network → a clear error.
 ## Cost
 
 - **TalkType:** free.
-- **Speech API:** pay the provider you choose (豆包 and xAI bill separately for STT usage). A few minutes of dictation per day is typically cheap; check each console for current rates.
+- **Speech API:** you pay the provider you pick. List prices move; check the console. As of mid-2026, a few minutes a day is pocket change:
+  - 豆包 流式语音识别 2.0 ≈ **¥1 / audio hour**
+  - Grok REST file STT = **$0.10 / audio hour** (streaming, if we add it later, is $0.20)
 
 ---
 

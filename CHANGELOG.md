@@ -14,6 +14,8 @@
   fields and the leftover prompt-character budget. Active terms are newest-first,
   then each provider client applies its own 100×50 cap. Old `vocabulary.json` files
   still load.
+- README (EN/中文) now says the product is cloud BYOK, not offline; first-open
+  Gatekeeper path and ballpark STT prices are on the download page.
 
 ## v3.1.0 — 2026-08-09
 
