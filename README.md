@@ -20,7 +20,7 @@ press hotkey → talk → press again / pause → text at cursor
 
 ## Install (about 5 minutes)
 
-**Needs:** macOS 13+ (Intel or Apple silicon), a network connection, and a 豆包 or xAI API key.
+**Needs:** macOS 13+ (Intel or Apple silicon), a network connection, and a Doubao (豆包) or xAI API key.
 
 1. **Download** the latest macOS build:  
    **[⬇ latest zip](https://github.com/simonsysun/talktype/releases/latest)**  
@@ -38,7 +38,7 @@ press hotkey → talk → press again / pause → text at cursor
 
    | Provider | Menu | Where to get a key | Notes |
    | --- | --- | --- | --- |
-   | **豆包 / Volcengine** (default) | API Key… | [Doubao Voice console](https://console.volcengine.com/) → **API Key 管理** (not IAM “API访问密钥”). Enable **流式语音识别 2.0** and **录音文件识别 2.0**. | Streams while you speak; same-provider file retry if the stream fails. |
+   | **Doubao (豆包 / Volcengine)** (default) | API Key… | [Doubao Voice console](https://console.volcengine.com/) → **API Key 管理**. Not IAM「API访问密钥」. Enable 流式语音识别 2.0 and 录音文件识别 2.0 (Streaming / Audio File Recognition 2.0). | Streams while you speak; same-provider file retry if the stream fails. |
    | **Grok / xAI** (optional) | Speech Provider → Grok, then API Key… | [console.x.ai](https://console.x.ai) → API Keys | REST after you stop. Chinese works in practice but is **not** on xAI’s official formatting language list (best-effort). |
 
 Press **⌘⇧Space** and start talking. Change the hotkey anytime from the menu bar.
@@ -48,7 +48,8 @@ Press **⌘⇧Space** and start talking. Change the hotkey anytime from the menu
 ## What it does (and does not)
 
 - **One recognition per dictation** — no second “polish” model, no local multi‑GB engine.
-- **One cloud provider at a time** — pick 豆包 or Grok in **Speech Provider**. TalkType never fails over between them behind your back.
+- **One cloud provider at a time** — pick Doubao (豆包) or Grok in **Speech Provider**. TalkType never fails over between them behind your back.
+- **Your own model** — not a menu setting. A file-STT client is a small code change; see [Building from source](#building-from-source).
 - **Vocabulary** — names the model mishears; sent as Doubao hot words or Grok `keyterm`s. Nothing rewrites text after STT.
 - **Clipboard** — every transcript is also copied, so ⌘V always works as a backup.
 
@@ -56,7 +57,7 @@ Press **⌘⇧Space** and start talking. Change the hotkey anytime from the menu
 
 | What | Leaves your Mac? |
 | --- | --- |
-| Audio for this dictation + vocabulary terms | **Yes** — to the provider **you selected** (Volcengine or xAI), under that provider’s policy |
+| Audio for this dictation + vocabulary terms | **Yes** — to the provider **you selected** (Doubao / Volcengine or xAI), under that provider’s policy |
 | Everything else | **No** — no TalkType account, no telemetry, no subscription identity |
 
 No offline mode: no network → a clear error.
@@ -84,8 +85,8 @@ No offline mode: no network → a clear error.
 | --- | --- |
 | macOS won’t open the app | Right-click → Open → Open. Still blocked: System Settings → Privacy & Security → Open Anyway |
 | Stopped pasting after an update | Menu bar / prompt → **Fix This**, re-enable TalkType under Privacy → Accessibility. Builds that share the same signing cert keep the grant. |
-| “还没填 API Key” | Menu bar → API Key… for the **current** provider |
-| Doubao: wrong key / “requested grant not found” | Use the Voice console project key (not IAM); enable 流式 + 录音文件识别 2.0 |
+| “还没填 API Key” (“API Key not set yet”) | Menu bar → API Key… for the **current** provider |
+| Doubao: wrong key / “requested grant not found” | Use the Voice console project key (not IAM); enable Streaming + Audio File Recognition 2.0 |
 | Grok: wrong key | Paste a full xAI API key from console.x.ai (no spaces / masked `***`) |
 | AirPods won’t start recording | Retry once, or switch Microphone to the MacBook mic; Bluetooth handoff is flaky on macOS |
 | CN/EN stuck together with no space | Raw model output by design — no local rewrite |
@@ -96,7 +97,7 @@ No offline mode: no network → a clear error.
 
 - **TalkType:** free.
 - **Speech API:** you pay the provider you pick. List prices move; check the console. As of mid-2026, a few minutes a day is pocket change:
-  - 豆包 流式语音识别 2.0 ≈ **¥1 / audio hour**
+  - Doubao Streaming Speech Recognition 2.0 (流式语音识别 2.0) ≈ **¥1 / audio hour**
   - Grok REST file STT = **$0.10 / audio hour** (streaming, if we add it later, is $0.20)
 
 ---
@@ -127,6 +128,7 @@ cd talktype
 - Logic tests (no Xcode GUI): `swift test`
 - Packaging helpers: `scripts/build.sh`, `scripts/make-signing-cert.sh`
 - macOS only. There is no iOS target in this repository.
+- To add a third speech API: copy `GrokSTTClient`, add one `STTProvider` case, one Keychain item, and the menu title. Streaming needs its own session; do not invent a plugin framework for one extra client.
 
 ---
 
@@ -145,7 +147,7 @@ You can also [browse existing discussions](https://github.com/simonsysun/talktyp
 
 ## Under the hood (short)
 
-- **豆包:** 16 kHz PCM over WebSocket 流式语音识别 2.0 (`bigmodel_nostream`); on failure, same audio to 录音文件识别 2.0 极速版. Hot words in `request.corpus.context` as a JSON **string**.
+- **Doubao (豆包):** 16 kHz PCM over WebSocket Streaming Speech Recognition 2.0 (`bigmodel_nostream`); on failure, same audio to Audio File Recognition 2.0 Flash (录音文件识别 2.0 极速版). Hot words in `request.corpus.context` as a JSON **string**.
 - **Grok:** WAV upload to `POST https://api.x.ai/v1/stt` with optional repeated `keyterm` fields (no `format`/`language=en` for mixed CN/EN).
 - Config / vocabulary live under `~/.talktype` (override with `TALKTYPE_STATE_DIR`).
 

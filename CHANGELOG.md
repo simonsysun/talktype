@@ -18,6 +18,8 @@
   Gatekeeper path and ballpark STT prices are on the download page.
 - README no longer indexes internal project-management files. `DEVLOG.md` and
   `project.json` are local-only.
+- README glosses Doubao console names in English and notes that a third STT
+  client is a small code change, not an in-app setting.
 
 ## v3.1.0 — 2026-08-09
 

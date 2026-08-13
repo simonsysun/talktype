@@ -20,7 +20,7 @@
 
 ## 安装（大约 5 分钟）
 
-**需要：** macOS 13 及以上（Intel 或 Apple 芯片）、能上网，以及豆包或 xAI 的 API Key。
+**需要：** macOS 13 及以上（Intel 或 Apple 芯片）、能上网，以及豆包（Doubao / 火山引擎）或 xAI 的 API Key。
 
 1. **下载**最新 macOS 安装包：  
    **[⬇ 最新 zip](https://github.com/simonsysun/talktype/releases/latest)**  
@@ -38,7 +38,7 @@
 
    | Provider | 菜单 | 去哪拿 Key | 说明 |
    | --- | --- | --- | --- |
-   | **豆包 / 火山**（默认） | API Key… | [豆包语音控制台](https://console.volcengine.com/) → **API Key 管理**（不是 IAM「API 访问密钥」）。开通 **流式语音识别 2.0** 和 **录音文件识别 2.0**。 | 边说边传；流式失败才用同家文件识别重试 |
+   | **豆包（Doubao / 火山引擎）**（默认） | API Key… | [豆包语音控制台](https://console.volcengine.com/) → **API Key 管理**（不是 IAM「API 访问密钥」）。开通 **流式语音识别 2.0** 和 **录音文件识别 2.0**。 | 边说边传；流式失败才用同家文件识别重试 |
    | **Grok / xAI**（可选） | Speech Provider → Grok，再 API Key… | [console.x.ai](https://console.x.ai) → API Keys | 松键后 REST 转写。中文实际能用，但不在 xAI 官方 formatting 语言表（best-effort） |
 
 按 **⌘⇧Space** 开始说。快捷键可在菜单栏随时改。
@@ -49,6 +49,7 @@
 
 - **一次听写 = 一次识别**——没有第二层「润色」模型，也没有几 GB 本地引擎。
 - **同一时间只用一个云**——菜单栏 **Speech Provider** 选豆包或 Grok；**不会**在两家之间偷偷切换。
+- **换别的模型**——不是设置项。克隆仓库，照 Grok 那条文件识别路径加一个客户端即可。没有插件槽，也不会自动跨厂商切换。
 - **词库**——常听错的名字/术语；豆包作热词，Grok 作 `keyterm`。识别后不做本地改写。
 - **剪贴板**——每次结果都会复制一份，⌘V 永远能兜底。
 
@@ -56,7 +57,7 @@
 
 | 什么 | 会离开 Mac 吗 |
 | --- | --- |
-| 本次听写的音频 + 词库术语 | **会**——发给**你选中的**厂商（火山或 xAI），按其政策处理 |
+| 本次听写的音频 + 词库术语 | **会**——发给**你选中的**厂商（豆包 / 火山引擎或 xAI），按其政策处理 |
 | 其它一切 | **不会**——无 TalkType 账号、无遥测、无订阅身份 |
 
 没有离线模式：没网就是明确报错。
@@ -127,6 +128,7 @@ cd talktype
 - 逻辑测试（不必开 Xcode GUI）：`swift test`
 - 打包：`scripts/build.sh`、`scripts/make-signing-cert.sh`
 - 只做 macOS。仓库里没有 iOS 目标。
+- 要加第三家语音 API：抄 `GrokSTTClient`，再加一个 `STTProvider`、一把钥匙串、一句菜单文案。流式得自己写 session；不要为多一家先做插件框架。
 
 ---
 
