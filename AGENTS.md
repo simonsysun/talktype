@@ -27,8 +27,8 @@ conformance; if the project already satisfies it, do not rewrite equivalent
 files. Otherwise make only the smallest authorized changes needed to close real
 gaps. `PRODUCT.md` defines intended behavior and boundaries; `DECISION.md`
 preserves costly, non-obvious choices and rationale; `NOW.md` is the only project
-task tracker and exact restart point; `DEVLOG.md` holds optional, owner-controlled
-entries and is never authority or auto-edited; `research/` contains dated
+task tracker and exact restart point; `DEVLOG.md` is Simon's optional local
+diary (gitignored, never authority or auto-edited); `research/` contains dated
 synthesis; `source-materials/` preserves provenance, not conclusions;
 code/tests/version control prove only what they directly exercise; deployment and
 user acceptance require separate evidence.
@@ -92,7 +92,7 @@ Read in this order:
 2. `PRODUCT.md` — relevant sections; full file when the boundary is uncertain.
 3. `DECISION.md` — active decisions the work may clarify, extend, or reverse.
 4. `NOW.md` — only tracker; resume ACTIVE or the recorded discussion point.
-5. `DEVLOG.md` — only when Simon's perspective is load-bearing or he asks.
+5. `DEVLOG.md` — only if the local file exists and Simon's perspective is load-bearing, or he asks.
 6. `research/` and `source-materials/` — search before new research or files.
 7. `docs/` — only narrow references with a current consumer (e.g. assets).
 8. Code, tests, Git, `CHANGELOG.md` — implementation and release evidence.
@@ -114,7 +114,8 @@ product truth until the accepted implication reaches `PRODUCT.md` or
 - keep durable context in the repository when the task authorizes those writes,
   in the same coherent change as the state it describes when practical;
 - use English for new project artifacts, commits, and PR text; source quotes may
-  remain in their original language; `DEVLOG.md` preserves Simon's voice.
+  remain in their original language; a local `DEVLOG.md` preserves Simon's voice
+  and must not be committed.
 
 **Agents must not:**
 
@@ -127,7 +128,7 @@ product truth until the accepted implication reaches `PRODUCT.md` or
   harness-specific process;
 - create a new root or project-management Markdown file when an existing role can
   hold the content; discuss a genuinely new role with Simon first;
-- treat `DEVLOG.md` as authority or update it automatically;
+- treat `DEVLOG.md` as authority, update it automatically, or commit it;
 - rewrite historical research, source material, or superseded decisions to match
   today's language;
 - leave material decisions, blockers, acceptance results, or restart points only
@@ -207,4 +208,4 @@ Two tests before writing durable prose:
    residual risk).
 
 When authorized, reconcile product, decisions, and `NOW.md` in the same coherent
-change as the implementation they describe. Do not auto-edit `DEVLOG.md`.
+change as the implementation they describe. Do not auto-edit or commit `DEVLOG.md`.

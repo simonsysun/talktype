@@ -31,6 +31,28 @@ changes, add a new entry and mark the old one `Superseded`; do not rewrite the
 old rationale. `Evidence` is optional and should normally link to one research
 synthesis when research carried the choice.
 
+## D008 — Keep the diary and Dev inventory off GitHub
+
+**Date:** 2026-08-13 · **Status:** Active · **Type:** Process
+
+**Extends:** D005 (portable governance stays); does **not** retire `NOW.md`
+
+**Decision:** `DEVLOG.md` and `project.json` are local working files. They stay on
+disk, stay gitignored, and are not part of the public repository. README does not
+index internal project-management files for passers-by. `PRODUCT.md`, `DECISION.md`,
+`NOW.md`, and `AGENTS.md` remain in Git so a clone can resume work.
+
+**Why:** The public landing page should explain the product, not how the owner
+runs agents. The diary is personal and nearly empty; `project.json` only serves
+the `~/Dev` inventory. Publishing them made the root look like a process exhibit.
+
+**Consequence:** Agents may read a local `DEVLOG.md` when Simon asks; they must
+not create, edit, or commit it. Do not re-add either file to Git to “complete”
+the portable set. `NOW.md` stays tracked because it is the restart point.
+
+**Revisit when:** Simon wants the diary public, or a second machine cannot resume
+without `project.json` in Git.
+
 ## D007 — Mobile: iOS keyboard is architecturally blocked; Android is the path
 
 **Date:** 2026-08-10 · **Status:** Active · **Type:** Scope / Architecture
@@ -100,10 +122,11 @@ swap) or worse (remove menu item); or xAI documents Chinese formatting with SLA.
 **Date:** 2026-08-09 · **Status:** Active · **Type:** Process
 
 **Decision:** Use the Portable Project Governance standard as TalkType's default
-repository OS: `PRODUCT.md`, `DECISION.md`, `NOW.md`, `DEVLOG.md`, `AGENTS.md`,
-plus `research/`, `source-materials/`, and narrow `docs/` when needed. Search
-existing material before creating more. No second product spec, decision log,
-task tracker, or agent process.
+repository OS: `PRODUCT.md`, `DECISION.md`, `NOW.md`, `AGENTS.md`, plus
+`research/`, `source-materials/`, and narrow `docs/` when needed. Search existing
+material before creating more. No second product spec, decision log, task
+tracker, or agent process. *(Amended by D008: `DEVLOG.md` is local-only, not a
+tracked governance file.)*
 
 **Why:** Prior docs mixed product truth, history, status, research, and
 implementation notes (`TODO.md`, `CONTEXT.md`, `PLAN.md`, `docs/adr/*`). The same

@@ -2,6 +2,10 @@
 .claude/
 *.log
 
+# Local-only working notes. Not part of the public repo.
+DEVLOG.md
+project.json
+
 # Swift / Xcode
 .build/
 build/

@@ -143,19 +143,6 @@ You can also [browse existing discussions](https://github.com/simonsysun/talktyp
 
 ---
 
-## Project docs (contributors / agents)
-
-| File | Purpose |
-| --- | --- |
-| [`PRODUCT.md`](./PRODUCT.md) | Product contract |
-| [`DECISION.md`](./DECISION.md) | Durable decisions |
-| [`NOW.md`](./NOW.md) | Task tracker / restart point |
-| [`AGENTS.md`](./AGENTS.md) | Agent workflow |
-| [`CHANGELOG.md`](./CHANGELOG.md) | Release history |
-| [`research/`](./research/) | Dated research notes |
-
----
-
 ## Under the hood (short)
 
 - **豆包:** 16 kHz PCM over WebSocket 流式语音识别 2.0 (`bigmodel_nostream`); on failure, same audio to 录音文件识别 2.0 极速版. Hot words in `request.corpus.context` as a JSON **string**.

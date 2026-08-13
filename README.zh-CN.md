@@ -142,19 +142,6 @@ TalkType 靠**真实日用**才会变好。哪里不顺、哪个词总听错、�
 
 ---
 
-## 项目文档（贡献者 / Agent）
-
-| 文件 | 用途 |
-| --- | --- |
-| [`PRODUCT.md`](./PRODUCT.md) | 产品合同 |
-| [`DECISION.md`](./DECISION.md) | 重要决策 |
-| [`NOW.md`](./NOW.md) | 任务与重启点 |
-| [`AGENTS.md`](./AGENTS.md) | Agent 工作流 |
-| [`CHANGELOG.md`](./CHANGELOG.md) | 版本历史 |
-| [`research/`](./research/) | 研究笔记 |
-
----
-
 ## 协议
 
 [MIT](./LICENSE)——随便用。

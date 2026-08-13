@@ -16,6 +16,8 @@
   still load.
 - README (EN/中文) now says the product is cloud BYOK, not offline; first-open
   Gatekeeper path and ballpark STT prices are on the download page.
+- README no longer indexes internal project-management files. `DEVLOG.md` and
+  `project.json` are local-only.
 
 ## v3.1.0 — 2026-08-09
 
