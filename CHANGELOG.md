@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Fixed
+
+- **A webcam microphone no longer reopens the Microphone privacy pane on every
+  hotkey press.** The pane now opens only when the microphone grant is actually
+  missing (D009); a device that will not start, or that returns silence while
+  authorized, is reported by name instead.
+- **Inputs that do not run at 48 kHz can record.** The input node's client sample
+  rate is aligned with the pinned device on every start, so a 16 kHz webcam mic or a
+  24 kHz Bluetooth headset no longer fails graph setup with -10868.
+- **A microphone that refuses to start no longer loses the dictation.** Capture falls
+  back once to another live input, built-in first, and says which one it used.
+
 ### Removed
 
 - **Dormant iOS targets.** `TalkTypeiOS/` and `TalkTypeKeyboard/` are gone from the

@@ -90,12 +90,39 @@ final class AudioRecorder {
     /// The callback must return quickly; AudioRecorder waits for it before closing a recording.
     var onSamples: (([Float], Int) -> Void)?
 
+    /// Why a recording could not be started. The distinction matters upstream: only one
+    /// of these is ever fixed in System Settings, and treating every failure as a denied
+    /// permission is what made a webcam microphone reopen the Privacy pane on every
+    /// hotkey press.
+    enum StartFailure: Error, LocalizedError {
+        /// No usable input format appeared in time — a Bluetooth device mid-switch.
+        case formatUnsettled(device: String)
+        /// CoreAudio refused to run the device. Permission is not the problem; the
+        /// device is (a USB microphone whose driver will not start IO, say).
+        case deviceRefused(device: String, status: OSStatus)
+        case noEngine
+
+        var errorDescription: String? {
+            switch self {
+            case .formatUnsettled:
+                return "Input not ready — Bluetooth device still switching."
+            case .deviceRefused(let device, let status):
+                return "\(device) would not start recording (CoreAudio \(status))."
+            case .noEngine:
+                return "Audio engine unavailable."
+            }
+        }
+    }
+
     /// UID of the input device to capture from. nil or unknown means follow the system
     /// default, which is also what happens when the chosen device is unplugged.
     var preferredDeviceUID: String? {
         didSet { if preferredDeviceUID != oldValue { appliedDeviceID = nil } }
     }
     private var appliedDeviceID: AudioDeviceID?
+    /// Set when the chosen input refused to start and capture fell back to another
+    /// device, so the caller can say which microphone is actually recording.
+    private(set) var substitutedDevice: (requested: String, used: String)?
 
     private var engine: AVAudioEngine?
     private var hwSampleRate: Int = 48000
@@ -137,36 +164,47 @@ final class AudioRecorder {
     }
 
     func start() throws {
+        substitutedDevice = nil
+
+        // An empty UID means Automatic: resolve the system default *now*, at capture
+        // time, so a headset connected since launch is picked up without a restart. A
+        // pinned device that is no longer connected resolves to nil, and CoreAudio picks
+        // the system default — unplugging the chosen mic should not stop dictation.
+        let intended: AudioDevices.Device?
+        if let uid = preferredDeviceUID, !uid.isEmpty {
+            intended = AudioDevices.device(forUID: uid)
+        } else {
+            intended = AudioDevices.automaticInput()
+        }
+
+        do {
+            try startEngine(pinning: intended)
+        } catch let failure as StartFailure {
+            // A device that will not start is not a reason to lose the dictation: try
+            // one other live input before giving up, and let the caller say so.
+            guard case .deviceRefused(let refused, let status) = failure,
+                  let alternative = AudioDevices.alternativeInput(to: intended) else { throw failure }
+            Log.write("[mic] \(refused) refused to start (OSStatus \(status)) — trying \(alternative.name)")
+            appliedDeviceID = nil
+            try startEngine(pinning: alternative)
+            substitutedDevice = (requested: refused, used: alternative.name)
+        }
+    }
+
+    private func startEngine(pinning device: AudioDevices.Device?) throws {
         if engine == nil {
             prepare()
         }
-        guard let engine = engine else {
-            throw NSError(domain: "AudioRecorder", code: 1, userInfo: [NSLocalizedDescriptionKey: "No engine"])
-        }
+        guard let engine = engine else { throw StartFailure.noEngine }
 
         // Lazily read hardware format on first start — this is when inputNode
         // is first accessed, which triggers the mic indicator and any Bluetooth
         // profile negotiation.
         let inputNode = engine.inputNode
+        let deviceLabel = device?.name ?? "system default"
 
-        // Pin the capture device before the format is read. An empty UID means
-        // Automatic: resolve the system default *now*, at capture time, so a headset
-        // connected since launch is picked up without a restart. A pinned device that
-        // is no longer connected resolves to nil, and CoreAudio picks the system
-        // default — unplugging the chosen mic should not stop dictation working.
-        let captureDevice: AudioDevices.Device?
-        if let uid = preferredDeviceUID, !uid.isEmpty {
-            captureDevice = AudioDevices.device(forUID: uid)
-        } else {
-            captureDevice = AudioDevices.automaticInput()
-        }
-        // Only a device we actually pinned has a trustworthy nominal rate; if the pin
-        // failed, capture falls back to the system default and we must not compare
-        // against the intended device's rate.
-        var pinnedRate: Double?
-        if let device = captureDevice,
-           device.id != appliedDeviceID,
-           let unit = inputNode.audioUnit {
+        // Pin the capture device before the format is read.
+        if let device = device, device.id != appliedDeviceID, let unit = inputNode.audioUnit {
             var deviceID = device.id
             let status = AudioUnitSetProperty(
                 unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
@@ -174,47 +212,54 @@ final class AudioRecorder {
             if status == noErr {
                 appliedDeviceID = device.id
                 captureDeviceName = device.name
-                pinnedRate = AudioDevices.nominalSampleRate(device.id)
                 Log.write("[mic] input device: \(device.name)")
             } else {
                 captureDeviceName = nil
                 Log.write("[mic] could not select \(device.name) (OSStatus \(status)) — using system default")
             }
+        } else if device != nil {
+            captureDeviceName = device?.name
         }
+        // Only a device we actually pinned has a trustworthy nominal rate; if the pin
+        // failed, capture falls back to the system default and we must not align
+        // against the intended device's rate.
+        let pinned: AudioDevices.Device? = (device?.id == appliedDeviceID) ? device : nil
 
-        // Always re-read the format: Bluetooth (HFP) renegotiates asynchronously after
-        // being pinned, and the value is not safe to cache across sessions (a headset
-        // drops back to A2DP once recording stops). Poll until the node format matches
-        // the device's nominal rate — the switch can go "old valid format → new format",
-        // so non-zero alone is not "settled". Short cap: beyond this the device is not
-        // coming up, and blocking the main thread longer just loses the user's first words.
+        // AVAudioEngine keeps the input node at the sample rate it first saw, so pinning
+        // a device that runs at another rate (a 16 kHz webcam mic, a 24 kHz headset in
+        // HFP mode) leaves the node stale and the graph refuses to build at all
+        // (kAudioUnitErr_FormatNotSupported, -10868). Pushing the device's rate into the
+        // unit's own output scope is what makes the node adopt it. The device's rate can
+        // still be moving while a Bluetooth link renegotiates, so re-read it each pass
+        // rather than trusting the first value; the loop is capped because beyond it the
+        // device is not coming up and blocking the main thread only loses first words.
         var format = inputNode.outputFormat(forBus: 0)
-        let deadline = Date().addingTimeInterval(0.8)
         var settled = false
-        while Date() < deadline {
-            if format.channelCount > 0, format.sampleRate > 0 {
-                if let pinnedRate = pinnedRate, pinnedRate > 0 {
-                    if abs(Double(format.sampleRate) - pinnedRate) < 1 {
-                        settled = true
-                        break
-                    }
-                } else {
-                    settled = true
-                    break
+        var deviceRate: Double = 0
+        let deadline = Date().addingTimeInterval(0.8)
+        while true {
+            if let pinned = pinned {
+                deviceRate = AudioDevices.nominalSampleRate(pinned.id) ?? 0
+                if deviceRate > 0, abs(format.sampleRate - deviceRate) >= 1, let unit = inputNode.audioUnit {
+                    _ = Self.alignClientRate(unit, to: deviceRate)
+                    format = inputNode.outputFormat(forBus: 0)
                 }
+                settled = deviceRate > 0 && abs(format.sampleRate - deviceRate) < 1 && format.channelCount > 0
+            } else {
+                settled = format.sampleRate > 0 && format.channelCount > 0
             }
+            if settled || Date() >= deadline { break }
             usleep(100_000)
             format = inputNode.outputFormat(forBus: 0)
         }
-        let nominalText = pinnedRate.map { "\($0)" } ?? "unknown"
+        let nominalText = deviceRate > 0 ? "\(deviceRate)" : "unknown"
         Log.write("[mic] format: \(Int(format.sampleRate)) Hz x\(format.channelCount) "
-                  + "settled=\(settled) nominal=\(nominalText) device=\(captureDevice?.name ?? "automatic")")
+                  + "settled=\(settled) nominal=\(nominalText) device=\(deviceLabel)")
         guard format.channelCount > 0, format.sampleRate > 0 else {
             // Do not cache a bad format: reset so the next attempt re-pins and re-reads.
             appliedDeviceID = nil
-            Log.write("[mic] input format never became valid (device=\(captureDevice?.name ?? "?") nominal=\(nominalText))")
-            throw NSError(domain: "AudioRecorder", code: 2,
-                          userInfo: [NSLocalizedDescriptionKey: "Input not ready — Bluetooth device still switching."])
+            Log.write("[mic] input format never became valid (device=\(deviceLabel) nominal=\(nominalText))")
+            throw StartFailure.formatUnsettled(device: deviceLabel)
         }
         captureFormatLock.lock()
         hwSampleRate = Int(format.sampleRate)
@@ -245,8 +290,24 @@ final class AudioRecorder {
                 tapInstalled = false
                 engine.stop()
             }
-            throw error
+            // The device was pinned but never ran; forget it so the next attempt re-pins
+            // from scratch instead of inheriting half-configured state.
+            appliedDeviceID = nil
+            throw StartFailure.deviceRefused(device: deviceLabel, status: OSStatus((error as NSError).code))
         }
+    }
+
+    /// Rewrite the input unit's client sample rate. Only the rate is touched: the channel
+    /// count and layout AVAudioEngine chose for the node are still correct.
+    private static func alignClientRate(_ unit: AudioUnit, to sampleRate: Double) -> OSStatus {
+        var description = AudioStreamBasicDescription()
+        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        let read = AudioUnitGetProperty(unit, kAudioUnitProperty_StreamFormat,
+                                        kAudioUnitScope_Output, 1, &description, &size)
+        guard read == noErr else { return read }
+        description.mSampleRate = sampleRate
+        return AudioUnitSetProperty(unit, kAudioUnitProperty_StreamFormat,
+                                    kAudioUnitScope_Output, 1, &description, size)
     }
 
     /// Stops AVAudioEngine and snapshots its chunks. This part stays on main because AppKit owns

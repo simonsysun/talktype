@@ -37,8 +37,27 @@ enum AudioDevices {
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
                                          &address, 0, nil, &size, &deviceID) == noErr,
-              deviceID != 0,
-              let uid = stringProperty(deviceID, kAudioDevicePropertyDeviceUID),
+              deviceID != 0
+        else { return nil }
+        return describe(deviceID)
+    }
+
+    /// The machine's own microphone. It is the one input that is always present and
+    /// always startable, which makes it the last resort when the chosen device refuses
+    /// to hand over audio (a USB webcam mic whose driver will not start, for instance).
+    static func builtInInput() -> Device? {
+        inputDevices().first { transportType($0.id) == kAudioDeviceTransportTypeBuiltIn }
+    }
+
+    /// An input other than `device` that is worth trying when `device` will not start.
+    /// The built-in microphone first, then anything else still connected.
+    static func alternativeInput(to device: Device?) -> Device? {
+        let others = inputDevices().filter { $0.uid != device?.uid }
+        return others.first { transportType($0.id) == kAudioDeviceTransportTypeBuiltIn } ?? others.first
+    }
+
+    private static func describe(_ deviceID: AudioDeviceID) -> Device? {
+        guard let uid = stringProperty(deviceID, kAudioDevicePropertyDeviceUID),
               let name = stringProperty(deviceID, kAudioObjectPropertyName)
         else { return nil }
         return Device(id: deviceID, uid: uid, name: name, isBluetooth: isBluetooth(deviceID))

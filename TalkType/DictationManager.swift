@@ -31,6 +31,8 @@ final class DictationManager {
     private var microphoneGranted = false
     private var micPermissionInFlight = false
     private var startAfterMicPermission = false
+    /// The device substitution the user has already been told about.
+    private var announcedSubstitution: String?
 
     // Silence auto-stop
     private var lastSpeechTime: TimeInterval = 0
@@ -167,7 +169,7 @@ final class DictationManager {
                 startAfterMicPermission = false
                 print("[audio] microphone: \(micStatusLabel(status))")
                 trayDelegate?.notifyError("Microphone access denied. Enable in System Settings -> Privacy -> Microphone.")
-                openMicSettings()
+                openMicSettingsIfDenied()
                 return
             }
         }
@@ -210,22 +212,55 @@ final class DictationManager {
         do {
             try recorder.start()
             sessionID += 1
+            announceSubstitution(recorder.substitutedDevice)
         } catch {
             takeActiveStream()?.cancel()
             state = .idle
             trayDelegate?.setRecording(false)
             trayDelegate?.setProcessing(false)
-            let nsError = error as NSError
-            let bluetoothSwitching = nsError.domain == "AudioRecorder" && nsError.code == 2
-            trayDelegate?.notifyError(bluetoothSwitching
-                ? error.localizedDescription
-                : "Microphone unavailable. Check Microphone permission.")
+            trayDelegate?.notifyError(startFailureMessage(error))
             if overlay.isVisible { overlay.hide() }
             print("[audio] failed to start microphone: \(error)")
             Log.write("[mic] start failed: \(error.localizedDescription) device=\(recorder.captureDeviceName ?? "?")")
-            if !bluetoothSwitching { openMicSettings() }
+            // Only a permission problem is fixed in System Settings. A device that will
+            // not start is not, and opening the pane on every hotkey press is noise.
+            openMicSettingsIfDenied()
             return
         }
+    }
+
+    /// Say once — not on every hotkey press — that recording moved to another
+    /// microphone. A device stays broken for as long as it is plugged in, and a
+    /// notification per dictation would be worse than the fault it reports.
+    private func announceSubstitution(_ swap: (requested: String, used: String)?) {
+        guard let swap = swap else {
+            announcedSubstitution = nil
+            return
+        }
+        let summary = "\(swap.requested)|\(swap.used)"
+        guard summary != announcedSubstitution else { return }
+        announcedSubstitution = summary
+        trayDelegate?.notifyInfo("\(swap.requested) would not start — recording from \(swap.used).")
+    }
+
+    /// What to tell the user when recording could not start. The message names the
+    /// device whenever the device is the problem: "check Microphone permission" sends
+    /// people to a pane that is already correct.
+    private func startFailureMessage(_ error: Error) -> String {
+        if let failure = error as? AudioRecorder.StartFailure {
+            switch failure {
+            case .formatUnsettled:
+                return failure.localizedDescription
+            case .deviceRefused(let device, _):
+                return "\(device) would not start. Pick another microphone from the menu bar."
+            case .noEngine:
+                return "Audio engine unavailable. Try again."
+            }
+        }
+        if AVCaptureDevice.authorizationStatus(for: .audio) != .authorized {
+            return "Microphone access denied. Enable in System Settings -> Privacy -> Microphone."
+        }
+        return "Microphone unavailable: \(error.localizedDescription)"
     }
 
     // MARK: - Stop dictation
@@ -286,11 +321,21 @@ final class DictationManager {
 
                 if !TranscriptionAudioGate.shouldTranscribe(rms: rms) {
                     stream?.cancel()
-                    print("[audio] all-zero audio - microphone access likely blocked")
-                    self.microphoneGranted = false
-                    Log.write("[dict] all-zero audio — mic blocked")
-                    self.trayDelegate?.notifyError("Microphone blocked. Enable in System Settings -> Privacy -> Microphone.")
-                    DispatchQueue.main.async { self.openMicSettings() }
+                    let device = self.recorder.captureDeviceName ?? "The microphone"
+                    // Digital silence means either macOS is muting us (no permission) or
+                    // the device itself is delivering nothing. Only the first is worth a
+                    // trip to System Settings.
+                    if AVCaptureDevice.authorizationStatus(for: .audio) == .authorized {
+                        print("[audio] all-zero audio from an authorized microphone")
+                        Log.write("[dict] all-zero audio from \(device) — device delivered no signal")
+                        self.trayDelegate?.notifyError("No sound from \(device). Pick another microphone from the menu bar.")
+                    } else {
+                        print("[audio] all-zero audio - microphone access blocked")
+                        self.microphoneGranted = false
+                        Log.write("[dict] all-zero audio — mic blocked")
+                        self.trayDelegate?.notifyError("Microphone blocked. Enable in System Settings -> Privacy -> Microphone.")
+                        DispatchQueue.main.async { self.openMicSettingsIfDenied() }
+                    }
                     return
                 }
 
@@ -515,11 +560,20 @@ final class DictationManager {
         startAfterMicPermission = false
         if status == .denied || status == .restricted {
             trayDelegate?.notifyError("Microphone access denied. Enable in System Settings -> Privacy -> Microphone.")
-            openMicSettings()
+            openMicSettingsIfDenied()
         }
     }
 
-    private func openMicSettings() {
+    /// Opens the Microphone privacy pane, but only when the grant is actually missing.
+    /// Every caller here reaches this after *some* audio failure, and most of those
+    /// failures have nothing to do with permission — a webcam microphone that refuses to
+    /// start used to reopen this pane on every single hotkey press.
+    private func openMicSettingsIfDenied() {
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        guard status != .authorized else {
+            Log.write("[mic] microphone already authorized — not opening Privacy settings")
+            return
+        }
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
             NSWorkspace.shared.open(url)
         }

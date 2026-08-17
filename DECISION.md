@@ -31,6 +31,36 @@ changes, add a new entry and mark the old one `Superseded`; do not rewrite the
 old rationale. `Evidence` is optional and should normally link to one research
 synthesis when research carried the choice.
 
+## D009 — An input that will not start is a device fault, not a permission fault
+
+**Date:** 2026-08-17 · **Status:** Active · **Type:** Behavior / UX
+
+**Decision:** TalkType opens the Microphone privacy pane only when
+`AVCaptureDevice.authorizationStatus` actually says the grant is missing. Any other
+capture failure — the device refusing to start, or delivering digital silence while
+authorized — reports the device by name instead. When the chosen input refuses to
+start, capture falls back once to another live input (built-in first) and says which
+microphone it used.
+
+**Why:** A USB webcam microphone (HD Pro Webcam C920) selected as the system input
+made every hotkey press reopen System Settings. Two separate faults were being read
+as "permission denied": AVAudioEngine kept the input node at the previous device's
+sample rate, so a 16 kHz device failed graph setup with `kAudioUnitErr_FormatNotSupported`
+(-10868); underneath that, the device itself would not start IO at all
+(`AudioDeviceStart` → EAGAIN 35, with `usbaudiod` reporting isochronous transfer
+errors), which no application can fix. Sending someone to a pane that is already
+correct teaches them the app is wrong about permissions.
+
+**Consequence:** Permission prompts are rarer and mean what they say. A pinned device
+that cannot record no longer blocks dictation, at the cost of recording from a
+different microphone than the user chose — so the substitution is always announced,
+never silent. The input node's client sample rate is pushed to the device's nominal
+rate on every start, which is also what lets any non-48 kHz input (16 kHz webcam mic,
+24 kHz headset in HFP mode) record at all.
+
+**Revisit when:** Substitution proves more surprising than useful in daily use, or
+AVAudioEngine starts following the pinned device's format on its own.
+
 ## D008 — Keep the diary and Dev inventory off GitHub
 
 **Date:** 2026-08-13 · **Status:** Active · **Type:** Process
