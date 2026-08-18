@@ -100,11 +100,16 @@ provider cascade without a new decision.
       AVFoundation captured 3 seconds / 48,000 non-zero samples. TalkType's
       current `AudioRecorder` then completed five consecutive captures at
       `16000 Hz x2`, with non-zero audio and no fallback; Automatic resolved to
-      the C920. The prior `AudioDeviceStart` / `EAGAIN` / isochronous-transfer
-      failure was a transient device or USB state that disappeared after
-      reconnecting. Do not add an `AVCaptureSession` fallback without a new
-      reproducible failure; on recurrence, compare the system input meter and
-      `~/.talktype/talktype.log` before changing the capture path.
+      the C920. The same recorder also switched C920 → built-in → C920 →
+      Automatic at the expected 16/48/16/16 kHz rates without fallback. This
+      verifies the generic device-selection path, not a C920 special case;
+      macOS microphone permission is app-wide, while TalkType chooses each
+      input by stable device UID. Bluetooth uses the same path but was not
+      connected for this check. The prior `AudioDeviceStart` / `EAGAIN` /
+      isochronous-transfer failure was a transient device or USB state that
+      disappeared after reconnecting. Do not add an `AVCaptureSession` fallback
+      without a new reproducible failure; on recurrence, compare the system
+      input meter and `~/.talktype/talktype.log` before changing capture code.
 7. [ ] **Lid-closed built-in mic returns digital silence.** With
       `AppleClamshellState = Yes`, both the signed app and a separate test process
       read exactly `rms=0.00000` from `MacBook Pro Microphone`, so the new
