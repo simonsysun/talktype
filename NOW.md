@@ -95,6 +95,23 @@ provider cascade without a new decision.
 5. Standing note: signing cert backup lives in `secrets/` (gitignored). Do not
    move it to a tracked path. Loss costs one extra Accessibility grant per
    machine after reinstall, once.
+6. [ ] **USB webcam mic (HD Pro Webcam C920) still unverified.** The privacy-pane
+      loop and the -10868 format bug are fixed and installed (D009, 2026-08-17);
+      the real app now reaches `format: 16000 Hz x2 settled=true`. Still open:
+      that device refuses to start IO — `'what'` (2003329396) from the signed app,
+      `EAGAIN` (35) from a raw HAL client, with `usbaudiod` logging isochronous
+      transfer errors. Unresolved because the webcam was unplugged mid-session.
+      Resume: replug it **directly into the Mac, not a monitor/hub**, watch the
+      System Settings → Sound → Input meter first, then press the hotkey and read
+      `~/.talktype/talktype.log`. Meter moves but TalkType fails ⇒ try an
+      `AVCaptureSession` capture path instead of pinning AVAudioEngine's input
+      node; meter dead ⇒ port/cable/bandwidth, not the app.
+7. [ ] **Lid-closed built-in mic returns digital silence.** With
+      `AppleClamshellState = Yes`, both the signed app and a separate test process
+      read exactly `rms=0.00000` from `MacBook Pro Microphone`, so the new
+      fall-back-to-another-input path cannot rescue a dictation in clamshell.
+      Not yet confirmed against an open lid. If clamshell is the cause, decide
+      whether falling back to a silent device is worse than failing loudly.
 
 **Blockers:** None for daily use. Promotion is gated on item 2.
 
