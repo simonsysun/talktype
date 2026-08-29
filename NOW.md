@@ -25,9 +25,9 @@ Stage labels: `DONE`, `ACTIVE`, `NEXT`, `LATER`, `BLOCKED`.
 
 ## Resume Here
 
-**Current state:** Exclusive STT switch is implemented (D006): menu 豆包 default /
-Grok optional; no cross-provider failover. Owner should run a few real Grok
-dictations after pasting the xAI key, then continue the real-usage window.
+**Current state:** v3.2.0 released (2026-08-29): overlay level fix, vDSP
+decimation, mic-fault handling (D009). Owner should run a few real Grok
+dictations, then continue the real-usage window.
 
 **Resume with:** Build/run the app → Speech Provider ▸ Grok → paste xAI key →
 daily use. Log only material issues. Promotion still gated on name collision.
