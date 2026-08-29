@@ -110,25 +110,16 @@ provider cascade without a new decision.
       disappeared after reconnecting. Do not add an `AVCaptureSession` fallback
       without a new reproducible failure; on recurrence, compare the system
       input meter and `~/.talktype/talktype.log` before changing capture code.
-7. [ ] **Overlay pill hidden above some apps' windows.** Reported 2026-08-29: in
-      certain frontmost apps the recording pill fails to appear; recording is
-      unaffected (the pill is display-only, so the hotkey → speak → paste loop
-      still works). Code review: the panel already has the standard HUD setup
-      (`nonactivatingPanel`, `canJoinAllSpaces`, `stationary`,
-      `fullScreenAuxiliary`, `orderFrontRegardless()`), but its level is
-      `.statusBar` (25), which only outranks ordinary windows (layer 0). Any app
-      window at layer ≥ 25 — presentation slideshows, always-on-top video,
-      capture HUDs — covers it, and recent macOS has public reports of
-      all-Spaces panels vanishing over fullscreen Spaces (Tauri #11488,
-      BetterTouchTool forum). A live CGWindowList probe found no normal-app
-      window above layer 0 at rest, so the trigger is app/mode specific and the
-      failing app is not yet identified; next occurrence should note the app
-      name. Proposed fix, one line, not yet applied: `panel.level =
-      .screenSaver` (1000) in `OverlayWindow.init`, everything else unchanged;
-      verify by reproducing in the affected app before/after. Secondary
-      hardening, same touch: `reposition()` uses `NSScreen.main`, which on a
-      multi-display setup can put the pill on the wrong screen — place it on the
-      frontmost app's screen instead.
+7. [x] **Overlay pill hidden above some apps' windows — fixed in v3.2.0
+      (2026-08-29).** Panel level moved `.statusBar` (25) → `.screenSaver`
+      (1000); verified live during a real dictation: the panel is on-screen at
+      layer 1000. Same batch moved the 48k→16k anti-alias filter onto
+      `vDSP_conv` (outputs identical within float rounding, ~12x faster),
+      rebuilt, reinstalled, and confirmed the Keychain key and mic grants carry
+      over under the same signing identity (real dictations succeeded
+      immediately after the update). Deferred: `reposition()` still uses
+      `NSScreen.main`; wrong-screen placement on a multi-display setup stays
+      open until observed — unverifiable here with one active display.
 8. [ ] **Lid-closed built-in mic returns digital silence.** With
       `AppleClamshellState = Yes`, both the signed app and a separate test process
       read exactly `rms=0.00000` from `MacBook Pro Microphone`, so the new
