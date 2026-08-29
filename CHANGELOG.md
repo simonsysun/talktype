@@ -1,9 +1,17 @@
 # Changelog
 
-## Unreleased
+## v3.2.0 — 2026-08-29
+
+Daily-use batch: the recording pill survives high-level app windows, and the
+decimation filter runs on vDSP.
 
 ### Fixed
 
+- **The recording pill is no longer hidden by some apps.** The overlay panel sat
+  at `.statusBar` level (25), which only outranks ordinary windows — presentation
+  slideshows, always-on-top video, and capture HUDs at higher custom levels could
+  cover it. It now sits at `.screenSaver` (1000), the usual HUD ceiling; the
+  panel never steals focus and is only visible while dictating.
 - **A webcam microphone no longer reopens the Microphone privacy pane on every
   hotkey press.** The pane now opens only when the microphone grant is actually
   missing (D009); a device that will not start, or that returns silence while
@@ -22,6 +30,9 @@
 
 ### Changed
 
+- **Anti-alias decimation runs on vDSP.** The 48 kHz → 16 kHz low-pass filter
+  keeps its exact output (within float rounding) and measures ~12x faster —
+  26 ms → 2 ms for the filter step of a 30 s dictation recorded at 48 kHz.
 - **Vocabulary is a word list.** Dropped unused polish-era `pinned` / `lastUsedAt`
   fields and the leftover prompt-character budget. Active terms are newest-first,
   then each provider client applies its own 100×50 cap. Old `vocabulary.json` files

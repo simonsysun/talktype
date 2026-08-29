@@ -17,7 +17,12 @@ final class OverlayWindow {
         let style: NSWindow.StyleMask = [.nonactivatingPanel, .titled, .fullSizeContentView]
         panel = NSPanel(contentRect: frame, styleMask: style, backing: .buffered, defer: false)
         panel.becomesKeyOnlyIfNeeded = true
-        panel.level = .statusBar
+        // .statusBar (25) only outranks ordinary windows (layer 0); apps that own higher
+        // custom levels — presentation slideshows, always-on-top video, capture HUDs —
+        // covered the pill. .screenSaver (1000) is the usual HUD ceiling: far below the
+        // system mic indicator, and the pill is only visible while the user is actively
+        // dictating, so a real screen saver never competes with it.
+        panel.level = .screenSaver
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
         panel.isMovableByWindowBackground = false
